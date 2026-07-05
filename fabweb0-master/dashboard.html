@@ -1,0 +1,1119 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin | Fab-Lab CMC BMK</title>
+    <meta name="description" content="Fab Lab Admin Dashboard — Suivi en temps réel, QR Codes, Rapports">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'body': '#060B28',
+                        'sidebar': '#060B28',
+                        'card': '#111C44',
+                        'card-hover': '#1A2552',
+                        'nav-active': 'rgba(255, 255, 255, 0.08)',
+                        'accent-green': '#01B574',
+                        'accent-brand': '#0075FF',
+                        'accent-blue': '#0075FF',
+                        'accent-amber': '#F59E0B',
+                        'accent-purple': '#4318FF',
+                        'accent-red': '#E31A1A',
+                    },
+                    fontFamily: {
+                        inter: ['Inter', 'sans-serif'],
+                        recta: ['Recta', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style>
+        @font-face {
+            font-family: 'Recta';
+            src: url('Recta.otf') format('opentype');
+            font-weight: normal;
+            font-style: normal;
+        }
+
+        * {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #060B28 radial-gradient(ellipse at 50% 0%, rgba(0, 117, 255, 0.15) 0%, transparent 60%);
+            background-repeat: no-repeat;
+            background-attachment: fixed;
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        /* ── Scrollbar ── */
+        ::-webkit-scrollbar {
+            width: 5px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 99px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        /* ── Sidebar ── */
+        .sidebar {
+            background: transparent;
+        }
+
+        /* ── Nav items ── */
+        .nav-item {
+            position: relative;
+            border-radius: 15px;
+            transition: all 0.25s ease;
+        }
+
+        .nav-item:hover {
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .nav-item.active {
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .nav-item .icon-box {
+            background: #111C44;
+            color: #0075FF;
+            transition: all 0.25s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 10px;
+            width: 30px;
+            height: 30px;
+        }
+
+        .nav-item.active .icon-box {
+            background: #0075FF;
+            color: white;
+        }
+
+        .nav-item.active .nav-label {
+            color: #ffffff;
+            font-weight: 700;
+        }
+
+        /* ── Cards ── */
+        .metric-card {
+            background: #111C44;
+            border: none;
+            border-radius: 20px;
+            padding: 24px;
+            transition: all 0.3s ease;
+        }
+
+        .metric-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .section-card {
+            background: #111C44;
+            border: none;
+            border-radius: 20px;
+            transition: all 0.3s ease;
+        }
+
+        /* ── Live pulse ── */
+        @keyframes livePulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.4;
+            }
+        }
+
+        .live-dot {
+            animation: livePulse 2s infinite;
+        }
+
+        /* ── Glow effects ── */
+        .glow-green {
+            box-shadow: 0 0 20px rgba(1, 181, 116, 0.15);
+        }
+
+        .glow-blue {
+            box-shadow: 0 0 20px rgba(0, 117, 255, 0.15);
+        }
+
+        .glow-amber {
+            box-shadow: 0 0 20px rgba(245, 158, 11, 0.15);
+        }
+
+        .glow-purple {
+            box-shadow: 0 0 20px rgba(67, 24, 255, 0.15);
+        }
+
+        .glow-red {
+            box-shadow: 0 0 20px rgba(227, 26, 26, 0.15);
+        }
+
+        .glow-white {
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.15);
+        }
+
+        /* ── View transitions ── */
+        .view-section {
+            display: none;
+            opacity: 0;
+            transform: translateY(8px);
+            transition: opacity 0.35s ease, transform 0.35s ease;
+        }
+
+        .view-section.active {
+            display: block;
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* ── QR Code container ── */
+        .qr-container {
+            background: white;
+            border-radius: 20px;
+            padding: 24px;
+        }
+
+        /* ── Generate buttons ── */
+        .btn-gate-in {
+            background: #0075FF;
+            color: white;
+            transition: all 0.3s ease;
+        }
+
+        .btn-gate-in:hover {
+            background: #005ECC;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0, 117, 255, 0.3);
+        }
+
+        .btn-gate-in:active {
+            transform: scale(0.95);
+        }
+
+        .btn-gate-out {
+            background: transparent;
+            border: 1.5px solid #E31A1A;
+            color: #E31A1A;
+            transition: all 0.3s ease;
+        }
+
+        .btn-gate-out:hover {
+            background: rgba(227, 26, 26, 0.1);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(227, 26, 26, 0.2);
+        }
+
+        .btn-gate-out:active {
+            transform: scale(0.95);
+        }
+
+        .btn-download {
+            background: transparent;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            transition: all 0.3s ease;
+        }
+
+        .btn-download:hover {
+            background: rgba(255, 255, 255, 0.05);
+            transform: translateY(-1px);
+        }
+
+        /* ── Table rows ── */
+        .trow {
+            transition: background 0.2s ease;
+        }
+
+        .trow:hover {
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        /* ── Fade-in animation ── */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(16px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .animate-fade-in {
+            animation: fadeInUp 0.5s ease forwards;
+        }
+
+        .delay-1 {
+            animation-delay: 0.1s;
+        }
+
+        .delay-2 {
+            animation-delay: 0.2s;
+        }
+
+        .delay-3 {
+            animation-delay: 0.3s;
+        }
+
+        .delay-4 {
+            animation-delay: 0.4s;
+        }
+
+        /* ── User avatar ── */
+        .user-avatar {
+            background: linear-gradient(135deg, #0075FF 0%, #4318FF 100%);
+        }
+
+        /* ── Presence list item ── */
+        .presence-item {
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+            transition: background 0.2s ease;
+        }
+
+        .presence-item:hover {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .presence-item:last-child {
+            border-bottom: none;
+        }
+
+        /* ── Journal entry ── */
+        .journal-entry {
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+            transition: background 0.2s ease;
+        }
+
+        .journal-entry:hover {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .journal-entry:last-child {
+            border-bottom: none;
+        }
+
+        /* ── Login Overlay ── */
+        #admin-login-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 9999;
+            background: #060B28 radial-gradient(ellipse at 50% 0%, rgba(0, 117, 255, 0.2) 0%, transparent 70%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(20px);
+        }
+
+        .login-card {
+            background: rgba(17, 28, 68, 0.8);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 24px;
+            width: 100%;
+            max-width: 400px;
+            padding: 40px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+            text-align: center;
+        }
+
+        .login-input {
+            width: 100%;
+            background: rgba(6, 11, 40, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 14px 16px;
+            color: white;
+            font-size: 14px;
+            margin-bottom: 20px;
+            outline: none;
+            transition: all 0.3s ease;
+        }
+
+        .login-input:focus {
+            border-color: #0075FF;
+            box-shadow: 0 0 15px rgba(0, 117, 255, 0.2);
+        }
+
+        .login-btn {
+            width: 100%;
+            background: linear-gradient(135deg, #0075FF 0%, #4318FF 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            padding: 14px;
+            font-weight: 700;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .login-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 117, 255, 0.4);
+        }
+
+        .login-btn:active {
+            transform: scale(0.98);
+        }
+    </style>
+</head>
+
+<body class="flex h-screen font-inter text-white">
+
+    <!-- ═══════════════ LOGIN OVERLAY ═══════════════ -->
+    <div id="admin-login-overlay">
+        <div class="login-card animate-fade-in">
+            <div class="flex flex-col items-center mb-8">
+                <div
+                    class="w-16 h-16 rounded-2xl flex items-center justify-center bg-gradient-to-br from-accent-brand to-accent-purple shadow-lg mb-4 p-2">
+                    <img src="fablab.webp" alt="Logo" class="w-full h-full object-contain" />
+                </div>
+                <h2 class="text-2xl font-bold tracking-tight">Espace Admin</h2>
+                <p class="text-white/40 text-xs mt-1 uppercase tracking-widest">Identification requise</p>
+            </div>
+
+            <div class="text-left">
+                <label
+                    class="text-[10px] font-bold text-white/40 uppercase tracking-widest ml-1 mb-2 block">Identifiant</label>
+                <input type="text" id="admin-username" class="login-input">
+
+                <label class="text-[10px] font-bold text-white/40 uppercase tracking-widest ml-1 mb-2 block">Mot de
+                    passe</label>
+                <input type="password" id="admin-password" class="login-input">
+            </div>
+
+            <button onclick="checkCustomAuth()" class="login-btn mt-4">Se connecter</button>
+            <p id="login-error" class="text-accent-red text-[11px] font-bold mt-4 opacity-0 transition-opacity">
+                Identifiants incorrects</p>
+        </div>
+    </div>
+
+    <!-- ═══════════════ SIDEBAR ═══════════════ -->
+    <aside class="sidebar w-[275px] flex flex-col shrink-0 z-50 px-4 py-8 relative">
+
+        <!-- Background glow for sidebar (Vision UI trait) -->
+        <div
+            class="absolute -top-20 -left-20 w-40 h-40 bg-[#0075FF] rounded-full blur-[100px] opacity-30 pointer-events-none">
+        </div>
+
+        <!-- Logo -->
+        <a href="index.html"
+            class="px-4 pb-8 flex items-center space-x-3 hover:opacity-80 transition-opacity cursor-pointer block">
+            <div
+                class="w-[42px] h-[42px] rounded-lg flex items-center justify-center bg-gradient-to-br from-accent-brand to-accent-purple shadow-[0_4px_10px_rgba(0,117,255,0.4)] p-[5px]">
+                <img src="fablab.webp" alt="FabLab Logo" class="w-full h-full object-contain" />
+            </div>
+            <div class="flex flex-col justify-center translate-y-0.5">
+                <h1 class="text-[18px] font-bold text-white tracking-[2.6px] uppercase leading-none font-recta">FAB LAB
+                </h1>
+                <p class="text-[8px] font-medium text-white/50 mb-1 mt-1 uppercase tracking-widest font-recta">cmc bmk
+                </p>
+            </div>
+        </a>
+
+        <div class="h-[1px] w-full bg-gradient-to-r from-transparent via-white/20 to-transparent mb-6"></div>
+
+        <!-- Navigation -->
+        <nav class="flex-1 space-y-2">
+            <button onclick="switchView('dashboard')" id="nav-dashboard"
+                class="nav-item active w-full flex items-center space-x-4 px-4 py-3 text-left">
+                <div class="icon-box">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                        <rect x="3" y="3" width="7" height="7" rx="1.5" />
+                        <rect x="14" y="3" width="7" height="7" rx="1.5" />
+                        <rect x="3" y="14" width="7" height="7" rx="1.5" />
+                        <rect x="14" y="14" width="7" height="7" rx="1.5" />
+                    </svg>
+                </div>
+                <span class="nav-label font-medium text-[13px] text-white/50">Dashboard</span>
+            </button>
+
+            <button onclick="switchView('qr')" id="nav-qr"
+                class="nav-item w-full flex items-center space-x-4 px-4 py-3 text-left">
+                <div class="icon-box">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                            d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+                    </svg>
+                </div>
+                <span class="nav-label font-medium text-[13px] text-white/50">QR Codes</span>
+            </button>
+
+            <button onclick="switchView('rapports')" id="nav-rapports"
+                class="nav-item w-full flex items-center space-x-4 px-4 py-3 text-left">
+                <div class="icon-box">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                            d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                </div>
+                <span class="nav-label font-medium text-[13px] text-white/50">Rapports</span>
+            </button>
+
+            <button onclick="switchView('ouvrages')" id="nav-ouvrages"
+                class="nav-item w-full flex items-center space-x-4 px-4 py-3 text-left">
+                <div class="icon-box">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                            d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                </div>
+                <span class="nav-label font-medium text-[13px] text-white/50">Ouvrages</span>
+            </button>
+
+            <button onclick="switchView('users')" id="nav-users"
+                class="nav-item w-full flex items-center space-x-4 px-4 py-3 text-left">
+                <div class="icon-box">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                            d="M12 4.35r-3.97 5.02a7 7 0 1010.58 0L12 4.35zM12 11a2 2 0 100-4 2 2 0 000 4z" />
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                            d="M16 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
+                    </svg>
+                </div>
+                <span class="nav-label font-medium text-[13px] text-white/50">Users</span>
+            </button>
+
+            <button onclick="switchView('projects')" id="nav-projects"
+                class="nav-item w-full flex items-center space-x-4 px-4 py-3 text-left">
+                <div class="icon-box">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                            d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                    </svg>
+                </div>
+                <span class="nav-label font-medium text-[13px] text-white/50">Projects</span>
+            </button>
+        </nav>
+
+    </aside>
+
+    <!-- ═══════════════ MAIN CONTENT ═══════════════ -->
+    <main class="flex-1 flex flex-col overflow-hidden">
+
+        <!-- Content scroll area -->
+        <div class="flex-1 overflow-y-auto p-8 pt-6">
+
+            <!-- ════════════ VIEW: DASHBOARD ════════════ -->
+            <section id="view-dashboard" class="view-section active">
+
+                <!-- Page Header -->
+                <div class="mb-7 mt-2">
+                    <p class="text-[12px] font-medium text-white/50 mb-1">Pages / Dashboard</p>
+                    <h1 class="text-[32px] font-bold text-white tracking-tight">Dashboard</h1>
+                </div>
+
+                <!-- Metric Cards -->
+                <div class="grid grid-cols-3 gap-5 mb-6">
+
+                    <!-- Card 1: Présents -->
+                    <div class="metric-card glow-green animate-fade-in delay-1" style="opacity:0">
+                        <p class="text-[10px] font-bold text-white/40 uppercase tracking-[2px] mb-3">PRÉSENTS MAINTENANT
+                        </p>
+                        <p class="text-[36px] font-extrabold text-accent-green leading-none mb-1.5" id="metric-present">
+                            0</p>
+                        <p class="text-[12px] text-white/30 font-normal">stagiaires actifs dans le lab</p>
+                    </div>
+
+                    <!-- Card 2: Total -->
+                    <div class="metric-card glow-white animate-fade-in delay-2" style="opacity:0">
+                        <p class="text-[10px] font-bold text-white/40 uppercase tracking-[2px] mb-3">TOTAL AUJOURD'HUI
+                        </p>
+                        <p class="text-[36px] font-extrabold text-white leading-none mb-1.5" id="metric-total">0
+                        </p>
+                        <p class="text-[12px] text-white/30 font-normal">entrées enregistrées</p>
+                    </div>
+
+                    <!-- Card 4: Sorties -->
+                    <div class="metric-card glow-red animate-fade-in delay-4" style="opacity:0">
+                        <p class="text-[10px] font-bold text-white/40 uppercase tracking-[2px] mb-3">SORTIES TERMINÉES
+                        </p>
+                        <p class="text-[36px] font-extrabold text-accent-red leading-none mb-1.5" id="metric-exits">0
+                        </p>
+                        <p class="text-[12px] text-white/30 font-normal">check-outs avec feedback</p>
+                    </div>
+                </div>
+
+                <!-- Stagiaires Présents -->
+                <div class="section-card mb-5">
+                    <div class="flex items-center justify-between px-7 py-5 border-b border-white/[0.04]">
+                        <h3 class="text-[16px] font-bold text-white">Stagiaires Présents</h3>
+                        <div class="flex items-center space-x-2">
+                            <div class="w-2 h-2 bg-accent-green rounded-full live-dot"></div>
+                            <span class="text-[10px] font-bold text-accent-green uppercase tracking-[2px]">EN
+                                DIRECT</span>
+                        </div>
+                    </div>
+                    <div id="presence-list" class="min-h-[100px]">
+                        <div class="px-7 py-10 text-center">
+                            <p class="text-[13px] text-white/30 italic font-normal">Aucun stagiaire présent pour le
+                                moment</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Journal d'aujourd'hui -->
+                <div class="section-card">
+                    <div class="flex items-center justify-between px-7 py-5 border-b border-white/[0.04]">
+                        <h3 class="text-[16px] font-bold text-white">Journal d'aujourd'hui</h3>
+                        <span class="text-[12px] text-white/30 font-medium" id="journal-count">0 entrée(s)</span>
+                    </div>
+                    <div id="journal-list" class="min-h-[100px]">
+                        <div class="px-7 py-10 text-center">
+                            <p class="text-[13px] text-white/30 italic font-normal">Aucune entrée aujourd'hui</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ════════════ VIEW: QR CODES ════════════ -->
+            <section id="view-qr" class="view-section">
+
+                <!-- Page Header -->
+                <div class="mb-7 mt-2">
+                    <p class="text-[12px] font-medium text-white/50 mb-1">Pages / QR Codes</p>
+                    <h1 class="text-[32px] font-bold text-white tracking-tight">Générateur QR Codes</h1>
+                </div>
+
+                <!-- QR Cards -->
+                <div class="grid grid-cols-2 gap-6">
+
+                    <!-- Gate-IN -->
+                    <div class="section-card p-7 flex flex-col items-center">
+                        <div class="flex items-center space-x-2 mb-2">
+                            <div class="w-3 h-3 bg-accent-green rounded-full"></div>
+                            <h3 class="text-[18px] font-bold text-accent-green">Gate-IN</h3>
+                        </div>
+                        <p class="text-[13px] text-white/40 font-normal mb-6">QR Code pour le check-in des stagiaires
+                        </p>
+                        <button onclick="generateQR('in')"
+                            class="btn-gate-in px-6 py-2.5 rounded-lg font-bold text-[13px] flex items-center space-x-2 mb-6">
+                            <span>⚡</span>
+                            <span>Générer Gate-IN</span>
+                        </button>
+                        <div id="qr-in-area" class="w-full flex flex-col items-center"></div>
+                    </div>
+
+                    <!-- Gate-OUT -->
+                    <div class="section-card p-7 flex flex-col items-center">
+                        <div class="flex items-center space-x-2 mb-2">
+                            <div class="w-3 h-3 bg-accent-red rounded-full"></div>
+                            <h3 class="text-[18px] font-bold text-accent-red">Gate-OUT</h3>
+                        </div>
+                        <p class="text-[13px] text-white/40 font-normal mb-6">QR Code pour le check-out des stagiaires
+                        </p>
+                        <button onclick="generateQR('out')"
+                            class="btn-gate-out px-6 py-2.5 rounded-lg font-bold text-[13px] flex items-center space-x-2 mb-6">
+                            <span>⚡</span>
+                            <span>Générer Gate-OUT</span>
+                        </button>
+                        <div id="qr-out-area" class="w-full flex flex-col items-center"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ════════════ VIEW: RAPPORTS ════════════ -->
+            <section id="view-rapports" class="view-section">
+
+                <!-- Page Header -->
+                <div class="mb-7 mt-2">
+                    <p class="text-[12px] font-medium text-white/50 mb-1">Pages / Rapports</p>
+                    <h1 class="text-[32px] font-bold text-white tracking-tight">Rapports</h1>
+                </div>
+
+                <!-- Filters -->
+                <div class="section-card p-6 mb-6">
+                    <div class="flex items-center space-x-5">
+                        <div class="flex-1">
+                            <label class="text-[10px] font-bold text-white/30 uppercase tracking-[2px] block mb-2">Date
+                                début</label>
+                            <input type="date" id="report-from"
+                                class="w-full bg-body border border-white/10 text-white text-[13px] font-medium rounded-xl px-4 py-3 outline-none focus:border-accent-blue/50 transition-colors">
+                        </div>
+                        <div class="flex-1">
+                            <label class="text-[10px] font-bold text-white/30 uppercase tracking-[2px] block mb-2">Date
+                                fin</label>
+                            <input type="date" id="report-to"
+                                class="w-full bg-body border border-white/10 text-white text-[13px] font-medium rounded-xl px-4 py-3 outline-none focus:border-accent-blue/50 transition-colors">
+                        </div>
+                        <div class="flex items-end space-x-3 pt-5">
+                            <button onclick="generateReport()"
+                                class="btn-gate-in px-6 py-3 rounded-xl font-bold text-[12px]">Générer</button>
+                            <button onclick="exportCSV()"
+                                class="btn-download px-5 py-3 rounded-xl font-bold text-[12px] flex items-center space-x-2">
+                                <span>📥</span>
+                                <span>Export CSV</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Summary Cards -->
+                <div class="grid grid-cols-3 gap-5 mb-6">
+                    <div class="metric-card">
+                        <p class="text-[10px] font-bold text-white/40 uppercase tracking-[2px] mb-2">TOTAL ENTRÉES</p>
+                        <p class="text-[32px] font-extrabold text-accent-blue leading-none" id="report-entries">0</p>
+                    </div>
+                    <div class="metric-card">
+                        <p class="text-[10px] font-bold text-white/40 uppercase tracking-[2px] mb-2">JOURS ACTIFS</p>
+                        <p class="text-[32px] font-extrabold text-accent-green leading-none" id="report-days">0</p>
+                    </div>
+                    <div class="metric-card">
+                        <p class="text-[10px] font-bold text-white/40 uppercase tracking-[2px] mb-2">SATISFACTION MOY.
+                        </p>
+                        <p class="text-[32px] font-extrabold text-accent-amber leading-none" id="report-satisfaction">
+                            0.0</p>
+                    </div>
+                </div>
+
+                <!-- Attendance Table -->
+                <div class="section-card overflow-hidden">
+                    <div class="flex items-center justify-between px-7 py-4 border-b border-white/[0.04]">
+                        <h3 class="text-[14px] font-bold text-white">Historique de présence</h3>
+                        <span class="text-[11px] text-white/25 font-semibold" id="report-table-count">0
+                            enregistrement(s)</span>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left">
+                            <thead>
+                                <tr class="border-b border-white/[0.04]">
+                                    <th class="px-7 py-3 text-[9px] font-bold text-white/30 uppercase tracking-[2px]">
+                                        Stagiaire</th>
+                                    <th class="px-5 py-3 text-[9px] font-bold text-white/30 uppercase tracking-[2px]">
+                                        Date</th>
+                                    <th class="px-5 py-3 text-[9px] font-bold text-white/30 uppercase tracking-[2px]">
+                                        Entrée</th>
+                                    <th class="px-5 py-3 text-[9px] font-bold text-white/30 uppercase tracking-[2px]">
+                                        Sortie</th>
+                                    <th class="px-5 py-3 text-[9px] font-bold text-white/30 uppercase tracking-[2px]">
+                                        Note</th>
+                                    <th class="px-5 py-3 text-[9px] font-bold text-white/30 uppercase tracking-[2px]">
+                                        Commentaire</th>
+                                </tr>
+                            </thead>
+                            <tbody id="report-table-body">
+                                <tr>
+                                    <td colspan="6" class="px-7 py-10 text-center text-white/20 italic text-[13px]">
+                                        Sélectionnez une période et cliquez "Générer"</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ════════════ VIEW: OUVRAGES ════════════ -->
+            <section id="view-ouvrages" class="view-section">
+
+                <!-- Page Header -->
+                <div class="mb-7 mt-2">
+                    <p class="text-[12px] font-medium text-white/50 mb-1">Pages / Ouvrages</p>
+                    <h1 class="text-[32px] font-bold text-white tracking-tight">Ouvrages & Équipements</h1>
+                </div>
+
+                <!-- Search & Add -->
+                <div class="flex items-center justify-between mb-6">
+                    <div class="relative w-80">
+                        <svg class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20" fill="none"
+                            stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <circle cx="11" cy="11" r="8" />
+                            <path d="M21 21l-4.35-4.35" />
+                        </svg>
+                        <input type="text" placeholder="Rechercher un équipement..." id="ouvrage-search"
+                            oninput="filterOuvrages()"
+                            class="w-full pl-11 pr-4 py-3 bg-card border border-white/[0.06] rounded-xl outline-none focus:border-accent-blue/40 text-[13px] font-medium text-white placeholder:text-white/20 transition-colors">
+                    </div>
+                    <button onclick="showAddModal()"
+                        class="btn-gate-in px-5 py-3 rounded-xl font-bold text-[12px] flex items-center space-x-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+                        </svg>
+                        <span>Ajouter</span>
+                    </button>
+                </div>
+
+                <!-- Equipment Grid -->
+                <div class="grid grid-cols-3 gap-5" id="ouvrages-grid">
+                    <!-- Populated by JS -->
+                </div>
+            </section>
+
+            <!-- ════════════ VIEW: USERS ════════════ -->
+            <section id="view-users" class="view-section">
+                <div class="mb-7 mt-2">
+                    <p class="text-[12px] font-medium text-white/50 mb-1">Pages / Users</p>
+                    <h1 class="text-[32px] font-bold text-white tracking-tight">Utilisateurs</h1>
+                </div>
+                <div class="section-card p-10 text-center">
+                    <p class="text-[14px] text-white/40">Gestion des utilisateurs en cours de développement...</p>
+                </div>
+            </section>
+
+            <!-- ════════════ VIEW: PROJECTS ════════════ -->
+            <section id="view-projects" class="view-section">
+                <div class="mb-7 mt-2">
+                    <p class="text-[12px] font-medium text-white/50 mb-1">Pages / Projects</p>
+                    <h1 class="text-[32px] font-bold text-white tracking-tight">Projets</h1>
+                </div>
+                <div class="section-card p-10 text-center">
+                    <p class="text-[14px] text-white/40">Gestion des projets en cours de développement...</p>
+                </div>
+            </section>
+
+        </div>
+    </main>
+
+    <!-- ═══════════════ JAVASCRIPT ═══════════════ -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getAuth, onAuthStateChanged, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { getFirestore, collection, query, where, orderBy, onSnapshot, getDoc, doc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyCTdUIf-eUUXuHVCJOK7R7DG9aToeF-96Y",
+            authDomain: "fablab-bmk.firebaseapp.com",
+            projectId: "fablab-bmk",
+            storageBucket: "fablab-bmk.firebasestorage.app",
+            messagingSenderId: "1094196382348",
+            appId: "1:1094196382348:web:cb912662e010323d1f09a9"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+
+        window.checkAuthState = () => {
+            const savedAuth = sessionStorage.getItem('admin_authenticated');
+            if (savedAuth !== 'true') return;
+
+            // Reveal dashboard and start listeners without needing a Firebase user session
+            document.body.style.display = 'flex';
+            window.initRealtimeListeners();
+        };
+
+        // Custom Credentials Auth
+        window.checkCustomAuth = async () => {
+            const user = document.getElementById('admin-username').value;
+            const pass = document.getElementById('admin-password').value;
+            const error = document.getElementById('login-error');
+
+            if (user === 'SARA-LADOUY' && pass === 'saracmc2025') {
+                // Since we opened the Database rules to public, we no longer need the 
+                // Anonymous sign-in "bridge" which was causing the restricted-operation error.
+
+                // Mark as session authenticated
+                sessionStorage.setItem('admin_authenticated', 'true');
+
+                // Hide overlay and reveal content
+                document.getElementById('admin-login-overlay').style.display = 'none';
+                window.checkAuthState();
+            } else {
+                error.style.opacity = '1';
+                setTimeout(() => error.style.opacity = '0', 3000);
+            }
+        };
+
+        // Initial Security Check
+        const savedAuth = sessionStorage.getItem('admin_authenticated');
+        if (savedAuth === 'true') {
+            document.getElementById('admin-login-overlay').style.display = 'none';
+            window.checkAuthState();
+        } else {
+            document.body.style.display = 'flex'; // Show body so overlay is visible
+        }
+
+        window.initRealtimeListeners = () => {
+            const startOfDay = new Date();
+            startOfDay.setHours(0, 0, 0, 0);
+
+            const q = query(
+                collection(db, "attendance"),
+                where("timestamp", ">=", startOfDay),
+                orderBy("timestamp", "desc")
+            );
+
+            onSnapshot(q, (snapshot) => {
+                const logs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                if (window.renderFirebaseDashboard) window.renderFirebaseDashboard(logs);
+            });
+        };
+    </script>
+
+    <script>
+        // ── Mock Data ──
+        const demoHistory = [
+            { name: "Ahmed El Mansouri", date: "2026-04-09", timeIn: "09:15", timeOut: "12:30", rating: 5, comment: "Super séance de prototypage !" },
+            { name: "Laila Bennani", date: "2026-04-09", timeIn: "10:05", timeOut: "11:45", rating: 4, comment: "Besoin de plus de filament PLA." },
+            { name: "Yassine Tazi", date: "2026-04-08", timeIn: "14:20", timeOut: "17:10", rating: 5, comment: "Découpe laser parfaite." },
+            { name: "Siham Alaoui", date: "2026-04-08", timeIn: "09:30", timeOut: "16:00", rating: 3, comment: "Un peu d'attente pour la CNC." }
+        ];
+
+        const demoOuvrages = [
+            { name: "Ultimaker S5", category: "Impression 3D", status: "Disponible", icon: "🖨️" },
+            { name: "Trotec Speedy 400", category: "Découpe Laser", status: "En usage", icon: "⚡" },
+            { name: "Roland SRM-20", category: "Fraiseuse CNC", status: "Maintenance", icon: "⚙️" },
+            { name: "Creality Ender 3", category: "Impression 3D", status: "Disponible", icon: "🖨️" },
+            { name: "Station de Soudure", category: "Électronique", status: "Disponible", icon: "🔌" },
+            { name: "Oscilloscope Rigol", category: "Électronique", status: "Disponible", icon: "📉" }
+        ];
+
+        // ── State ──
+        let currentView = 'dashboard';
+
+        // ── View Switcher ──
+        function switchView(viewId) {
+            document.querySelectorAll('.view-section').forEach(s => s.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+            const target = document.getElementById('view-' + viewId);
+            setTimeout(() => target.classList.add('active'), 20);
+            document.getElementById('nav-' + viewId).classList.add('active');
+            currentView = viewId;
+            if (viewId === 'ouvrages') renderOuvrages();
+        }
+
+        // ── Render Dashboard (Firebase) ──
+        function renderFirebaseDashboard(logs) {
+            const now = new Date();
+            const startOfDay = new Date(now.setHours(0, 0, 0, 0));
+
+            const entries = logs.filter(l => l.type === 'in');
+            const exits = logs.filter(l => l.type === 'out');
+
+            const userStatus = {};
+            logs.slice().reverse().forEach(log => {
+                userStatus[log.userId] = log.type;
+            });
+            const presentCount = Object.values(userStatus).filter(s => s === 'in').length;
+
+            document.getElementById('metric-present').textContent = presentCount;
+            document.getElementById('metric-total').textContent = entries.length;
+            document.getElementById('metric-exits').textContent = exits.length;
+
+            const jl = document.getElementById('journal-list');
+            document.getElementById('journal-count').textContent = `${logs.length} événement(s)`;
+
+            if (logs.length === 0) {
+                jl.innerHTML = `<div class="px-7 py-10 text-center"><p class="text-[13px] text-white/30 italic">Aucune activité aujourd'hui</p></div>`;
+            } else {
+                jl.innerHTML = `<div class="max-h-[350px] overflow-y-auto">` + logs.map(l => {
+                    const isIn = l.type === 'in';
+                    const time = l.timestamp ? new Date(l.timestamp.seconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--';
+                    return `
+                    <div class="journal-entry flex items-center px-7 py-3.5 trow">
+                        <div class="w-8 h-8 ${isIn ? 'bg-accent-green/10' : 'bg-accent-red/10'} rounded-lg flex items-center justify-center mr-4 shrink-0">
+                            <svg class="w-3.5 h-3.5 ${isIn ? 'text-accent-green' : 'text-accent-red'}" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="${isIn ? 'M11 16l-4-4m0 0l4-4m-4 4h14' : 'M17 16l4-4m0 0l-4-4m4 4H7'}"/>
+                            </svg>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <p class="text-[12px] font-semibold text-white">${l.userName || 'Anonyme'}</p>
+                            <p class="text-[9px] text-white/25 font-medium tracking-wide uppercase">${isIn ? 'Entrée' : 'Sortie'} — ${l.objective || 'Visite'}</p>
+                        </div>
+                        <span class="text-[11px] text-white/20 font-medium shrink-0">${time}</span>
+                    </div>`;
+                }).join('') + `</div>`;
+            }
+
+            const pl = document.getElementById('presence-list');
+            const presentUsers = Object.keys(userStatus).filter(uid => userStatus[uid] === 'in');
+
+            if (presentUsers.length === 0) {
+                pl.innerHTML = `<div class="px-7 py-10 text-center"><p class="text-[13px] text-white/30 italic">Aucun stagiaire présent pour le moment</p></div>`;
+            } else {
+                pl.innerHTML = presentUsers.map(uid => {
+                    const lastLog = logs.find(l => l.userId === uid && l.type === 'in');
+                    const userName = lastLog ? lastLog.userName : 'Stagiaire';
+                    const time = lastLog && lastLog.timestamp ? new Date(lastLog.timestamp.seconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--';
+                    return `
+                    <div class="presence-item flex items-center px-7 py-4">
+                        <div class="w-10 h-10 bg-accent-green/10 rounded-full flex items-center justify-center text-[11px] font-bold text-accent-green mr-4 shrink-0">
+                            ${userName[0]}
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <p class="text-[13px] font-semibold text-white truncate">${userName}</p>
+                        </div>
+                        <div class="text-right shrink-0">
+                            <p class="text-[11px] text-white/30 font-medium">${time}</p>
+                            <div class="flex items-center space-x-1 justify-end mt-0.5">
+                                <div class="w-1.5 h-1.5 bg-accent-green rounded-full live-dot"></div>
+                                <span class="text-[9px] text-accent-green font-bold uppercase">Actif</span>
+                            </div>
+                        </div>
+                        <span class="text-[11px] text-white/20 font-medium shrink-0">${time}</span>
+                    </div>`;
+                }).join('') + `</div>`;
+            }
+        }
+
+        // ── QR Code Generator ──
+        let qrInInstance = null;
+        let qrOutInstance = null;
+
+        function generateQR(type) {
+            const area = document.getElementById(type === 'in' ? 'qr-in-area' : 'qr-out-area');
+            const uid = crypto.randomUUID ? crypto.randomUUID().split('-')[0] : Math.random().toString(36).substring(2, 10);
+            const payload = JSON.stringify({
+                action: type === 'in' ? 'check_in' : 'check_out',
+                lab: 'CMC_BENI_MELLAL',
+                gate: type === 'in' ? 'GATE_IN' : 'GATE_OUT',
+                id: uid,
+                ts: Date.now()
+            });
+
+            area.innerHTML = `
+                <div class="qr-container flex flex-col items-center mb-4">
+                    <div id="qr-canvas-${type}"></div>
+                </div>
+                <p class="text-[11px] text-white/20 font-medium mb-4">ID: ${uid}...</p>
+                <button onclick="downloadQR('${type}')" class="btn-download px-5 py-2.5 rounded-xl font-bold text-[12px] flex items-center space-x-2">
+                    <span>📥</span>
+                    <span>Télécharger PNG</span>
+                </button>
+            `;
+
+            const color = type === 'in' ? '#111C44' : '#E31A1A';
+            new QRCode(document.getElementById('qr-canvas-' + type), {
+                text: payload,
+                width: 220,
+                height: 220,
+                colorDark: color,
+                colorLight: '#ffffff',
+                correctLevel: QRCode.CorrectLevel.H
+            });
+        }
+
+        function downloadQR(type) {
+            const canvas = document.querySelector('#qr-canvas-' + type + ' canvas');
+            if (!canvas) return;
+            const link = document.createElement('a');
+            link.download = `fablab_gate_${type}_${Date.now()}.png`;
+            link.href = canvas.toDataURL('image/png');
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // ── Reports ──
+        function generateReport() {
+            const entries = demoHistory.length;
+            const days = [...new Set(demoHistory.map(h => h.date))].length;
+            const avgRating = (demoHistory.reduce((s, h) => s + h.rating, 0) / entries).toFixed(1);
+
+            document.getElementById('report-entries').textContent = entries;
+            document.getElementById('report-days').textContent = days;
+            document.getElementById('report-satisfaction').textContent = avgRating;
+            document.getElementById('report-table-count').textContent = `${entries} enregistrement(s)`;
+
+            const tbody = document.getElementById('report-table-body');
+            tbody.innerHTML = demoHistory.map(h => `
+                <tr class="trow border-b border-white/[0.03]">
+                    <td class="px-7 py-3.5">
+                        <p class="text-[12px] font-semibold text-white">${h.name}</p>
+                    </td>
+                    <td class="px-5 py-3.5 text-[12px] text-white/50 font-medium">${h.date}</td>
+                    <td class="px-5 py-3.5">
+                        <span class="text-[11px] font-bold text-accent-green bg-accent-green/10 px-2.5 py-1 rounded-lg">${h.timeIn}</span>
+                    </td>
+                    <td class="px-5 py-3.5">
+                        <span class="text-[11px] font-bold text-accent-red bg-accent-red/10 px-2.5 py-1 rounded-lg">${h.timeOut}</span>
+                    </td>
+                    <td class="px-5 py-3.5">
+                        <span class="text-[12px] font-bold text-accent-amber">${'★'.repeat(h.rating)}${'☆'.repeat(5 - h.rating)}</span>
+                    </td>
+                    <td class="px-5 py-3.5 text-[11px] text-white/30 font-medium max-w-[200px] truncate">${h.comment || '—'}</td>
+                </tr>
+            `).join('');
+        }
+
+        function exportCSV() {
+            const headers = ['Stagiaire', 'Date', 'Entrée', 'Sortie', 'Note', 'Commentaire'];
+            const rows = demoHistory.map(h => [h.name, h.date, h.timeIn, h.timeOut, h.rating, h.comment || '']);
+            const csv = [headers.join(','), ...rows.map(r => r.map(v => `"${v}"`).join(','))].join('\n');
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `fablab_rapport_${new Date().toISOString().split('T')[0]}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        // ── Ouvrages ──
+        function renderOuvrages() {
+            const q = (document.getElementById('ouvrage-search')?.value || '').toLowerCase();
+            const filtered = demoOuvrages.filter(o => o.name.toLowerCase().includes(q) || o.category.toLowerCase().includes(q));
+            const grid = document.getElementById('ouvrages-grid');
+
+            grid.innerHTML = filtered.map(o => {
+                const statusColor = o.status === 'Disponible' ? 'accent-green' : o.status === 'En usage' ? 'accent-amber' : 'accent-red';
+                return `
+                <div class="section-card p-6 hover:border-white/10 transition-all hover:-translate-y-1 cursor-pointer">
+                    <div class="flex items-start justify-between mb-4">
+                        <span class="text-3xl">${o.icon}</span>
+                        <span class="text-[9px] font-bold text-${statusColor} bg-${statusColor}/10 px-2.5 py-1 rounded-full uppercase tracking-wider">${o.status}</span>
+                    </div>
+                    <h4 class="text-[14px] font-bold text-white mb-1">${o.name}</h4>
+                    <p class="text-[11px] text-white/30 font-medium">${o.category}</p>
+                </div>`;
+            }).join('');
+        }
+
+        function filterOuvrages() { renderOuvrages(); }
+
+        function showAddModal() {
+            alert('Fonctionnalité d\'ajout à venir — connecter au backend.');
+        }
+
+        // ── Init ──
+        document.addEventListener('DOMContentLoaded', () => {
+            if (window.initRealtimeListeners) {
+                window.initRealtimeListeners();
+            }
+            renderOuvrages();
+
+            // Set default date range for reports
+            const today = new Date().toISOString().split('T')[0];
+            const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0];
+            document.getElementById('report-from').value = weekAgo;
+            document.getElementById('report-to').value = today;
+        });
+    </script>
+
+</body>
+
+</html>

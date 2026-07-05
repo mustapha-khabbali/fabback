@@ -1,0 +1,61 @@
+Profile Module: Frontend Architecture & Gap Analysis
+
+This document provides a comprehensive analysis of the Profile module in the FabLab user application. It outlines the current component structure, explains the workflows, and identifies the technical and UX gaps between the existing codebase and the Master Codex specifications.
+
+---
+
+1. Core Architecture & Files
+
+The profile module is structured under several tab views within src/components/dashboard/tabs/:
+
+* My Profile Tab: MyProfileTab.jsx
+  Manages the logged-in user's profile view and editing state. It handles standard fields (Prénom, Nom, Bio, Email, Tel, CIN, CEF) and displays their current machines, programs, and general statistics.
+* Member Profile Tab: MemberProfileTab.jsx
+  Handles inspecting other users' profiles (e.g. from Search). It displays their bio, academic details, certified machines, programs, project portfolios, and contact information. It also manages contact permission request flows.
+* Settings View: SettingsView.jsx
+  Handles supplementary user configurations, including theme switches, language toggles, contact privacy defaults, and account logout processes.
+
+---
+
+2. Master Codex Requirements vs. Existing Frontend Gaps
+
+A comparison reveals several functional gaps between the current implementation and the production-level system specifications detailed in Section 11 & 12 of the Master Codex.
+
+Functional & Architectural Gaps
+
+1. Machine Certification Workflow (Section 11):
+   * Codex: Trainees must undergo a certification process (training/assessment) to unlock specific machines (e.g. 3D printer, laser cutter). Certification requests are submitted to and approved by formateurs.
+   * Current Frontend: The MACHINES section renders a static, read-only list of certified machines. There is no interactive flow for requesting certifications, submitting training hours, or formateur-level validations.
+
+2. Gamification & Point/Level Lifecycles (Section 11.2):
+   * Codex: Users accrue XP/Points through project completions, helping others, and attending workshops. This determines their Rank/Level.
+   * Current Frontend: Renders static level headers and point totals, but lacks point logs, accomplishment histories, badge unlock systems, or leaderboard integrations.
+
+3. Contact Access Permission Manager (Section 9.5):
+   * Codex: A detailed dashboard allowing users to view, approve, reject, or revoke contact info access grants (allowedContactUsers permissions).
+   * Current Frontend: Uses a binary toggle to enable or disable privacy. Although the state tracks permissions in memory, there is no UI section for users to manage the list of peers who have requested or received their contact details.
+
+4. Program Progress & Completion Tracking (Section 12.3):
+   * Codex: Tracks a trainee's progression through their specific path (e.g. Design, Electronics, Web Development) with progress bars and module checklists.
+   * Current Frontend: The PROGRAMS section is a simple tag list. There is no path tracking, completed module percentage visualization, or syllabus checklist.
+
+5. Self Project Portfolio (Mes Projets):
+   * Codex: The user's profile must show their own active and collaborated projects.
+   * Current Frontend: While MemberProfileTab.jsx shows a projects section for other users, MyProfileTab.jsx has no projects section. The logged-in user cannot view their project history directly on their profile page.
+
+6. Formateur/Supervisor Special Profile Layouts:
+   * Codex: Supervisors and formateurs (like Sara Ladouy) have special landing layouts showing their supervised project grid, history of reviews, and active teaching poles.
+   * Current Frontend: Viewing a formateur's profile renders the standard trainee template with empty fields (e.g., empty CEF/CIN inputs), missing supervisor-specific widgets.
+
+7. Virtual Scannable ID Card:
+   * Codex: A virtual ID card containing a scannable QR code matching the user's ID for Fab Lab physical check-in and check-out tracking.
+   * Current Frontend: A static QR code icon is rendered in the header, but clicking it does not display the full scannable ID card modal.
+
+---
+
+3. UI & UX Improvements Needed
+
+1. Avatar Upload & Base64 Converter:
+   * Profile image uploads are static mock files. The profile editing form should include a clean file picker that converts images to base64 strings and saves them in local storage.
+2. Help Stats Representation:
+   * Displays general counts (e.g., "Projets Terminés", "Aides Fournies"), but does not link them to the actual history or provide a clickable modal showing the list of contributions/help validations.

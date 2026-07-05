@@ -1,0 +1,197 @@
+import { useState, useMemo } from 'react';
+import { useApp, SCREENS } from '../../context/AppContext';
+import { poleOptions, niveauOptions, yearOptions, getFiliereOptions, getOptionChoices } from '../../data/trainingData';
+import { validateEmail, validatePhone } from '../../utils/validation';
+
+export default function StagiaireScreen() {
+  const { navigateTo, goToCharte, setCurrentUser, showLogin, registrationDraft, setRegistrationDraft, showNotification } = useApp();
+
+  const isDraftValid = registrationDraft && registrationDraft.role === 'stagiaire';
+  const [form, setForm] = useState(isDraftValid ? registrationDraft.form : {
+    prenom: '', nom: '', cin: '',
+    pole: '', niveau: '', filiere: '', year: '', option: '',
+    tel: '', email: '',
+  });
+  const [charteAccepted, setCharteAccepted] = useState(isDraftValid ? registrationDraft.charteAccepted : false);
+  const [reproductionAccepted, setReproductionAccepted] = useState(isDraftValid ? registrationDraft.reproductionAccepted : false);
+
+  const handleCharteClick = (e) => {
+    e.preventDefault();
+    setRegistrationDraft({ role: 'stagiaire', form, charteAccepted, reproductionAccepted });
+    goToCharte(SCREENS.STAGIAIRE);
+  };
+
+  const update = (field, value) => {
+    const newForm = { ...form, [field]: value };
+    // Reset dependent fields
+    if (field === 'pole' || field === 'niveau') {
+      newForm.filiere = '';
+      newForm.option = '';
+    }
+    if (field === 'filiere' || field === 'year') {
+      newForm.option = '';
+    }
+    setForm(newForm);
+  };
+
+  const filiereList = useMemo(() => getFiliereOptions(form.pole, form.niveau), [form.pole, form.niveau]);
+  const optionList = useMemo(() => getOptionChoices(form.pole, form.niveau, form.filiere, form.year), [form.pole, form.niveau, form.filiere, form.year]);
+
+  const handleSubmit = () => {
+    const { prenom, nom, cin, pole, niveau, filiere, year, tel, email } = form;
+    if (!prenom || !nom || !cin || !pole || !niveau || !filiere || !year || !tel || !email) {
+      showNotification("Veuillez remplir tous les champs obligatoires.", 'error');
+      return;
+    }
+    if (!validateEmail(email)) {
+      showNotification("Veuillez entrer une adresse email valide.", 'error');
+      return;
+    }
+    if (!validatePhone(tel)) {
+      showNotification("Le numéro de téléphone doit commencer par 06 ou 07 et contenir 10 chiffres au total.", 'error');
+      return;
+    }
+    if (!charteAccepted || !reproductionAccepted) {
+      showNotification("Veuillez accepter la charte et l'autorisation de reproduction pour continuer.", 'error');
+      return;
+    }
+
+    const userData = { ...form, role: 'stagiaire' };
+    setCurrentUser(userData);
+    localStorage.setItem('temp_registration_data', JSON.stringify(userData));
+    showNotification("Compte créé avec succès !");
+    showLogin();
+  };
+
+  return (
+    <div className="flex flex-col w-full h-full max-w-md mx-auto p-6 justify-between overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-center relative mb-0">
+        <button onClick={() => navigateTo(SCREENS.ROLE_SELECTION)} className="absolute left-0 p-2 text-t-primary/40 hover:text-t-primary transition-colors">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+        <h2 className="text-2xl font-bold text-t-primary">Welcome Stagiaire</h2>
+      </div>
+
+      {/* Form */}
+      <div className="flex-1 space-y-2.5 overflow-y-auto px-2 always-visible-scrollbar my-4">
+        {/* Prenom */}
+        <div className="space-y-1">
+          <label className="text-sm font-semibold text-t-primary px-1">Prenom</label>
+          <input type="text" placeholder="Entrez Votre Prenom" value={form.prenom} onChange={e => update('prenom', e.target.value)}
+            className="w-full py-3 px-4 bg-t-surface border border-gray-300 rounded-xl outline-none focus:border-midnight-blue focus:ring-1 focus:ring-midnight-blue transition-all" />
+        </div>
+
+        {/* Nom */}
+        <div className="space-y-1.5">
+          <label className="text-sm font-semibold text-t-primary px-1">Nom</label>
+          <input type="text" placeholder="Entrez Votre Nom" value={form.nom} onChange={e => update('nom', e.target.value)}
+            className="w-full p-4 bg-t-surface border border-gray-300 rounded-xl outline-none focus:border-midnight-blue focus:ring-1 focus:ring-midnight-blue transition-all" />
+        </div>
+
+        {/* CIN */}
+        <div className="space-y-1.5">
+          <label className="text-sm font-semibold text-t-primary px-1">ID CIN</label>
+          <input type="text" placeholder="Entrez Votre CIN" value={form.cin} onChange={e => update('cin', e.target.value)}
+            className="w-full p-4 bg-t-surface border border-gray-300 rounded-xl outline-none focus:border-midnight-blue focus:ring-1 focus:ring-midnight-blue transition-all" />
+        </div>
+
+        {/* POLE */}
+        <div className="space-y-1.5">
+          <label className="text-sm font-semibold text-t-primary px-1">POLE</label>
+          <select value={form.pole} onChange={e => update('pole', e.target.value)}
+            className="w-full p-4 bg-t-surface border border-gray-300 rounded-xl outline-none focus:border-midnight-blue focus:ring-1 focus:ring-midnight-blue transition-all cursor-pointer">
+            <option value="" disabled hidden>selectionner votre pole</option>
+            {poleOptions.map(p => <option key={p} value={p}>{p}</option>)}
+          </select>
+        </div>
+
+        {/* Niveau */}
+        <div className="space-y-1.5">
+          <label className="text-sm font-semibold text-t-primary px-1">Niveau</label>
+          <select value={form.niveau} onChange={e => update('niveau', e.target.value)}
+            className="w-full p-4 bg-t-surface border border-gray-300 rounded-xl outline-none focus:border-midnight-blue focus:ring-1 focus:ring-midnight-blue transition-all cursor-pointer">
+            <option value="" disabled hidden>selectionner votre niveau</option>
+            {niveauOptions.map(n => <option key={n.value} value={n.value}>{n.label}</option>)}
+          </select>
+        </div>
+
+        {/* Filière */}
+        <div className="space-y-1.5">
+          <label className="text-sm font-semibold text-t-primary px-1">Filière</label>
+          <select value={form.filiere} onChange={e => update('filiere', e.target.value)}
+            className="w-full p-4 bg-t-surface border border-gray-300 rounded-xl outline-none focus:border-midnight-blue focus:ring-1 focus:ring-midnight-blue transition-all cursor-pointer">
+            <option value="" disabled hidden>selectionner votre pole</option>
+            {filiereList.map(f => (
+              <option key={f.name} value={f.name}>{f.name === "N" ? "Aucune filière disponible" : f.name}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Année */}
+        <div className="space-y-1.5">
+          <label className="text-sm font-semibold text-t-primary px-1">Année</label>
+          <select value={form.year} onChange={e => update('year', e.target.value)}
+            className="w-full p-4 bg-t-surface border border-gray-300 rounded-xl outline-none focus:border-midnight-blue focus:ring-1 focus:ring-midnight-blue transition-all cursor-pointer">
+            <option value="" disabled hidden>Sélectionner l'année</option>
+            {yearOptions.map(y => <option key={y.value} value={y.value}>{y.label}</option>)}
+          </select>
+        </div>
+
+        {/* Option (conditional) */}
+        {optionList.length > 0 && (
+          <div className="space-y-1.5">
+            <label className="text-sm font-semibold text-t-primary px-1">Option</label>
+            <select value={form.option} onChange={e => update('option', e.target.value)}
+              className="w-full p-4 bg-t-surface border border-gray-300 rounded-xl outline-none focus:border-midnight-blue focus:ring-1 focus:ring-midnight-blue transition-all cursor-pointer">
+              <option value="" disabled hidden>Sélectionner une option</option>
+              {optionList.map(o => <option key={o} value={o}>{o}</option>)}
+            </select>
+          </div>
+        )}
+
+        {/* Téléphone */}
+        <div className="space-y-1.5">
+          <label className="text-sm font-semibold text-t-primary px-1">téléphone</label>
+          <input type="tel" maxLength="10" placeholder="Entrez Votre Tel" value={form.tel} onChange={e => update('tel', e.target.value)}
+            className="w-full p-4 bg-t-surface border border-gray-300 rounded-xl outline-none focus:border-midnight-blue focus:ring-1 focus:ring-midnight-blue transition-all" />
+        </div>
+
+        {/* Email */}
+        <div className="space-y-1.5">
+          <label className="text-sm font-semibold text-t-primary px-1">Email</label>
+          <input type="email" placeholder="Entrez Votre Email" value={form.email} onChange={e => update('email', e.target.value)}
+            className="w-full p-4 bg-t-surface border border-gray-300 rounded-xl outline-none focus:border-midnight-blue focus:ring-1 focus:ring-midnight-blue transition-all" />
+        </div>
+
+        {/* Charter Agreement */}
+        <div className="flex items-start space-x-3 pt-4">
+          <input type="checkbox" checked={charteAccepted} onChange={e => setCharteAccepted(e.target.checked)}
+            className="mt-1 w-5 h-5 shrink-0 rounded border-gray-300 text-t-primary focus:ring-midnight-blue cursor-pointer" />
+          <p className="text-[13px] text-t-primary leading-relaxed">
+            J'accepte de respecter <button onClick={handleCharteClick} className="text-[#3B5FE6] underline font-semibold cursor-pointer">la charte de fab lab</button>
+          </p>
+        </div>
+
+        {/* Reproduction Agreement */}
+        <div className="flex items-start space-x-3 pt-2">
+          <input type="checkbox" checked={reproductionAccepted} onChange={e => setReproductionAccepted(e.target.checked)}
+            className="mt-1 w-5 h-5 shrink-0 rounded border-gray-300 text-t-primary focus:ring-midnight-blue cursor-pointer" />
+          <p className="text-[13px] text-t-primary leading-relaxed">
+            J'Autorise la reproduction sur tout support et par tous procédés et à diffuser, à titre gratuit et non exclusif, la (ou les) photographie(s) me représentant ainsi que mon témoignage recueillis
+          </p>
+        </div>
+      </div>
+
+      {/* Continue Button */}
+      <div className="pt-4 text-center">
+        <button onClick={handleSubmit}
+          className="w-full py-4 bg-button-gradient text-white font-bold text-lg rounded-xl shadow-[0_8px_20px_-5px_rgba(26,102,255,0.4)] hover:shadow-[0_12px_25px_-5px_rgba(26,102,255,0.5)] hover:-translate-y-1 transition-all duration-300 active:scale-95">
+          créer un compte <span className="ml-2">→</span>
+        </button>
+      </div>
+    </div>
+  );
+}

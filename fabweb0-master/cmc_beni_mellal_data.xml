@@ -1,0 +1,288 @@
+<?xml version="1.0" ?>
+<vocational_training>
+  <pole name="digital et intelligence artificiel">
+    <formation_initiale>
+      <niveau name="Technicien Spécialisé">
+        <filiere name="Infrastructure Digitale">
+          <year name="1ère année"/>
+          <year name="2ème année">
+            <option>Systèmes et Réseaux</option>
+            <option>Cloud Computing</option>
+            <option>Cybersécurité</option>
+          </year>
+        </filiere>
+        <filiere name="Développement Digital">
+          <year name="1ère année"/>
+          <year name="2ème année">
+            <option>Mobile</option>
+            <option>Web Fullstack</option>
+          </year>
+        </filiere>
+        <filiere name="Marketing Digital Et Communication">
+          <year name="1ère année"/>
+          <year name="2ème année">
+             <option>Web Marketer</option>
+          </year>
+        </filiere>
+    
+    </formation_initiale>
+  </pole>
+  <pole name="Agriculture">
+    <formation_initiale>
+      <niveau name="Technicien Spécialisé">
+        <filiere name="Agriculture De Précision">
+          <year name="1ère année"/>
+          <year name="2ème année">
+            <option>N</option>
+          </year>
+        </filiere>
+        <filiere name="Management Des Exploitations Agricoles">
+          <year name="1ère année"/>
+          <year name="2ème année">
+            <option>Commercialisation des Produits Agricoles (Agrobusiness)</option>
+            <option>Gestion des entreprises et Coopératives Agricoles</option>
+          </year>
+        </filiere>
+        <filiere name="Techniques Agricoles">
+          <year name="1ère année"/>
+          <year name="2ème année">
+            <option>Agriculture Biologique</option>
+            <option>Gestion des Sols et systèmes d'Irrigation</option>
+            <option>Production végétale</option>            
+
+          </year>
+        </filiere>
+      </niveau>
+      <niveau name="Qualification">
+        <filiere name="Opérateur Agricole">
+          <year name="1ère année"/>
+          <year name="2ème année">
+            <option>N</option>
+          </year>
+        </filiere>
+      </niveau>
+    </formation_initiale>
+   
+  </pole>
+  <pole name="Agro-Industrie">
+    <formation_initiale>
+      <niveau name="Technicien Spécialisé">
+        <filiere name="Transformation et valorisation des plantes Aromatiques et médicinales">
+          <year name="1ère année"/>
+          <year name="2ème année">
+            <option>N</option>
+          </year>
+        </filiere>
+      </niveau>
+     
+    </formation_initiale>
+  </pole>
+  <pole name="BTP">
+    <formation_initiale>
+      <niveau name="Technicien Spécialisé">
+        <filiere name="Géomètre Topographe">
+          <year name="1ère année"/>
+          <year name="2ème année">
+             <option>N</option>
+          </year>
+        </filiere>
+        <filiere name="Génie Civil">
+          <year name="1ère année"/>
+          <year name="2ème année">
+             <option>Génie Civil option Travaux Publics</option>
+             <option>Génie Civil option Laboratoire BTP</option>
+          </year>
+        </filiere>
+      </niveau>
+      <niveau name="Technicien">
+        <filiere name="Dessinateur Projeteur En Bâtiment">
+          <year name="1ère année"/>
+          <year name="2ème année">
+            <option>Bâtiment option Métreur</option>
+            <option>Bâtiment option Projeteur</option>
+          </year>
+        </filiere>
+     
+    </formation_initiale>
+    
+  </pole>
+  <pole name="Industrie">
+    <formation_initiale>
+      <niveau name="Technicien Spécialisé">
+        <filiere name="Diagnostic Et Électronique Embarquée Automobile">
+          <year name="1ère année"/>
+          <year name="2ème année">
+            <option>N</option>
+          </year>
+        </filiere>
+        <filiere name="Qualité Hygiène Sécurité Et Environnement (Qhse)">
+          <year name="1ère année"/>
+          <year name="2ème année">
+            <option>N</option>
+          </year>
+        </filiere>
+      </niveau>
+      <niveau name="Technicien">
+       <filiere name="Electromécanique des engins motorisés">
+          <year name="1ère année"/>
+          <year name="2ème année">
+            <option>Electromécanique des engins motorisés option Machinisme agricole</option>
+            <option>Electromécanique des engins motorisés option Automobile</option>
+          </year>
+        </filiere>
+      </niveau>
+    
+    </formation_initiale>
+
+  </pole>
+  <pole name="Tourisme Hôtellerie Restauration">
+    <formation_initiale>
+      <niveau name="Technicien Spécialisé">
+        <filiere name="Management Touristique">
+          <year name="1ère année"/>
+          <year name="2ème année">
+            <option>E-Travel Agency</option>
+            <option>Management des destinations durables</option>
+          </year>
+        </filiere>
+        <filiere name="Management hôtelier">
+          <year name="1ère année"/>
+          <year name="2ème année">
+            <option>Hébergement et Réception</option>
+          </year>
+        </filiere>
+      </niveau>
+      <niveau name="Technicien">
+        <filiere name="Arts culinaires">
+          <year name="1ère année"/>
+          <year name="2ème année">
+            <option>Cuisine Gastronomique</option>
+            <option>Pâtisserie-Chocolaterie</option>
+          </year>
+        </filiere>
+         <filiere name="Service de Restauration ''Arts de table''">
+          <year name="1ère année"/>
+          <year name="2ème année">
+            <option>N</option>
+          </year>
+        </filiere>
+      </niveau>
+    
+    </formation_initiale>
+ 
+  </pole>
+  <pole name="Logistique et Transport">
+    <formation_initiale>
+      <niveau name="Technicien Spécialisé">
+        <filiere name="Exploitation">
+          <year name="1ère année"/>
+          <year name="2ème année">
+            <option>Logistique</option>
+            <option>Transport</option>
+          </year>
+        </filiere>
+      </niveau>
+      <niveau name="Technicien">
+        <filiere name="Moniteur Auto-Ecole">
+          <year name="1ère année"/>
+          <year name="2ème année">
+            <option>N</option>
+          </year>
+        </filiere>
+         <filiere name="Logistique">
+          <year name="1ère année"/>
+          <year name="2ème année">
+            <option>N</option>
+          </year>
+        </filiere>
+       
+      </niveau>
+    </formation_initiale>
+  </pole>
+  <pole name="Gestion et Commerce">
+    <formation_initiale>
+      <niveau name="Technicien Spécialisé">
+        <filiere name="Gestion des Entreprises">
+          <year name="1ère année"/>
+          <year name="2ème année">
+            <option>Comptabilité et Finance</option>
+            <option>Commerce et Marketing</option>
+            <option>Ressources Humaines</option>
+          </year>
+        </filiere>
+      </niveau>
+      <niveau name="Technicien">
+        <filiere name="Assistant Administratif">
+          <year name="1ère année"/>
+          <year name="2ème année">
+            <option>Comptabilité</option>
+            <option>Commerce</option>
+            <option>Gestion</option>
+          </year>
+        </filiere>
+      </niveau>
+      <niveau name="Qualification">
+        <item>N</item>
+      </niveau>
+    </formation_initiale>
+    <formation_continue>
+      <filiere name="Gestion des Petites Entreprises"/>
+      <filiere name="E-commerce Fondations"/>
+      <filiere name="Comptabilité de Base"/>
+    </formation_continue>
+  </pole>
+  <pole name="Artisanat">
+    <formation_initiale>
+      <niveau name="Technicien Spécialisé">
+        <item>N</item>
+      </niveau>
+      <niveau name="Technicien">
+        <filiere name="Menuiserie D'Art">
+          <year name="1ère année"/>
+          <year name="2ème année">
+            <option>N</option>
+          </year>
+        </filiere>
+        <filiere name="Tapisserie">
+          <year name="1ère année"/>
+          <year name="2ème année">
+            <option>N</option>
+          </year>
+        </filiere>
+       
+      </niveau>
+      <niveau name="Qualification">
+        <filiere name="Couture traditionnelle">
+          <year name="1ère année"/>
+          <year name="2ème année">
+            <option>N</option>
+          </year>
+        </filiere>
+        <filiere name="Tissage Traditionnel">
+          <year name="1ère année"/>
+          <year name="2ème année">
+            <option>N</option>
+          </year>
+        </filiere>
+      </niveau>
+    </formation_initiale>
+    <formation_continue>
+      <filiere name="Tailleur de Pierre"/>
+      <filiere name="Bijouterie Traditionnelle"/>
+      <filiere name="Poterie et Céramique"/>
+    </formation_continue>
+  </pole>
+  <pole name="AIG">
+    <formation_initiale>
+      <niveau name="Technicien Spécialisé">
+        <filiere name="infographie prépresse">
+          <year name="1ère année"/>
+          <year name="2ème année">
+            <option>N</option>
+          </year>
+        </filiere>
+      </niveau>
+
+    </formation_initiale>
+  </pole>
+</vocational_training>

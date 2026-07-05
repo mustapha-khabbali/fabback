@@ -1,0 +1,29 @@
+# node_modules and build outputs
+**/node_modules/
+**/dist/
+**/build/
+**/.firebase/
+**/.dataconnect/
+
+# Git backups
+**/git_backup_folder/
+
+# Logs
+*.log
+**/logs/
+
+# OS/Editor files
+.DS_Store
+**/.DS_Store
+.vscode/
+**/.vscode/
+.idea/
+**/.idea/
+
+# Environment variables
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+**/.env*

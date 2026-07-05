@@ -1,0 +1,45 @@
+Admin Dashboard View: Live Attendance & Gate Monitor Analysis
+
+This document provides a technical and functional gap analysis of the specific "Dashboard" tab (the real-time attendance and gate monitoring section) inside the FabLab Admin codebase (`dashboard.html`). It focuses solely on the live presence tracker, today's event log, and its real-time Firestore integration.
+
+---
+
+1. Architecture & Live Data Workflows
+
+The live attendance view (container `#view-dashboard`) acts as the core real-time telemetry panel for the laboratory:
+
+* Real-time Synchronization:
+  - Hooks a Firestore `onSnapshot` listener to the `attendance` collection.
+  - Queries records matching `timestamp >= start-of-day` (midnight), ordered descending.
+* Metrics Computation (`renderFirebaseDashboard`):
+  - Live Present Count (`metric-present`): Computes presence by tracking the last event type (`in` vs `out`) for each unique `userId` within today's logs.
+  - Entry Counter (`metric-total`): Displays the sum of all check-in (`in`) events since midnight.
+  - Exit Counter (`metric-exits`): Displays the sum of all check-out (`out`) events since midnight.
+* Live presence grid (`#presence-list`): Renders cards for each checked-in user, detailing their name, check-in timestamp, and an "Actif" pulse dot.
+* Daily Activity Log (`#journal-list`): Renders a chronological stream of gate transitions with transition types, objectives, and timestamps.
+
+---
+
+2. Technical & Functional Gaps vs. Production Requirements
+
+A comparison against standard gate operations reveals several gaps in the live telemetry system:
+
+1. Lack of Admin Override (Manual Force Checkout):
+   * Gap: If a trainee forgets to scan the Gate-OUT QR code when leaving, they remain in the "Stagiaires Présents" list indefinitely.
+   * Required: A "Forcer la sortie" (Force Checkout) button next to each active trainee card to allow administrators to manually check them out and record a checkout timestamp.
+
+2. Absence of Machine Status & Pole Indicators:
+   * Gap: The live presence cards do not display which machine (e.g. 3D Printer, CNC) a trainee is currently running, or which training pole they are working under.
+   * Required: Integration with machine session states to display active machine badges next to the trainee's name in the live presence list.
+
+3. Static Profile Information:
+   * Gap: Trainee cards are non-interactive. Administrators cannot click a trainee's name to view their profile details, level, filiere, or certified machines.
+   * Required: A side-drawer or modal trigger on trainee card click to inspect their profile record.
+
+4. No Capacity Checks or Gate Control:
+   * Gap: There is no indicator showing if the laboratory has reached maximum capacity, nor is there a trigger to temporarily block further check-ins.
+   * Required: A safety capacity bar (e.g., "12 / 20 Trainees") that alerts when capacity is reached and locks the Gate-IN QR code.
+
+5. Activity Log Inflexibility:
+   * Gap: Today's activity log is read-only. If a trainee checked in with the wrong objective (e.g., "Visite" instead of "Impression 3D"), there is no way to edit or reassign it.
+   * Required: Edit controls on today's activity log entries.

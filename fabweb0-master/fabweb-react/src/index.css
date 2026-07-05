@@ -1,0 +1,22 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary-blue-top: #2B7FFF;
+  --color-primary-blue-bottom: #1A66FF;
+  --color-midnight-blue: #133853;
+  
+  --font-montserrat: 'Montserrat', sans-serif;
+}
+
+@layer utilities {
+  .bg-button-gradient {
+    background: linear-gradient(to bottom, var(--color-primary-blue-top) 0%, var(--color-primary-blue-bottom) 100%);
+  }
+}
+
+body {
+  font-family: var(--font-montserrat);
+  background: linear-gradient(to bottom, #BDE3F2 0%, #E2F1F8 40%, #FFFFFF 100%);
+  min-height: 100vh;
+  margin: 0;
+}

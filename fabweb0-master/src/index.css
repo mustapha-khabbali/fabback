@@ -1,0 +1,414 @@
+@import "tailwindcss";
+
+/* ===========================
+   CSS CUSTOM PROPERTIES (Theme Tokens)
+   =========================== */
+:root {
+  /* Surfaces */
+  --color-theme-body: #FFFFFF;
+  --color-theme-surface: #FFFFFF;
+  --color-theme-surface-hover: #F9FAFB;
+  --color-theme-surface-alt: #F9FAFB;
+  --color-theme-surface-elevated: #FFFFFF;
+  --color-theme-surface-input: #F9FAFB;
+  --color-theme-surface-glass: rgba(255, 255, 255, 0.85);
+
+  /* Text */
+  --color-theme-text-primary: #133853;
+  --color-theme-text-secondary: rgba(19, 56, 83, 0.6);
+  --color-theme-text-tertiary: rgba(19, 56, 83, 0.4);
+  --color-theme-text-muted: rgba(19, 56, 83, 0.2);
+  --color-theme-text-inverse: #FFFFFF;
+
+  /* Borders */
+  --color-theme-border: #F3F4F6;
+  --color-theme-border-strong: #E5E7EB;
+  --color-theme-border-subtle: rgba(0, 0, 0, 0.04);
+
+  /* Shadows */
+  --shadow-theme-card: 0 1px 3px rgba(0, 0, 0, 0.06);
+  --shadow-theme-elevated: 0 4px 20px rgba(0, 0, 0, 0.08);
+  --shadow-theme-glow: none;
+
+  /* Gradients */
+  --gradient-theme-main: linear-gradient(to bottom, #BDE3F2 0%, #E2F1F8 40%, #FFFFFF 100%);
+
+  /* Bottom Nav */
+  --color-theme-nav-bg: #FFFFFF;
+  --color-theme-nav-border: #F3F4F6;
+  --shadow-theme-nav: 0 -4px 20px -10px rgba(0, 0, 0, 0.1);
+
+  /* Notification badge */
+  --color-theme-badge-border: #FFFFFF;
+
+  /* Scrollbar */
+  --color-theme-scrollbar-thumb: #133853;
+  --color-theme-scrollbar-track: rgba(19, 56, 83, 0.1);
+
+  /* Modal overlays */
+  --color-theme-overlay: rgba(19, 56, 83, 0.6);
+  --color-theme-modal-bg: #FFFFFF;
+  --color-theme-modal-handle: #F3F4F6;
+}
+
+/* ===========================
+   ★ PREMIUM DARK MODE ★
+   Deep navy aesthetic with glassmorphism,
+   subtle blue glows, and refined surfaces
+   Inspired by admin dashboard Vision UI
+   =========================== */
+[data-theme="dark"] {
+  /* Surfaces — layered dark with subtle transparency */
+  --color-theme-body: #060B28;
+  --color-theme-surface: rgba(17, 28, 68, 0.7);
+  --color-theme-surface-hover: rgba(26, 37, 82, 0.8);
+  --color-theme-surface-alt: rgba(255, 255, 255, 0.03);
+  --color-theme-surface-elevated: rgba(17, 28, 68, 0.9);
+  --color-theme-surface-input: rgba(6, 11, 40, 0.6);
+  --color-theme-surface-glass: rgba(17, 28, 68, 0.5);
+
+  /* Text — bright whites with elegant fading */
+  --color-theme-text-primary: #FFFFFF;
+  --color-theme-text-secondary: rgba(255, 255, 255, 0.55);
+  --color-theme-text-tertiary: rgba(255, 255, 255, 0.35);
+  --color-theme-text-muted: rgba(255, 255, 255, 0.12);
+  --color-theme-text-inverse: #060B28;
+
+  /* Borders — subtle white glass edges */
+  --color-theme-border: rgba(255, 255, 255, 0.06);
+  --color-theme-border-strong: rgba(255, 255, 255, 0.12);
+  --color-theme-border-subtle: rgba(255, 255, 255, 0.03);
+
+  /* Shadows — deep shadows with blue glow accents */
+  --shadow-theme-card: 0 4px 16px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.04);
+  --shadow-theme-elevated: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 40px rgba(0, 117, 255, 0.06);
+  --shadow-theme-glow: 0 0 30px rgba(0, 117, 255, 0.08);
+
+  /* Gradients — deep navy with radial blue glow */
+  --gradient-theme-main: #060B28;
+
+  /* Bottom Nav — frosted glass effect */
+  --color-theme-nav-bg: rgba(10, 16, 53, 0.85);
+  --color-theme-nav-border: rgba(255, 255, 255, 0.06);
+  --shadow-theme-nav: 0 -8px 32px rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 117, 255, 0.04);
+
+  /* Notification badge */
+  --color-theme-badge-border: #111C44;
+
+  /* Scrollbar */
+  --color-theme-scrollbar-thumb: rgba(255, 255, 255, 0.12);
+  --color-theme-scrollbar-track: rgba(255, 255, 255, 0.03);
+
+  /* Modal overlays */
+  --color-theme-overlay: rgba(6, 11, 40, 0.8);
+  --color-theme-modal-bg: rgba(17, 28, 68, 0.95);
+  --color-theme-modal-handle: rgba(255, 255, 255, 0.1);
+}
+
+/* ===========================
+   TAILWIND V4 THEME TOKENS
+   =========================== */
+@theme {
+  --color-midnight-blue: #133853;
+  --color-primary-blue-top: #2B7FFF;
+  --color-primary-blue-bottom: #1A66FF;
+  --color-accent-blue: #3B5FE6;
+
+  /* Dark-mode-ready theme tokens */
+  --color-t-body: var(--color-theme-body);
+  --color-t-surface: var(--color-theme-surface);
+  --color-t-surface-hover: var(--color-theme-surface-hover);
+  --color-t-surface-alt: var(--color-theme-surface-alt);
+  --color-t-surface-elevated: var(--color-theme-surface-elevated);
+  --color-t-surface-input: var(--color-theme-surface-input);
+  --color-t-surface-glass: var(--color-theme-surface-glass);
+  --color-t-primary: var(--color-theme-text-primary);
+  --color-t-secondary: var(--color-theme-text-secondary);
+  --color-t-tertiary: var(--color-theme-text-tertiary);
+  --color-t-muted: var(--color-theme-text-muted);
+  --color-t-inverse: var(--color-theme-text-inverse);
+  --color-t-border: var(--color-theme-border);
+  --color-t-border-strong: var(--color-theme-border-strong);
+  --color-t-border-subtle: var(--color-theme-border-subtle);
+  --color-t-nav-bg: var(--color-theme-nav-bg);
+  --color-t-nav-border: var(--color-theme-nav-border);
+  --color-t-badge-border: var(--color-theme-badge-border);
+  --color-t-overlay: var(--color-theme-overlay);
+  --color-t-modal-bg: var(--color-theme-modal-bg);
+  --color-t-modal-handle: var(--color-theme-modal-handle);
+
+  --font-family-montserrat: 'Montserrat', sans-serif;
+}
+
+/* ===========================
+   BASE STYLES
+   =========================== */
+html,
+body {
+  font-family: 'Montserrat', sans-serif;
+  margin: 0;
+  padding: 0;
+  height: 100dvh;
+  width: 100vw;
+  overflow: hidden;
+  background-color: var(--color-theme-body);
+  color: var(--color-theme-text-primary);
+  /* Block browser back/forward overscroll gestures */
+  overscroll-behavior: none;
+  /* Hide scrollbars globally */
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+  transition: background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1), color 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+#root {
+  height: 100%;
+  width: 100%;
+  overscroll-behavior: none;
+}
+
+.main-container {
+  background: var(--gradient-theme-main);
+  transition: background 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ★ Premium dark mode — radial blue aurora glow + glass overlay */
+[data-theme="dark"] .main-container {
+  background:
+    radial-gradient(ellipse at 50% -10%, rgba(0, 117, 255, 0.15) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 100%, rgba(67, 24, 255, 0.08) 0%, transparent 40%),
+    #060B28;
+  background-attachment: fixed;
+}
+
+/* ★ Premium glassmorphic cards in dark mode */
+[data-theme="dark"] .glass-card {
+  background: rgba(17, 28, 68, 0.5) !important;
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.06) !important;
+  box-shadow:
+    0 4px 24px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+/* ★ Fully opaque solid surface for dark mode */
+[data-theme="dark"] .dark-solid {
+  background: rgb(17, 28, 68) !important;
+}
+
+
+/* ★ Glow effect on interactive elements in dark mode */
+[data-theme="dark"] .glow-on-hover:hover {
+  box-shadow: 0 0 24px rgba(0, 117, 255, 0.15), 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+/* ★ Accent blue glow button in dark mode */
+[data-theme="dark"] .btn-accent-glow {
+  box-shadow: 0 4px 20px rgba(59, 95, 230, 0.35), 0 0 40px rgba(59, 95, 230, 0.1);
+}
+
+/* ★ Bottom nav frosted glass in dark mode */
+[data-theme="dark"] .nav-glass {
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+}
+
+/* ★ Premium gradient border effect for selected items */
+[data-theme="dark"] .gradient-border-selected {
+  background: linear-gradient(135deg, rgba(0, 117, 255, 0.15), rgba(67, 24, 255, 0.15));
+  border-color: rgba(0, 117, 255, 0.3) !important;
+}
+
+/* --- PHONE STYLES --- */
+@media screen and (max-width: 767px) {
+  .mobile-padding {
+    padding: 1rem !important;
+    margin-top: 0 !important;
+  }
+
+  .illustration-container {
+    margin-top: 4vh !important;
+  }
+
+  .logo-header {
+    margin-top: 0 !important;
+    width: 110px !important;
+  }
+}
+
+/* --- DESKTOP STYLES --- */
+@media screen and (min-width: 768px) {
+  .illustration-container {
+    margin-top: 0 !important;
+  }
+
+  .logo-header {
+    margin-top: 0rem !important;
+    width: 140px !important;
+  }
+}
+
+/* KILL SCROLLBAR ON NON-OPT-IN ELEMENTS */
+*:not(.always-visible-scrollbar)::-webkit-scrollbar {
+  display: none !important;
+}
+
+/* Rich Text Styling */
+.rich-text-content ul {
+  list-style-type: disc !important;
+  padding-left: 1.5rem !important;
+  margin: 0.75rem 0 !important;
+}
+
+.rich-text-content ol {
+  list-style-type: decimal !important;
+  padding-left: 1.5rem !important;
+  margin: 0.75rem 0 !important;
+}
+
+.rich-text-content li {
+  margin-bottom: 0.25rem !important;
+}
+
+.rich-text-content b,
+.rich-text-content strong {
+  font-weight: 800 !important;
+}
+
+.rich-text-content i,
+.rich-text-content em {
+  font-style: italic !important;
+}
+
+.rich-text-content u {
+  text-decoration: underline !important;
+}
+
+.overflow-wrap-anywhere {
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
+}
+
+/* Button gradient utility */
+.bg-button-gradient {
+  background: linear-gradient(to bottom, #2B7FFF 0%, #1A66FF 100%);
+}
+
+/* Custom scrollbar for internal scroll regions (hidden) */
+.custom-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Always visible scrollbar for specific screens */
+.always-visible-scrollbar {
+  scrollbar-width: thin !important;
+  scrollbar-color: var(--color-theme-scrollbar-thumb) var(--color-theme-scrollbar-track) !important;
+  -ms-overflow-style: auto !important;
+  -webkit-overflow-scrolling: touch;
+}
+
+.always-visible-scrollbar::-webkit-scrollbar {
+  display: block !important;
+  width: 6px !important;
+  -webkit-appearance: none !important;
+}
+
+.always-visible-scrollbar::-webkit-scrollbar-track {
+  background: var(--color-theme-scrollbar-track) !important;
+  border-radius: 10px !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+.always-visible-scrollbar::-webkit-scrollbar-thumb {
+  background-color: var(--color-theme-scrollbar-thumb) !important;
+  border-radius: 10px !important;
+  border: 1px solid rgba(255, 255, 255, 0.3) !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+/* contentEditable Placeholder Support */
+[contenteditable][placeholder]:empty:before {
+  content: attr(placeholder);
+  color: var(--color-theme-text-muted);
+  cursor: text;
+}
+
+[contenteditable][placeholder]:empty:focus:before {
+  content: "";
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+@keyframes slideDown {
+  from { transform: translateY(0); }
+  to { transform: translateY(100%); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out forwards;
+}
+
+.animate-slide-up {
+  animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-slide-down {
+  animation: slideDown 0.3s ease-in forwards;
+}
+
+/* ===========================
+   ★ PREMIUM DARK MODE ANIMATIONS
+   =========================== */
+@keyframes shimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+@keyframes glowPulse {
+  0%, 100% { box-shadow: 0 0 20px rgba(0, 117, 255, 0.1); }
+  50% { box-shadow: 0 0 30px rgba(0, 117, 255, 0.2); }
+}
+
+[data-theme="dark"] .shimmer-dark {
+  background: linear-gradient(90deg, transparent 30%, rgba(255,255,255,0.03) 50%, transparent 70%);
+  background-size: 200% 100%;
+  animation: shimmer 3s infinite;
+}
+
+[data-theme="dark"] .glow-pulse {
+  animation: glowPulse 3s ease-in-out infinite;
+}
+
+/* ★ Smooth theme transition for ALL elements */
+[data-theme="dark"] *,
+[data-theme="light"] * {
+  transition-property: background-color, border-color, color, box-shadow;
+  transition-duration: 0.3s;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Exclude transform-based animations from the blanket transition */
+[data-theme="dark"] .active\:scale-95:active,
+[data-theme="dark"] .active\:scale-\[0\.98\]:active,
+[data-theme="dark"] .hover\:scale-110:hover,
+[data-theme="dark"] .group-hover\:scale-110:hover {
+  transition-property: transform;
+  transition-duration: 0.15s;
+}

@@ -1,0 +1,17 @@
+{
+  "projects": {
+    "default": "fablab-bmk"
+  },
+  "targets": {
+    "fablab-bmk": {
+      "hosting": {
+        "visitor": [
+          "fablab-bmk"
+        ],
+        "admin": [
+          "fablab-cmc"
+        ]
+      }
+    }
+  }
+}
