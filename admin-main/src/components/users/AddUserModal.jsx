@@ -6,9 +6,16 @@ const ROLES = ['Stagiaire', 'Formateur', 'Administrateur', 'Visiteur'];
 const emptyForm = {
   role: 'Stagiaire',
   nom: '', prenom: '', email: '', tel: '', cin: '',
-  cef: '', pole: '', niveau: '', filiere: '', year: '', option: '',
+  cef: '', pole: '', niveau: 'Technicien Spécialisé', filiere: '', year: '', option: '',
   bio: ''
 };
+
+function createUserId() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return `user-${crypto.randomUUID()}`;
+  }
+  return `user-${Date.now()}`;
+}
 
 export default function AddUserModal({ onCreate, onClose }) {
   const [form, setForm] = useState(emptyForm);
@@ -21,6 +28,9 @@ export default function AddUserModal({ onCreate, onClose }) {
 
   const update = (field, value) => {
     const next = { ...form, [field]: value };
+    if (field === 'role' && value === 'Stagiaire' && !next.niveau) {
+      next.niveau = 'Technicien Spécialisé';
+    }
     // Same cascade as the profile edit form.
     if (field === 'pole' || field === 'niveau') { next.filiere = ''; next.option = ''; }
     if (field === 'filiere' || field === 'year') { next.option = ''; }
@@ -32,7 +42,7 @@ export default function AddUserModal({ onCreate, onClose }) {
   const handleCreate = () => {
     if (!canCreate) return;
     const base = {
-      id: 'user-' + Date.now(),
+      id: createUserId(),
       role: form.role,
       prenom: form.prenom.trim(),
       nom: form.nom.trim(),
@@ -128,8 +138,8 @@ export default function AddUserModal({ onCreate, onClose }) {
               </div>
               <div className="flex flex-col">
                 <span className={label}>Filière</span>
-                <select value={form.filiere} onChange={(e) => update('filiere', e.target.value)} className={`${field} cursor-pointer`}>
-                  <option value="" disabled hidden>Sélectionner la filière</option>
+                <select value={form.filiere} onChange={(e) => update('filiere', e.target.value)} disabled={!form.pole || !form.niveau || filiereList.length === 0} className={`${field} cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed`}>
+                  <option value="" disabled hidden>{!form.pole ? 'Sélectionner le pôle d’abord' : !form.niveau ? 'Sélectionner le niveau d’abord' : 'Sélectionner la filière'}</option>
                   {filiereList.map((f) => <option key={f.name} value={f.name}>{f.name === 'N' ? 'Aucune filière disponible' : f.name}</option>)}
                 </select>
               </div>

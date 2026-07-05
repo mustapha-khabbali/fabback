@@ -336,7 +336,7 @@ export default function AdminOverviewView({ onNavigate }) {
 
   // Custom exceptions list
   const [customExceptions, setCustomExceptions] = useState([
-    { id: 'c1', label: 'Maintenance CNC', date: '2026-07-05', timeFrom: '14:00', timeTo: '17:00', isCustom: true }
+    { id: 'c1', label: 'Maintenance Assemblage', date: '2026-07-05', timeFrom: '14:00', timeTo: '17:00', isCustom: true }
   ]);
 
   // New exception form fields
