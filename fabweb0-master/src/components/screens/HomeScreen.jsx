@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useApp, SCREENS } from '../../context/AppContext';
+import { ensureUserIdentity } from '../../utils/userIdentity';
 
 const introImages = ['intro.webp', 'intro1.webp', 'intro2.webp', 'intro3.webp', 'intro4.webp', 'intro5.webp', 'intro6.webp', 'intro7.webp', 'intro8.webp'];
 
@@ -20,7 +21,7 @@ export default function HomeScreen() {
     setAuthLoading(provider);
     setTimeout(() => {
       setAuthLoading(null);
-      setCurrentUser({
+      setCurrentUser(ensureUserIdentity({
         prenom: "Test",
         nom: "User",
         cin: "AB123456",
@@ -33,7 +34,7 @@ export default function HomeScreen() {
           { name: 'FabLab Hackathon 2024', type: 'Hackathon', result: 'Win' },
           { name: 'Introduction to IoT', type: 'Workshop', result: 'Participation' }
         ]
-      });
+      }));
       navigateTo(SCREENS.ROLE_SELECTION);
     }, 800);
   }, [navigateTo, setCurrentUser]);
@@ -68,6 +69,16 @@ export default function HomeScreen() {
         {/* Auth Buttons */}
         <div className="w-full flex flex-col space-y-4 pt-4">
           <button
+            disabled
+            className="invisible pointer-events-none w-full py-4 bg-t-surface text-t-primary font-bold text-lg rounded-2xl border border-t-border shadow-sm hover:shadow-md transition-all active:scale-95 flex items-center justify-center space-x-3"
+          >
+            <>
+              <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/microsoft.svg" className="w-6 h-6" alt="Microsoft" />
+              <span>Continuer avec Outlook</span>
+            </>
+          </button>
+
+          <button
             onClick={() => handleAuth('google')}
             className="w-full py-4 bg-t-surface text-t-primary font-bold text-lg rounded-2xl border border-t-border shadow-sm hover:shadow-md transition-all active:scale-95 flex items-center justify-center space-x-3"
           >
@@ -80,22 +91,6 @@ export default function HomeScreen() {
               </>
             )}
           </button>
-
-          {/* 
-          <button
-            onClick={() => handleAuth('outlook')}
-            className="w-full py-4 bg-t-surface text-t-primary font-bold text-lg rounded-2xl border border-t-border shadow-sm hover:shadow-md transition-all active:scale-95 flex items-center justify-center space-x-3"
-          >
-            {authLoading === 'outlook' ? (
-              <span>Patientez...</span>
-            ) : (
-              <>
-                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/microsoft.svg" className="w-6 h-6" alt="Microsoft" />
-                <span>Continuer avec Outlook</span>
-              </>
-            )}
-          </button>
-          */}
         </div>
 
       </div>

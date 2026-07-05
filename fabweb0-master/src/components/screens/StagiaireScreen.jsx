@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { useApp, SCREENS } from '../../context/AppContext';
 import { poleOptions, niveauOptions, yearOptions, getFiliereOptions, getOptionChoices } from '../../data/trainingData';
 import { validateEmail, validatePhone } from '../../utils/validation';
+import { ensureUserIdentity } from '../../utils/userIdentity';
 
 export default function StagiaireScreen() {
   const { navigateTo, goToCharte, setCurrentUser, showLogin, registrationDraft, setRegistrationDraft, showNotification } = useApp();
@@ -56,7 +57,7 @@ export default function StagiaireScreen() {
       return;
     }
 
-    const userData = { ...form, role: 'stagiaire' };
+    const userData = ensureUserIdentity({ ...form, role: 'stagiaire' });
     setCurrentUser(userData);
     localStorage.setItem('temp_registration_data', JSON.stringify(userData));
     showNotification("Compte créé avec succès !");

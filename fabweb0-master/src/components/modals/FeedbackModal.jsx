@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { getPrimaryUserId } from '../../utils/userIdentity';
 
 export default function FeedbackModal() {
   const { showFeedbackModal, setShowFeedbackModal, setIsUserInLab, currentUser, showNotification } = useApp();
@@ -9,11 +10,13 @@ export default function FeedbackModal() {
   if (!showFeedbackModal) return null;
 
   const saveGateOut = () => {
-    const userId = currentUser.uid || currentUser.id || 'guest';
+    const userId = getPrimaryUserId(currentUser) || 'guest';
     const timestampOut = new Date().toISOString();
-    let attendance = [];
+    let attendance;
 
-    try { attendance = JSON.parse(localStorage.getItem('lab_attendance') || '[]'); } catch {}
+    try { attendance = JSON.parse(localStorage.getItem('lab_attendance') || '[]'); } catch {
+      attendance = [];
+    }
 
     const openEntryIndex = attendance.findIndex((entry) =>
       entry.type === 'in' &&

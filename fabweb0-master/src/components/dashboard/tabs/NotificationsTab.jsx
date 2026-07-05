@@ -1,18 +1,14 @@
-import { useState } from 'react';
 import { useApp, TABS } from '../../../context/AppContext';
-import { mockUsers } from '../../../data/usersData';
+import { findUserByIdentity, getPrimaryUserId } from '../../../utils/userIdentity';
 
 export default function NotificationsTab() {
-  const { currentUser, setSelectedUser, setActiveTab, showNotification, setPreviousTab, activeTab, selectedNotificationRequest, setSelectedNotificationRequest, setReviewingProject, setCurrentProjectId, directProgramView, setDirectProgramView, notifications, setNotifications, handleContactRequestResponse, setShowHelpFeedbackModal } = useApp();
+  const { currentUser, setSelectedUser, setActiveTab, showNotification, setPreviousTab, activeTab, selectedNotificationRequest, setSelectedNotificationRequest, setReviewingProject, setCurrentProjectId, setDirectProgramView, notifications, setNotifications, handleContactRequestResponse, setShowHelpFeedbackModal, usersList } = useApp();
+  const currentUserId = getPrimaryUserId(currentUser);
 
   // A notification with a recipientId is only meant for that user (e.g. don't show
   // the sender their own invite). Notifications without one are shown to everyone (demo seeds).
-  const visibleNotifications = notifications.filter(n => !n.recipientId || n.recipientId === currentUser.id);
+  const visibleNotifications = notifications.filter(n => !n.recipientId || String(n.recipientId) === String(currentUserId));
   
-  // Feedback state for the pending notification
-  const [feedbackRating, setFeedbackRating] = useState(0);
-  const [feedbackComment, setFeedbackComment] = useState('');
-
   const handleApprove = (id) => {
     if (selectedNotificationRequest?.type === 'CONTACT_REQUEST') {
       handleContactRequestResponse(id, selectedNotificationRequest.requesterId, true);
@@ -42,7 +38,7 @@ export default function NotificationsTab() {
   };
 
   const viewSenderProfile = (userId) => {
-    const user = mockUsers.find(u => u.id === userId);
+    const user = findUserByIdentity(usersList, userId, currentUser);
     if (user) {
       setPreviousTab(activeTab);
       setSelectedUser(user);
@@ -182,7 +178,7 @@ export default function NotificationsTab() {
                 {selectedNotificationRequest.type !== 'CONTACT_REQUEST' && (
                   <div 
                     onClick={() => {
-                      const sender = mockUsers.find(u => u.id === (selectedNotificationRequest.senderId || selectedNotificationRequest.requesterId));
+                      const sender = findUserByIdentity(usersList, selectedNotificationRequest.senderId || selectedNotificationRequest.requesterId, currentUser);
                       if (sender) {
                         setPreviousTab(activeTab);
                         setSelectedUser(sender);

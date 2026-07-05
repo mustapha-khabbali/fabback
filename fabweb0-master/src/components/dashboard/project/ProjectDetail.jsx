@@ -5,7 +5,7 @@ import JournalCreateModal from './JournalCreateModal';
 import JournalReaderModal from './JournalReaderModal';
 import ContributorsModal from './ContributorsModal';
 import SupervisorModal from './SupervisorModal';
-import { mockUsers } from '../../../data/usersData';
+import { findUserByIdentity, getPrimaryUserId, isCurrentUserId } from '../../../utils/userIdentity';
 
 const JOURNAL_COLORS = ['#FF6B6B', '#4ECDC4', '#3B5FE6', '#FF9F43', '#10AC84', '#EE5253', '#5F27CD', '#222F3E'];
 const SYSTEM_SUPERVISOR_IDS = ['user-sara', 'system-sara'];
@@ -28,7 +28,8 @@ const ALL_SDGS = Array.from({ length: 17 }, (_, i) => ({
 }));
 
 export default function ProjectDetail({ onBack }) {
-  const { currentUser, userProjects, saveProjects, currentProjectId, recycleBin, saveRecycleBin, showNotification, setActiveTab, setSelectedUser, navigationHistory, setNavigationHistory, usersList, notifications, setNotifications, recordPresenceActivity } = useApp();
+  const { currentUser, userProjects, saveProjects, currentProjectId, recycleBin, saveRecycleBin, showNotification, setActiveTab, setSelectedUser, setNavigationHistory, usersList, notifications, setNotifications, recordPresenceActivity } = useApp();
+  const currentUserId = getPrimaryUserId(currentUser);
   const [menuOpen, setMenuOpen] = useState(false);
   const [showModify, setShowModify] = useState(false);
   const [showSupervisorModal, setShowSupervisorModal] = useState(false);
@@ -58,7 +59,7 @@ export default function ProjectDetail({ onBack }) {
   const [showPhaseModal, setShowPhaseModal] = useState(false);
   const [helpDescription, setHelpDescription] = useState('');
   const [selectedHelpMachine, setSelectedHelpMachine] = useState(null);
-  const HELP_MACHINES = ['Imprimante 3D', 'Scanner 3D', 'Coupe Laser', 'CNC', 'Électronique'];
+  const HELP_MACHINES = ['Imprimante 3D', 'Scanner 3D', 'Coupe Laser', 'Assemblage', 'Électronique'];
 
   // Deletion selection mode
   const [isDeleteMode, setIsDeleteMode] = useState(false);
@@ -71,8 +72,8 @@ export default function ProjectDetail({ onBack }) {
 
   // Computed permissions matrix
   const permissions = (() => {
-    const isFounder = project.userId === currentUser.id;
-    const contributor = (project.contributors || []).find(c => c.userId === currentUser.id);
+    const isFounder = isCurrentUserId(currentUser, project.userId);
+    const contributor = (project.contributors || []).find(c => isCurrentUserId(currentUser, c.userId));
     const isCoFounder = contributor?.accessLevel === 'CO_FOUNDER';
     const isAdminRole = contributor?.isAdmin === true;
     const isProjectAdmin = isFounder || isCoFounder || isAdminRole;
@@ -93,7 +94,7 @@ export default function ProjectDetail({ onBack }) {
     const updatedContributors = project.contributors.map(item => {
       if (item.userId === approvingMember.userId) {
         const nextApprovals = Array.isArray(item.approvals) ? item.approvals : [];
-        const approvals = nextApprovals.includes(currentUser.id) ? nextApprovals : [...nextApprovals, currentUser.id];
+        const approvals = nextApprovals.includes(currentUserId) ? nextApprovals : [...nextApprovals, currentUserId];
         return {
           ...item,
           approvals
@@ -262,8 +263,6 @@ export default function ProjectDetail({ onBack }) {
       .filter(c => c.status === 'ACCEPTED' && (c.accessLevel === 'CO_FOUNDER' || c.isAdmin))
       .map(c => c.userId)
   ];
-  const multipleAdminsExist = activeAdmins.length > 1;
-
   const handleSaveRoleChange = () => {
     if (!editingMember) return;
 
@@ -293,7 +292,7 @@ export default function ProjectDetail({ onBack }) {
           pendingRole: finalRole,
           pendingAccessLevel: finalAccessLevel,
           pendingIsAdmin: finalIsAdmin,
-          approvals: [currentUser.id],
+          approvals: [currentUserId],
           memberAccepted: false
         };
       }
@@ -343,14 +342,12 @@ export default function ProjectDetail({ onBack }) {
       showNotification("Sara Ladouy est la Responsable du Fab Lab.");
       return;
     }
-    const u = c.userId === currentUser.id ? currentUser : usersList.find(mu => mu.id === c.userId);
+    const u = findUserByIdentity(usersList, c.userId, currentUser);
     if (!u) return;
 
     const entry = { selectedUser: null, currentProjectId: project.id, fromTab: TABS.MY_PROJECT };
-    console.log('[ProjectDetail handleMemberClick] SETTING navHistory:', JSON.stringify(entry));
-    console.log('[ProjectDetail handleMemberClick] clicked user:', u.id, 'is self:', u.id === currentUser.id);
     setNavigationHistory([entry]);
-    if (u.id === currentUser.id) {
+    if (isCurrentUserId(currentUser, u.id)) {
       setActiveTab('profile');
       setSelectedUser(null);
     } else {
@@ -451,12 +448,6 @@ export default function ProjectDetail({ onBack }) {
     setActiveJournal(null);
     setShowJournalModal(true);
     setMenuOpen(false);
-  };
-
-  const openEditJournal = (e, journal) => {
-    e.stopPropagation(); // Don't trigger the reader
-    setActiveJournal(journal);
-    setShowJournalModal(true);
   };
 
   const saveJournal = (date, content, tempImage, phase, version) => {
@@ -677,14 +668,14 @@ export default function ProjectDetail({ onBack }) {
                 const newNotif = {
                   id: 'review-' + Date.now(),
                   type: 'review_request',
-                  senderId: currentUser.id,
+                  senderId: currentUserId,
                   senderName: `${currentUser.prenom} ${currentUser.nom}`,
                   projectTitle: project.title,
                   projectId: project.id,
                   description: "Mon prototype est terminé et prêt pour la validation finale.",
                   time: 'Maintenant',
                   status: 'pending',
-                  level: 4
+                  // level: 4
                 };
                 setNotifications([newNotif, ...notifications]);
 
@@ -745,7 +736,7 @@ export default function ProjectDetail({ onBack }) {
 
       {/* Pending Member Acceptance Banner */}
       {(() => {
-        const myContrib = project.contributors?.find(c => c.userId === currentUser.id);
+        const myContrib = project.contributors?.find(c => isCurrentUserId(currentUser, c.userId));
         if (myContrib && myContrib.status === 'PENDING' && !myContrib.memberAccepted) {
           return (
             <div className="mx-2 lg:mx-0 p-6 bg-blue-50 border border-blue-100 rounded-3xl flex flex-col space-y-4 animate-in fade-in slide-in-from-top-3 duration-500">
@@ -789,7 +780,7 @@ export default function ProjectDetail({ onBack }) {
           <div className="grid grid-cols-2 gap-3">
             {/* Founder (Always the user in ProjectDetail usually, but we use project.userId) */}
             {(() => {
-              const u = project.userId === currentUser.id ? currentUser : mockUsers.find(mu => mu.id === project.userId);
+              const u = findUserByIdentity(usersList, project.userId, currentUser);
               const colors = ['#FF6B6B', '#4ECDC4', '#3B5FE6', '#FF9F43', '#10AC84'];
               return (
                 <button
@@ -812,7 +803,7 @@ export default function ProjectDetail({ onBack }) {
 
             {/* Contributors */}
             {(project.contributors || []).map((c, idx) => {
-              const u = c.userId === currentUser.id ? currentUser : mockUsers.find(mu => mu.id === c.userId);
+              const u = findUserByIdentity(usersList, c.userId, currentUser);
               const colors = ['#FF6B6B', '#4ECDC4', '#3B5FE6', '#FF9F43', '#10AC84'];
               const isPending = c.status !== 'ACCEPTED';
               return (
@@ -1049,7 +1040,7 @@ export default function ProjectDetail({ onBack }) {
                   const newNotif = {
                     id: 'help-' + Date.now(),
                     type: 'help_request',
-                    senderId: currentUser.id,
+                    senderId: currentUserId,
                     senderName: `${currentUser.prenom} ${currentUser.nom}`,
                     projectTitle: project.title,
                     projectId: project.id,
@@ -1057,7 +1048,7 @@ export default function ProjectDetail({ onBack }) {
                     description: helpDescription,
                     time: 'Maintenant',
                     status: 'pending',
-                    level: 4
+                    // level: 4
                   };
                   setNotifications([newNotif, ...notifications]);
 
@@ -1297,7 +1288,7 @@ export default function ProjectDetail({ onBack }) {
             
             <p className="text-sm text-t-secondary font-semibold text-center leading-relaxed">
               {(() => {
-                const u = approvingMember.userId === currentUser.id ? currentUser : mockUsers.find(mu => mu.id === approvingMember.userId);
+                const u = findUserByIdentity(usersList, approvingMember.userId, currentUser);
                 const name = `${u?.prenom || ''} ${u?.nom || ''}`;
                 if (approvingMember.pendingRemove) {
                   return `Approuver le retrait de ${name} du projet ?`;
@@ -1328,7 +1319,7 @@ export default function ProjectDetail({ onBack }) {
       )}
       {/* Quick Role Edit Modal */}
       {showRoleModal && editingMember && (() => {
-        const u = editingMember.userId === currentUser.id ? currentUser : mockUsers.find(mu => mu.id === editingMember.userId);
+        const u = findUserByIdentity(usersList, editingMember.userId, currentUser);
         return (
           <div className="fixed inset-0 z-[500] flex items-center justify-center p-6 bg-midnight-blue/40 backdrop-blur-sm animate-in fade-in duration-300">
             <div className="bg-t-surface w-full max-w-sm rounded-[32px] shadow-2xl p-6 relative overflow-hidden flex flex-col space-y-6 animate-in zoom-in-95 duration-300">

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useApp, SCREENS } from '../../context/AppContext';
 import { validateEmail, validatePhone } from '../../utils/validation';
+import { ensureUserIdentity } from '../../utils/userIdentity';
 
 export default function RoleRegistrationScreen() {
   const { navigateTo, pendingRole, goToCharte, setCurrentUser, showLogin, registrationDraft, setRegistrationDraft, showNotification } = useApp();
@@ -32,7 +33,7 @@ export default function RoleRegistrationScreen() {
       showNotification("Le numéro de téléphone doit commencer par 06 ou 07 et contenir 10 chiffres au total.", 'error');
       return;
     }
-    setCurrentUser({ ...form, role: (pendingRole || 'visiteur').toLowerCase() });
+    setCurrentUser(ensureUserIdentity({ ...form, role: (pendingRole || 'visiteur').toLowerCase() }));
     showLogin();
   };
 

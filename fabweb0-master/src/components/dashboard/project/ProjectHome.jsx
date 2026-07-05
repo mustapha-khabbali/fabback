@@ -1,9 +1,21 @@
 import { useState } from 'react';
 import { useApp } from '../../../context/AppContext';
-import { mockUsers } from '../../../data/usersData';
+import { findUserByIdentity, getPrimaryUserId, isCurrentUserId } from '../../../utils/userIdentity';
+
+const SHOW_ARTICLES_BUTTON = false;
+
+function uniqueProjectsById(projects) {
+  const seen = new Set();
+  return projects.filter((project) => {
+    if (!project?.id || seen.has(project.id)) return false;
+    seen.add(project.id);
+    return true;
+  });
+}
 
 export default function ProjectHome({ onCreateProject, onShowDetail, onShowRecycle, onShowArticles }) {
-  const { currentUser, userProjects, allProjects, saveProjects, setCurrentProjectId, recycleBin, saveRecycleBin, showNotification } = useApp();
+  const { currentUser, userProjects, allProjects, saveProjects, setCurrentProjectId, recycleBin, saveRecycleBin, showNotification, usersList } = useApp();
+  const currentUserId = getPrimaryUserId(currentUser);
   const [isDeleteMode, setIsDeleteMode] = useState(false);
   const [selectedProjects, setSelectedProjects] = useState([]);
   
@@ -40,10 +52,10 @@ export default function ProjectHome({ onCreateProject, onShowDetail, onShowRecyc
     const directDeleteList = [];
 
     allSelected.forEach(p => {
-      const isFounder = p.userId === currentUser.id;
-      const contrib = (p.contributors || []).find(c => c.userId === currentUser.id);
+      const isFounder = isCurrentUserId(currentUser, p.userId);
+      const contrib = (p.contributors || []).find(c => isCurrentUserId(currentUser, c.userId));
       const isCoFounder = contrib?.accessLevel === 'CO_FOUNDER';
-      const hasOtherAcceptedMembers = (p.contributors || []).some(c => c.userId !== currentUser.id && c.status === 'ACCEPTED');
+      const hasOtherAcceptedMembers = (p.contributors || []).some(c => !isCurrentUserId(currentUser, c.userId) && c.status === 'ACCEPTED');
 
       if ((isFounder || isCoFounder) && hasOtherAcceptedMembers) {
         needsDecisionList.push(p);
@@ -57,11 +69,11 @@ export default function ProjectHome({ onCreateProject, onShowDetail, onShowRecyc
       const updatedProjects = userProjects.map(p => {
         if (directDeleteList.some(d => d.id === p.id)) {
           // If we are a member, just remove ourselves from contributors
-          const contrib = (p.contributors || []).find(c => c.userId === currentUser.id);
-          if (contrib && p.userId !== currentUser.id) {
+          const contrib = (p.contributors || []).find(c => isCurrentUserId(currentUser, c.userId));
+          if (contrib && !isCurrentUserId(currentUser, p.userId)) {
             return {
               ...p,
-              contributors: p.contributors.filter(c => c.userId !== currentUser.id)
+              contributors: p.contributors.filter(c => !isCurrentUserId(currentUser, c.userId))
             };
           }
         }
@@ -70,13 +82,13 @@ export default function ProjectHome({ onCreateProject, onShowDetail, onShowRecyc
 
       // Filter out projects that are owned by us and deleted
       const finalProjects = updatedProjects.filter(p => {
-        const isOwned = p.userId === currentUser.id;
+        const isOwned = isCurrentUserId(currentUser, p.userId);
         const isDeleted = directDeleteList.some(d => d.id === p.id);
         return !(isOwned && isDeleted);
       });
 
       // Move owned projects to recycle bin
-      const ownedDeletes = directDeleteList.filter(d => d.userId === currentUser.id);
+      const ownedDeletes = directDeleteList.filter(d => isCurrentUserId(currentUser, d.userId));
       const recycleEntries = ownedDeletes.map(p => ({
         ...p,
         type: 'project',
@@ -123,13 +135,13 @@ export default function ProjectHome({ onCreateProject, onShowDetail, onShowRecyc
           <div className="grid grid-cols-3 gap-x-4 gap-y-6 lg:grid-cols-6 lg:gap-8 lg:gap-y-12">
             {(() => {
               // Merge owned projects with projects where user is a contributor
-              const combinedProjects = [
+              const combinedProjects = uniqueProjectsById([
                 ...userProjects,
                 ...(allProjects || []).filter(p => 
-                  p.userId !== currentUser.id && // Don't duplicate if already in userProjects
-                  (p.contributors || []).some(c => c.userId === currentUser.id)
+                  !isCurrentUserId(currentUser, p.userId) && // Don't duplicate if already in userProjects
+                  (p.contributors || []).some(c => isCurrentUserId(currentUser, c.userId))
                 )
-              ].filter(p => !p.removedByUsers?.includes(currentUser.id));
+              ]).filter(p => !p.removedByUsers?.map(String).includes(String(currentUserId)));
 
               if (combinedProjects.length === 0) {
                 return <div className="col-span-3 text-center py-10 text-t-muted italic text-sm lg:col-span-6 lg:py-20 lg:text-lg">Aucun projet</div>;
@@ -166,7 +178,7 @@ export default function ProjectHome({ onCreateProject, onShowDetail, onShowRecyc
                   }`}>{p.title}</span>
                   <div className="flex -space-x-1 mt-1 lg:mt-3">
                     {[p.userId, ...(p.contributors || []).map(c => c.userId)].slice(0, 3).map((uid, i) => {
-                      const u = uid === currentUser.id ? currentUser : mockUsers.find(mu => mu.id === uid);
+                      const u = findUserByIdentity(usersList, uid, currentUser);
                       const colors = ['#FF6B6B', '#4ECDC4', '#3B5FE6', '#FF9F43', '#10AC84'];
                       return (
                         <div 
@@ -209,12 +221,14 @@ export default function ProjectHome({ onCreateProject, onShowDetail, onShowRecyc
           </span>
         </button>
 
-        <button onClick={onShowArticles} className="flex-1 flex flex-col items-center justify-center p-3 bg-t-surface border border-t-border rounded-[28px] shadow-sm space-y-1 hover:bg-t-surface-alt transition-all active:scale-95 lg:flex-row lg:flex-initial lg:px-6 lg:py-3 lg:rounded-full lg:h-12 lg:space-y-0 lg:space-x-2 lg:bg-t-surface-alt lg:hover:bg-t-surface-alt lg:border-t-border-strong lg:shadow-md">
-          <div className="p-1.5 bg-emerald-50 text-emerald-600 rounded-xl lg:p-0 lg:bg-transparent lg:text-emerald-600">
-            <svg className="h-5 w-5 lg:h-5 lg:w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" /></svg>
-          </div>
-          <span className="text-[9px] font-bold text-t-primary uppercase tracking-tight text-center lg:text-xs lg:tracking-wide">Articles</span>
-        </button>
+        {SHOW_ARTICLES_BUTTON && (
+          <button onClick={onShowArticles} className="flex-1 flex flex-col items-center justify-center p-3 bg-t-surface border border-t-border rounded-[28px] shadow-sm space-y-1 hover:bg-t-surface-alt transition-all active:scale-95 lg:flex-row lg:flex-initial lg:px-6 lg:py-3 lg:rounded-full lg:h-12 lg:space-y-0 lg:space-x-2 lg:bg-t-surface-alt lg:hover:bg-t-surface-alt lg:border-t-border-strong lg:shadow-md">
+            <div className="p-1.5 bg-emerald-50 text-emerald-600 rounded-xl lg:p-0 lg:bg-transparent lg:text-emerald-600">
+              <svg className="h-5 w-5 lg:h-5 lg:w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" /></svg>
+            </div>
+            <span className="text-[9px] font-bold text-t-primary uppercase tracking-tight text-center lg:text-xs lg:tracking-wide">Articles</span>
+          </button>
+        )}
 
         <button onClick={onShowRecycle} className="flex-1 flex flex-col items-center justify-center p-3 bg-t-surface border border-t-border rounded-[28px] shadow-sm space-y-1 hover:bg-t-surface-alt transition-all active:scale-95 lg:flex-row lg:flex-initial lg:px-6 lg:py-3 lg:rounded-full lg:h-12 lg:space-y-0 lg:space-x-2 lg:bg-t-surface-alt lg:hover:bg-t-surface-alt lg:border-t-border-strong lg:shadow-md lg:group">
           <div className="p-1.5 bg-indigo-50 text-indigo-600 rounded-xl lg:p-0 lg:bg-transparent lg:text-indigo-500">
@@ -227,13 +241,13 @@ export default function ProjectHome({ onCreateProject, onShowDetail, onShowRecyc
       {/* Delete Decision Modal */}
       {currentDecisionIndex >= 0 && pendingDeleteProjects[currentDecisionIndex] && (() => {
         const proj = pendingDeleteProjects[currentDecisionIndex];
-        const isFounder = proj.userId === currentUser.id;
+        const isFounder = isCurrentUserId(currentUser, proj.userId);
         
         // Find other accepted members we can transfer control to
         const otherMembers = (proj.contributors || [])
-          .filter(c => c.userId !== currentUser.id && c.status === 'ACCEPTED')
+          .filter(c => !isCurrentUserId(currentUser, c.userId) && c.status === 'ACCEPTED')
           .map(c => {
-            const u = mockUsers.find(mu => mu.id === c.userId);
+            const u = findUserByIdentity(usersList, c.userId, currentUser);
             return { ...c, info: u };
           });
 
@@ -259,9 +273,9 @@ export default function ProjectHome({ onCreateProject, onShowDetail, onShowRecyc
                       if (p.id === proj.id) {
                         return {
                           ...p,
-                          removedByUsers: [...(p.removedByUsers || []), currentUser.id],
+                          removedByUsers: [...(p.removedByUsers || []), currentUserId],
                           // If co-founder, also remove from contributors list
-                          contributors: (p.contributors || []).filter(c => c.userId !== currentUser.id)
+                          contributors: (p.contributors || []).filter(c => !isCurrentUserId(currentUser, c.userId))
                         };
                       }
                       return p;
@@ -297,14 +311,14 @@ export default function ProjectHome({ onCreateProject, onShowDetail, onShowRecyc
                             // Transfer ownership:
                             // 1. set project.userId to m.userId
                             // 2. remove m.userId from project.contributors
-                            // 3. remove currentUser.id from project.contributors if present
+                            // 3. remove the current user from project.contributors if present
                             // 4. remove project from currentUser's projects list (or set removedByUsers)
                             const updated = userProjects.map(p => {
                               if (p.id === proj.id) {
                                 return {
                                   ...p,
                                   userId: m.userId,
-                                  contributors: (p.contributors || []).filter(c => c.userId !== m.userId && c.userId !== currentUser.id)
+                                  contributors: (p.contributors || []).filter(c => c.userId !== m.userId && !isCurrentUserId(currentUser, c.userId))
                                 };
                               }
                               return p;

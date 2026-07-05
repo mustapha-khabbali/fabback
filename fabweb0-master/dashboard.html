@@ -873,22 +873,9 @@
     </script>
 
     <script>
-        // ── Mock Data ──
-        const demoHistory = [
-            { name: "Ahmed El Mansouri", date: "2026-04-09", timeIn: "09:15", timeOut: "12:30", rating: 5, comment: "Super séance de prototypage !" },
-            { name: "Laila Bennani", date: "2026-04-09", timeIn: "10:05", timeOut: "11:45", rating: 4, comment: "Besoin de plus de filament PLA." },
-            { name: "Yassine Tazi", date: "2026-04-08", timeIn: "14:20", timeOut: "17:10", rating: 5, comment: "Découpe laser parfaite." },
-            { name: "Siham Alaoui", date: "2026-04-08", timeIn: "09:30", timeOut: "16:00", rating: 3, comment: "Un peu d'attente pour la CNC." }
-        ];
+        const demoHistory = [];
 
-        const demoOuvrages = [
-            { name: "Ultimaker S5", category: "Impression 3D", status: "Disponible", icon: "🖨️" },
-            { name: "Trotec Speedy 400", category: "Découpe Laser", status: "En usage", icon: "⚡" },
-            { name: "Roland SRM-20", category: "Fraiseuse CNC", status: "Maintenance", icon: "⚙️" },
-            { name: "Creality Ender 3", category: "Impression 3D", status: "Disponible", icon: "🖨️" },
-            { name: "Station de Soudure", category: "Électronique", status: "Disponible", icon: "🔌" },
-            { name: "Oscilloscope Rigol", category: "Électronique", status: "Disponible", icon: "📉" }
-        ];
+        const demoOuvrages = [];
 
         // ── State ──
         let currentView = 'dashboard';

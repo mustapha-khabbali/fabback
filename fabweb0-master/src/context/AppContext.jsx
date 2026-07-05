@@ -1,11 +1,11 @@
 import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { mockProjects, mockUsers } from '../data/usersData';
 import {
   createPresenceActivityEvent,
   savePresenceActivityEvent,
   PRESENCE_ACTIVITY_STORAGE_KEY
 } from '../utils/presenceActivity';
+import { ensureUserIdentity, mergeUserByIdentity, getPrimaryUserId } from '../utils/userIdentity';
 
 const AppContext = createContext(null);
 
@@ -41,7 +41,13 @@ export function AppProvider({ children }) {
   const [activeTab, setActiveTab] = useState(TABS.SCAN);
 
   // User state
-  const [currentUser, setCurrentUser] = useState({});
+  const [currentUser, setCurrentUserState] = useState(() => {
+    try {
+      return ensureUserIdentity(JSON.parse(localStorage.getItem('user_profile_data') || '{}')) || {};
+    } catch {
+      return {};
+    }
+  });
   const [pendingRole, setPendingRole] = useState('');
   const [selectedUser, setSelectedUser] = useState(null); // For viewing other profiles from Search
   const [searchQuery, setSearchQuery] = useState('');
@@ -50,30 +56,52 @@ export function AppProvider({ children }) {
   const [usersList, setUsersList] = useState(() => {
     try {
       const custom = JSON.parse(localStorage.getItem('custom_users') || '[]');
-      return [...mockUsers, ...custom];
+      return custom.map(ensureUserIdentity);
     } catch {
-      return mockUsers;
+      return [];
     }
   });
 
+  const persistUsers = useCallback((users) => {
+    localStorage.setItem('custom_users', JSON.stringify(users));
+  }, []);
+
   const addCustomUser = useCallback((newUser) => {
     setUsersList(prev => {
-      const updated = [...prev, newUser];
-      const customOnly = updated.filter(u => !mockUsers.some(mu => mu.id === u.id));
-      localStorage.setItem('custom_users', JSON.stringify(customOnly));
+      const updated = mergeUserByIdentity(prev, newUser);
+      persistUsers(updated);
       return updated;
     });
-  }, []);
+  }, [persistUsers]);
+
+  const setCurrentUser = useCallback((nextUser) => {
+    setCurrentUserState((prevUser) => {
+      const resolved = typeof nextUser === 'function' ? nextUser(prevUser) : nextUser;
+      const normalized = ensureUserIdentity(resolved) || {};
+
+      if (normalized.id) {
+        setUsersList((prevUsers) => {
+          const updated = mergeUserByIdentity(prevUsers, normalized);
+          persistUsers(updated);
+          return updated;
+        });
+      }
+
+      localStorage.setItem('user_profile_data', JSON.stringify(normalized));
+      return normalized;
+    });
+  }, [persistUsers]);
   const [searchFilter, setSearchFilter] = useState('ALL');
   const [previousTab, setPreviousTab] = useState(TABS.SEARCH);
   const [selectedNotificationRequest, setSelectedNotificationRequest] = useState(null);
   const [reviewingProject, setReviewingProject] = useState(null);
 
   const sendContactRequest = (targetUserId) => {
+    const requesterId = getPrimaryUserId(currentUser);
     const newNotif = {
-      id: Date.now().toString(),
+      id: crypto.randomUUID(),
       type: 'CONTACT_REQUEST',
-      requesterId: currentUser.id,
+      requesterId,
       requesterName: `${currentUser.prenom} ${currentUser.nom}`,
       requesterAvatar: currentUser.avatar,
       title: 'Demande de contact',
@@ -82,7 +110,7 @@ export function AppProvider({ children }) {
       targetId: targetUserId,
       createdAt: new Date().toISOString()
     };
-    setNotifications([newNotif, ...notifications]);
+    setNotifications(prev => [newNotif, ...prev]);
     showNotification("Demande envoyée !");
   };
 
@@ -95,92 +123,14 @@ export function AppProvider({ children }) {
     } else {
       showNotification("Demande refusée.");
     }
-    setNotifications(notifications.map(n => 
+    setNotifications(notifications.map(n =>
       n.id === notifId ? { ...n, status: 'read', handled: true, approved: approve } : n
     ));
   };
 
   const [navigationHistory, setNavigationHistory] = useState([]); // Array of { selectedUser, currentProjectId }
   const [directProgramView, setDirectProgramView] = useState(null); // { programId, returnToTab }
-  const [notifications, setNotifications] = useState([
-    {
-      id: 'notif-contact-req-demo',
-      type: 'CONTACT_REQUEST',
-      requesterId: 'user-2',
-      requesterName: 'Jane Smith',
-      requesterAvatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Jane',
-      title: 'Demande de contact',
-      message: 'Jane Smith souhaite voir vos coordonnées pour vous contacter.',
-      status: 'unread',
-      time: '15 min'
-    },
-    // Future admin-backed program notification.
-    // Keep this full block for later when admin can create program launches.
-    // {
-    //   id: 'notif-program',
-    //   type: 'program_launch',
-    //   title: 'Nouveau programme disponible !',
-    //   message: 'Rejoignez le Hackathon Innovation 2026 et montrez vos talents.',
-    //   programId: 'prog-demo-1',
-    //   time: 'Maintenant',
-    //   status: 'unread'
-    // },
-    {
-      id: 'notif-1',
-      type: 'contribution_request',
-      senderId: 'user-1',
-      senderName: 'John Doe',
-      projectTitle: 'Bras Articulé CMC',
-      projectId: 'proj-1',
-      description: "Salut ! J'ai vu ton projet de drone et je pense pouvoir t'aider sur la partie impression 3D du châssis.",
-      time: 'Il y a 5 minutes',
-      status: 'pending'
-    },
-    {
-      id: 'notif-2',
-      type: 'help_request',
-      senderId: 'user-2',
-      senderName: 'Jane Smith',
-      projectTitle: 'Robot Solaire Autonome',
-      projectId: 'proj-2',
-      machineName: 'Coupe Laser',
-      description: "J'ai besoin d'aide pour découper les pièces du châssis.",
-      time: 'Il y a 10 minutes',
-      status: 'pending',
-      level: 4
-    },
-    {
-      id: 'notif-3',
-      type: 'help_feedback_request',
-      senderId: 'user-1',
-      senderName: 'John Doe',
-      projectTitle: 'Bras Articulé CMC',
-      projectId: 'proj-1',
-      machineName: 'Imprimante 3D',
-      time: 'Maintenant',
-      status: 'pending'
-    },
-    {
-      id: 'notif-4',
-      type: 'review_request',
-      senderId: 'user-2',
-      senderName: 'Jane Smith',
-      projectTitle: 'Robot Solaire Autonome',
-      projectId: 'proj-2',
-      description: "Mon prototype est terminé et prêt pour la validation finale.",
-      time: 'Il y a 30 minutes',
-      status: 'pending',
-      level: 4
-    },
-    {
-      id: 'notif-5',
-      type: 'system',
-      title: 'Bienvenue au Fab Lab !',
-      message: 'Votre compte a été créé avec succès. Explorez nos outils.',
-      time: 'Il y a 2 heures',
-      status: 'read'
-    }
-  ]);
+  const [notifications, setNotifications] = useState([]);
 
   // Lab presence state
   const [isUserInLab, setIsUserInLab] = useState(false);
@@ -230,9 +180,7 @@ export function AppProvider({ children }) {
 
   const prevTabRef = useRef(activeTab);
   useEffect(() => {
-    console.log('[AppContext activeTab tracker] activeTab changed from', prevTabRef.current, 'to', activeTab);
     if (activeTab !== prevTabRef.current) {
-      console.log('[AppContext activeTab tracker] Setting previousTab to', prevTabRef.current);
       setPreviousTab(prevTabRef.current);
       prevTabRef.current = activeTab;
     }
@@ -369,7 +317,7 @@ export function AppProvider({ children }) {
     // Projects
     userProjects,
     saveProjects,
-    allProjects: mockProjects,
+    allProjects: userProjects,
     recycleBin,
     saveRecycleBin,
     currentProjectId,

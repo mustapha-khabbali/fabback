@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useApp } from '../../../context/AppContext';
 import RichTextEditor from '../../common/RichTextEditor';
+import { getPrimaryUserId } from '../../../utils/userIdentity';
 
 export default function ProjectCreateForm({ onBack }) {
   const { showNotification, userProjects, saveProjects, currentUser, recordPresenceActivity } = useApp();
@@ -16,7 +17,7 @@ export default function ProjectCreateForm({ onBack }) {
     }
     const newProject = {
       id: crypto.randomUUID(),
-      userId: currentUser.id || currentUser.uid || currentUser.cin || currentUser.email,
+      userId: getPrimaryUserId(currentUser),
       title, 
       description: desc, // Save as HTML
       image: null, 

@@ -4,6 +4,8 @@ import { validateEmail, validatePhone } from '../../../utils/validation';
 import { buildPresenceHeatmapCells } from '../../../utils/presenceActivity';
 import SettingsView from './SettingsView';
 
+const SHOW_PROFILE_LEVEL_BADGE = false;
+
 export default function MyProfileTab() {
   const { 
     currentUser, 
@@ -19,24 +21,25 @@ export default function MyProfileTab() {
     navigationHistory,
     setNavigationHistory,
     setSelectedUser,
-    currentProjectId,
     setCurrentProjectId,
     presenceActivityEvents
   } = useApp();
   // Refs to avoid stale closures in handleBack
   const navHistoryRef = useRef(navigationHistory);
-  navHistoryRef.current = navigationHistory;
   const previousTabRef = useRef(previousTab);
-  previousTabRef.current = previousTab;
+
+  useEffect(() => {
+    navHistoryRef.current = navigationHistory;
+  }, [navigationHistory]);
+
+  useEffect(() => {
+    previousTabRef.current = previousTab;
+  }, [previousTab]);
 
   const handleBack = () => {
     const history = navHistoryRef.current;
-    console.log('[MyProfileTab handleBack] history:', JSON.stringify(history));
-    console.log('[MyProfileTab handleBack] previousTab:', previousTabRef.current);
-    console.log('[MyProfileTab handleBack] currentProjectId:', currentProjectId);
     if (history.length > 0) {
       const last = history[history.length - 1];
-      console.log('[MyProfileTab handleBack] USING HISTORY, last entry:', JSON.stringify(last));
       setNavigationHistory(prev => prev.slice(0, -1));
       setSelectedUser(last.selectedUser);
       setCurrentProjectId(last.currentProjectId || null);
@@ -45,7 +48,6 @@ export default function MyProfileTab() {
       }
       return;
     }
-    console.log('[MyProfileTab handleBack] FALLBACK — history empty, going to:', previousTabRef.current || TABS.SCAN);
     setCurrentProjectId(null);
     setSelectedUser(null);
     setActiveTab(previousTabRef.current || TABS.SCAN);
@@ -241,7 +243,7 @@ export default function MyProfileTab() {
           <p className="text-t-tertiary font-bold text-sm uppercase tracking-widest">{roleLabel}</p>
           
           <div className="flex items-center justify-center space-x-2 pt-2">
-            {isStagiaire && (
+            {SHOW_PROFILE_LEVEL_BADGE && isStagiaire && (
               <div className="bg-emerald-50 px-4 py-1.5 rounded-full flex items-center space-x-2 border border-emerald-100 shadow-sm">
                 <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">
                   Level {Math.floor((currentUser?.points || 0) / 200) + 1}

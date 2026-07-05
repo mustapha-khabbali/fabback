@@ -1,6 +1,6 @@
 import { Routes, Route, useLocation, Navigate } from 'react-router-dom';
-import React, { Suspense, lazy, useEffect } from 'react';
-import { useApp, SCREENS } from './context/AppContext';
+import { Suspense, lazy, useEffect } from 'react';
+import { useApp } from './context/AppContext';
 import useBlockZoom from './hooks/useBlockZoom';
 import LoginScreen from './components/dashboard/LoginScreen';
 

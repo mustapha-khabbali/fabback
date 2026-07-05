@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback } from 'react';
+import { useRef, useEffect } from 'react';
 
 export default function useSwipe({ onSwipeLeft, onSwipeRight, threshold = 50 }) {
   const ref = useRef(null);

@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
-import { useApp, SCREENS, TABS } from '../../../context/AppContext';
+import { useApp, TABS } from '../../../context/AppContext';
 import JournalReaderModal from '../project/JournalReaderModal';
 import { buildPresenceHeatmapCells } from '../../../utils/presenceActivity';
+import { findUserByIdentity, getPrimaryUserId, isCurrentUserId } from '../../../utils/userIdentity';
 
 const JOURNAL_COLORS = ['#FF6B6B', '#4ECDC4', '#3B5FE6', '#FF9F43', '#10AC84', '#EE5253', '#5F27CD', '#222F3E'];
 
@@ -11,8 +12,10 @@ const ALL_SDGS = Array.from({ length: 17 }, (_, i) => ({
   image: `/sdg/${i + 1}_result.webp`
 }));
 
+const SHOW_PROFILE_LEVEL_BADGE = false;
+
 export default function MemberProfileTab() {
-  const { currentUser, navigateTo, setSelectedUser, selectedUser, setActiveTab, allProjects, userProjects, showNotification, previousTab, currentProjectId, setCurrentProjectId, navigationHistory, setNavigationHistory, sendContactRequest, presenceActivityEvents, usersList } = useApp();
+  const { currentUser, setSelectedUser, selectedUser, setActiveTab, allProjects, userProjects, showNotification, previousTab, currentProjectId, setCurrentProjectId, navigationHistory, setNavigationHistory, sendContactRequest, presenceActivityEvents, usersList, contactPrivacyMode, allowedContactUsers } = useApp();
 
   const [viewingProjects, setViewingProjects] = useState(false);
   const [viewingProjectDetailId, setViewingProjectDetailId] = useState(null);
@@ -41,15 +44,23 @@ export default function MemberProfileTab() {
   const [reportType, setReportType] = useState('');
   const [reportDetails, setReportDetails] = useState('');
 
-  const RECOGNITION_MACHINES = ['Imprimante 3D', 'Scanner 3D', 'Coupe Laser', 'CNC', 'Électronique'];
-  const isOwnProfile = displayUser?.id === currentUser?.id;
-  const findUserById = (userId) => userId === currentUser.id ? currentUser : usersList.find(user => user.id === userId);
+  const RECOGNITION_MACHINES = ['Imprimante 3D', 'Scanner 3D', 'Coupe Laser', 'Assemblage', 'Électronique'];
+  const currentUserId = getPrimaryUserId(currentUser);
+  const displayUserId = getPrimaryUserId(displayUser);
+  const isOwnProfile = isCurrentUserId(currentUser, displayUserId);
+  const findUserById = (userId) => findUserByIdentity(usersList, userId, currentUser);
 
   // Refs to avoid stale closures in handleBack
   const navHistoryRef = useRef(navigationHistory);
-  navHistoryRef.current = navigationHistory;
   const previousTabRef = useRef(previousTab);
-  previousTabRef.current = previousTab;
+
+  useEffect(() => {
+    navHistoryRef.current = navigationHistory;
+  }, [navigationHistory]);
+
+  useEffect(() => {
+    previousTabRef.current = previousTab;
+  }, [previousTab]);
 
   // Handle deep-link to project from notification
   useEffect(() => {
@@ -61,12 +72,8 @@ export default function MemberProfileTab() {
 
   const handleBack = () => {
     const history = navHistoryRef.current;
-    console.log('[MemberProfileTab handleBack] history:', JSON.stringify(history));
-    console.log('[MemberProfileTab handleBack] previousTab:', previousTabRef.current);
-    console.log('[MemberProfileTab handleBack] currentProjectId:', currentProjectId);
     if (history.length > 0) {
       const last = history[history.length - 1];
-      console.log('[MemberProfileTab handleBack] USING HISTORY, last entry:', JSON.stringify(last));
       setNavigationHistory(prev => prev.slice(0, -1));
 
       if (last.fromTab) {
@@ -89,7 +96,6 @@ export default function MemberProfileTab() {
       }
       return;
     }
-    console.log('[MemberProfileTab handleBack] FALLBACK — history empty, going to:', previousTabRef.current || TABS.SEARCH);
     setCurrentProjectId(null);
     setSelectedUser(null);
     setActiveTab(previousTabRef.current || TABS.SEARCH);
@@ -145,7 +151,7 @@ export default function MemberProfileTab() {
           <p className="text-t-tertiary font-bold text-sm uppercase tracking-widest">{roleLabel}</p>
 
           <div className="flex flex-col items-center space-y-3 pt-2">
-            {isStagiaire && (
+            {SHOW_PROFILE_LEVEL_BADGE && isStagiaire && (
               <div className="bg-emerald-50 px-4 py-1.5 rounded-full flex items-center space-x-2 border border-emerald-100 shadow-sm">
                 <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">
                   Level {Math.floor((displayUser?.points || 0) / 200) + 1}
@@ -367,22 +373,20 @@ export default function MemberProfileTab() {
 
         {/* CONTACT Section */}
         {(() => {
-          const { contactPrivacyMode, allowedContactUsers, currentUser } = useApp();
-          
           let canSeeContacts = false;
           if (isOwnProfile) {
             canSeeContacts = true;
           } else {
             // Logic for viewing others:
-            // Since we don't have a real backend for others' privacy, we check the target user's mock data.
+            // Since we don't have a real backend for others' privacy, use the target profile fields.
             // But if the user being viewed is the currentUser (e.g. from search), use global settings.
-            const targetPrivacyMode = displayUser.id === currentUser.id ? contactPrivacyMode : (displayUser.privacyMode || 'private');
-            const targetAllowedList = displayUser.id === currentUser.id ? allowedContactUsers : (displayUser.allowedUsers || []);
+            const targetPrivacyMode = isCurrentUserId(currentUser, displayUserId) ? contactPrivacyMode : (displayUser.privacyMode || 'private');
+            const targetAllowedList = isCurrentUserId(currentUser, displayUserId) ? allowedContactUsers : (displayUser.allowedUsers || []);
             
             if (targetPrivacyMode === 'public') {
               canSeeContacts = true;
             } else if (targetPrivacyMode === 'personalised') {
-              canSeeContacts = targetAllowedList.includes(currentUser.id);
+              canSeeContacts = targetAllowedList.map(String).includes(String(currentUserId));
             }
           }
 
@@ -390,7 +394,7 @@ export default function MemberProfileTab() {
             return !isOwnProfile ? (
               <div className="px-2">
                 <button 
-                  onClick={() => sendContactRequest(displayUser.id)}
+                  onClick={() => sendContactRequest(displayUserId)}
                   className="w-full flex items-center justify-between p-6 bg-t-surface glass-card rounded-[32px] border-2 border-[#3B5FE6]/10 hover:border-[#3B5FE6] hover:bg-blue-50/30 transition-all active:scale-[0.98] group"
                 >
                   <div className="flex items-center space-x-4">
@@ -770,10 +774,10 @@ export default function MemberProfileTab() {
                       Mes Dossiers
                     </h3>
                     <div className="grid grid-cols-3 gap-x-4 gap-y-6">
-                      {allProjects?.filter(p => p.userId === displayUser.id || (p.contributors || []).some(c => c.userId === displayUser.id)).length === 0 ? (
+                      {allProjects?.filter(p => p.userId === displayUserId || (p.contributors || []).some(c => c.userId === displayUserId)).length === 0 ? (
                         <div className="col-span-3 text-center py-10 text-t-muted italic text-sm">Aucun projet</div>
                       ) : (
-                        allProjects?.filter(p => p.userId === displayUser.id || (p.contributors || []).some(c => c.userId === displayUser.id)).map(p => (
+                        allProjects?.filter(p => p.userId === displayUserId || (p.contributors || []).some(c => c.userId === displayUserId)).map(p => (
                           <button
                             key={p.id}
                             onClick={() => setViewingProjectDetailId(p.id)}

@@ -53,11 +53,11 @@ export default function FabLabTab() {
       ]
     },
     {
-      name: "Fraisage CNC",
+      name: "Assemblage",
       desc: "Usinage de précision pour le bois, le métal et les circuits imprimés.",
       color: "purple",
       icon: "M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z",
-      fullDesc: "La CNC (Commande Numérique par Calculateur) permet de tailler des formes précises dans des blocs de matière. Idéal pour les structures robustes en bois ou en métal.",
+      fullDesc: "L'assemblage permet de réunir, ajuster et sécuriser les pièces d'un prototype. Idéal pour finaliser une structure et vérifier sa solidité.",
       steps: [
         "Fixez solidement votre brut sur le plateau",
         "Installez la fraise appropriée (mèche)",

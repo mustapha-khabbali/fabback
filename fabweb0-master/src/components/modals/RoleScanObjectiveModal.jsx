@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useApp, TABS } from '../../context/AppContext';
+import { getPrimaryUserId } from '../../utils/userIdentity';
 
 const DEFAULT_GATE_IN_CONFIG = {
   staff: [
@@ -60,12 +61,13 @@ export default function RoleScanObjectiveModal() {
   const [customText, setCustomText] = useState('');
   const [selectedProjectId, setSelectedProjectId] = useState('');
   const [selectedEventId, setSelectedEventId] = useState('');
+  const currentUserId = getPrimaryUserId(currentUser);
 
   const supervisedProjects = useMemo(() => {
     return uniqueById([...(userProjects || []), ...(allProjects || [])]).filter((project) =>
-      (project.supervisorIds || []).map(String).includes(String(currentUser.id))
+      (project.supervisorIds || []).map(String).includes(String(currentUserId))
     );
-  }, [userProjects, allProjects, currentUser.id]);
+  }, [userProjects, allProjects, currentUserId]);
 
   if (!showRoleScanObjectiveModal) return null;
 
@@ -104,7 +106,7 @@ export default function RoleScanObjectiveModal() {
     const project = supervisedProjects.find((item) => item.id === selectedProjectId);
     const event = events.find((item) => item.id === selectedEventId);
     const logEntry = {
-      userId: currentUser.uid || currentUser.id || 'guest',
+      userId: currentUserId || 'guest',
       userName: `${currentUser.prenom || ''} ${currentUser.nom || ''}`.trim(),
       nom: currentUser.nom || '',
       prenom: currentUser.prenom || '',
@@ -129,8 +131,10 @@ export default function RoleScanObjectiveModal() {
       logEntry.eventTitle = event?.title || '';
     }
 
-    let attendance = [];
-    try { attendance = JSON.parse(localStorage.getItem('lab_attendance') || '[]'); } catch {}
+    let attendance;
+    try { attendance = JSON.parse(localStorage.getItem('lab_attendance') || '[]'); } catch {
+      attendance = [];
+    }
     attendance.unshift(logEntry);
     localStorage.setItem('lab_attendance', JSON.stringify(attendance));
 

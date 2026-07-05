@@ -1,6 +1,5 @@
 import { useState, useMemo } from 'react';
-import { useApp, TABS } from '../../../context/AppContext';
-import { mockUsers } from '../../../data/usersData';
+import { useApp } from '../../../context/AppContext';
 
 export default function SettingsView({ onBack }) {
   const { 
@@ -8,7 +7,7 @@ export default function SettingsView({ onBack }) {
     contactPrivacyMode, setContactPrivacyMode, 
     allowedContactUsers, setAllowedContactUsers,
     language, setLanguage,
-    setSelectedUser, setActiveTab, setNavigationHistory
+    setSelectedUser, setNavigationHistory, usersList
   } = useApp();
   const [activeSubView, setActiveSubView] = useState('main'); // 'main', 'appearance', 'privacy', 'language', 'personalise'
   const [searchQuery, setSearchQuery] = useState('');
@@ -16,14 +15,14 @@ export default function SettingsView({ onBack }) {
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
 
   const filteredUsers = useMemo(() => {
-    return mockUsers.filter(user => {
+    return (usersList || []).filter(user => {
       const matchesSearch =
         `${user.prenom} ${user.nom}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
         user.email?.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesRole = searchFilter === 'ALL' || user.role.toUpperCase() === searchFilter.toUpperCase();
       return matchesSearch && matchesRole;
     });
-  }, [searchQuery, searchFilter]);
+  }, [searchQuery, searchFilter, usersList]);
 
   const toggleUserInAllowedList = (userId) => {
     if (allowedContactUsers.includes(userId)) {

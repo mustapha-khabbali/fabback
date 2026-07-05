@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { getPrimaryUserId, isCurrentUserId } from '../../utils/userIdentity';
 
 const SYSTEM_SUPERVISOR_IDS = ['user-sara', 'system-sara'];
 const SARA_SUPERVISOR = {
@@ -101,12 +102,13 @@ export default function ScanObjectiveModal() {
   const [newNom, setNewNom] = useState('');
   const [newRole, setNewRole] = useState('formateur');
   const [newType, setNewType] = useState('');
+  const currentUserId = getPrimaryUserId(currentUser);
 
   const allAvailableProjects = useMemo(() => {
     const localProjectIds = new Set((userProjects || []).map((project) => project.id));
     return uniqueById([...(userProjects || []), ...(allProjects || [])])
-      .filter((project) => localProjectIds.has(project.id) || project.userId === currentUser.id);
-  }, [userProjects, allProjects, currentUser.id]);
+      .filter((project) => localProjectIds.has(project.id) || isCurrentUserId(currentUser, project.userId));
+  }, [userProjects, allProjects, currentUser]);
 
   const userById = useMemo(() => {
     const map = { [SARA_SUPERVISOR.id]: SARA_SUPERVISOR, 'system-sara': SARA_SUPERVISOR };
@@ -263,7 +265,7 @@ export default function ScanObjectiveModal() {
     const finalSupervisorId = selectedSupervisorId || 'user-sara';
     const supervisor = userById[finalSupervisorId] || SARA_SUPERVISOR;
     const logEntry = {
-      userId: currentUser.uid || currentUser.id || 'guest',
+      userId: currentUserId || 'guest',
       userName: `${currentUser.prenom || ''} ${currentUser.nom || ''}`.trim(),
       nom: currentUser.nom || '',
       prenom: currentUser.prenom || '',
@@ -291,8 +293,10 @@ export default function ScanObjectiveModal() {
       logEntry.comment = customText.trim();
     }
 
-    let attendance = [];
-    try { attendance = JSON.parse(localStorage.getItem('lab_attendance') || '[]'); } catch {}
+    let attendance;
+    try { attendance = JSON.parse(localStorage.getItem('lab_attendance') || '[]'); } catch {
+      attendance = [];
+    }
     attendance.unshift(logEntry);
     localStorage.setItem('lab_attendance', JSON.stringify(attendance));
 

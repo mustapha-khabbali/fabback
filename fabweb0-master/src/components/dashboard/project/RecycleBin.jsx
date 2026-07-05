@@ -14,7 +14,11 @@ export default function RecycleBin({ onBack }) {
         return;
       }
       
-      const { type, projectId, projectName, deletedAt, ...journalData } = item;
+      const journalData = { ...item };
+      delete journalData.type;
+      delete journalData.projectId;
+      delete journalData.projectName;
+      delete journalData.deletedAt;
       
       const updatedProjects = userProjects.map(p => 
         p.id === item.projectId ? { ...p, journals: [journalData, ...p.journals] } : p
@@ -115,4 +119,3 @@ export default function RecycleBin({ onBack }) {
     </div>
   );
 }
-

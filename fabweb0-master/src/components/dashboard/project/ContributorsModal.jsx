@@ -1,9 +1,10 @@
 import { useState, useMemo } from 'react';
-import { mockUsers } from '../../../data/usersData';
 import { useApp, TABS } from '../../../context/AppContext';
+import { findUserByIdentity, getPrimaryUserId, isCurrentUserId } from '../../../utils/userIdentity';
 
 export default function ContributorsModal({ project, onClose, onSave, showNotification }) {
-  const { currentUser, recycleBin, saveRecycleBin, setSelectedUser: setAppSelectedUser, setActiveTab, setNavigationHistory, notifications, setNotifications } = useApp();
+  const { currentUser, recycleBin, saveRecycleBin, setSelectedUser: setAppSelectedUser, setActiveTab, setNavigationHistory, notifications, setNotifications, usersList } = useApp();
+  const currentUserId = getPrimaryUserId(currentUser);
   const [searchQuery, setSearchQuery] = useState('');
   const [isAdding, setIsAdding] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
@@ -22,8 +23,8 @@ export default function ContributorsModal({ project, onClose, onSave, showNotifi
 
   // Compute permissions matrix for current user
   const permissions = useMemo(() => {
-    const isFounder = project.userId === currentUser.id;
-    const contributor = (project.contributors || []).find(c => c.userId === currentUser.id);
+    const isFounder = isCurrentUserId(currentUser, project.userId);
+    const contributor = (project.contributors || []).find(c => isCurrentUserId(currentUser, c.userId));
     const isCoFounder = contributor?.accessLevel === 'CO_FOUNDER';
     const isAdminRole = contributor?.isAdmin === true;
     const isProjectAdmin = isFounder || isCoFounder || isAdminRole;
@@ -36,10 +37,10 @@ export default function ContributorsModal({ project, onClose, onSave, showNotifi
       canModifyTeam: isProjectAdmin,
       canTransferControl: isFounder || isCoFounder
     };
-  }, [project, currentUser.id]);
+  }, [project, currentUser]);
 
   // Find the founder user
-  const founder = (project.userId === currentUser.id) ? currentUser : (mockUsers.find(u => u.id === project.userId) || { prenom: 'Inconnu', nom: '', role: 'Fondateur' });
+  const founder = findUserByIdentity(usersList, project.userId, currentUser) || { prenom: 'Inconnu', nom: '', role: 'Fondateur' };
 
   // Count active project admins
   const activeAdmins = useMemo(() => {
@@ -52,13 +53,11 @@ export default function ContributorsModal({ project, onClose, onSave, showNotifi
     return list;
   }, [project]);
 
-  const multipleAdminsExist = activeAdmins.length > 1;
-
   // Filter users for search (only stagiaires, and not the founder or already added contributors)
   const filteredSearchUsers = useMemo(() => {
     if (!searchQuery.trim()) return [];
 
-    return mockUsers.filter(user => {
+    return (usersList || []).filter(user => {
       const isStagiaire = user.role === 'stagiaire';
       const isNotFounder = user.id !== project.userId;
       const isNotAlreadyContributor = !(project.contributors || []).some(c => c.userId === user.id);
@@ -69,14 +68,14 @@ export default function ContributorsModal({ project, onClose, onSave, showNotifi
 
       return isStagiaire && isNotFounder && isNotAlreadyContributor && matchesSearch;
     });
-  }, [searchQuery, project.userId, project.contributors]);
+  }, [searchQuery, project.userId, project.contributors, usersList]);
 
   const handleAddContributor = () => {
     if (!selectedUser) return;
 
-    let finalRole = '';
-    let finalAccessLevel = 'MEMBER';
-    let finalIsAdmin = false;
+    let finalRole;
+    let finalAccessLevel;
+    let finalIsAdmin;
 
     if (roleType === 'CO_FOUNDER') {
       finalRole = 'Co-fondateur';
@@ -98,8 +97,8 @@ export default function ContributorsModal({ project, onClose, onSave, showNotifi
       accessLevel: finalAccessLevel,
       isAdmin: finalIsAdmin,
       status: 'PENDING',
-      approvals: [currentUser.id],
-      memberAccepted: selectedUser.id === currentUser.id,
+      approvals: [currentUserId],
+      memberAccepted: isCurrentUserId(currentUser, selectedUser.id),
       addedAt: new Date().toISOString()
     };
 
@@ -129,7 +128,7 @@ export default function ContributorsModal({ project, onClose, onSave, showNotifi
           id: `invite-${project.id}-${selectedUser.id}-${Date.now()}`,
           type: 'project_invite',
           recipientId: selectedUser.id,
-          senderId: currentUser.id,
+          senderId: currentUserId,
           senderName: `${currentUser.prenom} ${currentUser.nom}`,
           projectId: project.id,
           projectTitle: project.title,
@@ -159,7 +158,7 @@ export default function ContributorsModal({ project, onClose, onSave, showNotifi
     const updatedContributors = project.contributors.map(c => {
       if (c.userId === userId) {
         const nextApprovals = Array.isArray(c.approvals) ? c.approvals : [];
-        const approvals = nextApprovals.includes(currentUser.id) ? nextApprovals : [...nextApprovals, currentUser.id];
+        const approvals = nextApprovals.includes(currentUserId) ? nextApprovals : [...nextApprovals, currentUserId];
         return {
           ...c,
           pendingRemove: true,
@@ -216,9 +215,9 @@ export default function ContributorsModal({ project, onClose, onSave, showNotifi
   };
 
   const saveEditedRole = () => {
-    let finalRole = '';
-    let finalAccessLevel = 'MEMBER';
-    let finalIsAdmin = false;
+    let finalRole;
+    let finalAccessLevel;
+    let finalIsAdmin;
 
     if (editRoleType === 'CO_FOUNDER') {
       finalRole = 'Co-fondateur';
@@ -242,7 +241,7 @@ export default function ContributorsModal({ project, onClose, onSave, showNotifi
           pendingRole: finalRole,
           pendingAccessLevel: finalAccessLevel,
           pendingIsAdmin: finalIsAdmin,
-          approvals: [currentUser.id],
+          approvals: [currentUserId],
           memberAccepted: false
         };
       }
@@ -280,15 +279,14 @@ export default function ContributorsModal({ project, onClose, onSave, showNotifi
   };
 
   const getContributorInfo = (userId) => {
-    if (userId === currentUser.id) return currentUser;
-    return mockUsers.find(u => u.id === userId) || { prenom: 'Utilisateur', nom: 'Inconnu', avatar: null };
+    return findUserByIdentity(usersList, userId, currentUser) || { prenom: 'Utilisateur', nom: 'Inconnu', avatar: null };
   };
 
   const handleApproveContributor = (c) => {
     const updatedContributors = project.contributors.map(item => {
       if (item.userId === c.userId) {
         const nextApprovals = Array.isArray(item.approvals) ? item.approvals : [];
-        const approvals = nextApprovals.includes(currentUser.id) ? nextApprovals : [...nextApprovals, currentUser.id];
+        const approvals = nextApprovals.includes(currentUserId) ? nextApprovals : [...nextApprovals, currentUserId];
         return {
           ...item,
           approvals
@@ -373,18 +371,15 @@ export default function ContributorsModal({ project, onClose, onSave, showNotifi
   };
 
   const handleViewProfile = (userId) => {
-    const u = userId === currentUser.id ? currentUser : mockUsers.find(mu => mu.id === userId);
+    const u = findUserByIdentity(usersList, userId, currentUser);
     if (!u) return;
     onClose();
     const entry = { selectedUser: null, currentProjectId: project.id, fromTab: TABS.MY_PROJECT };
-    console.log('[ContributorsModal handleViewProfile] SETTING navHistory:', JSON.stringify(entry));
     setNavigationHistory([entry]);
-    if (u.id === currentUser.id) {
-      console.log('[ContributorsModal handleViewProfile] Viewing self, setting selectedUser to null');
+    if (isCurrentUserId(currentUser, u.id)) {
       setActiveTab('profile');
       setAppSelectedUser(null);
     } else {
-      console.log('[ContributorsModal handleViewProfile] Viewing other member:', u.id);
       setAppSelectedUser(u);
       setActiveTab('profile');
     }
@@ -580,7 +575,7 @@ export default function ContributorsModal({ project, onClose, onSave, showNotifi
                       <div className="shrink-0 flex items-center space-x-2">
                         {isPending && (
                           <div className="flex items-center space-x-1.5">
-                            {permissions.isAdmin && (!c.approvals || !c.approvals.map(String).includes(String(currentUser.id))) ? (
+                            {permissions.isAdmin && (!c.approvals || !c.approvals.map(String).includes(String(currentUserId))) ? (
                               <>
                                 <button
                                   onClick={() => handleApproveContributor(c)}
@@ -597,7 +592,7 @@ export default function ContributorsModal({ project, onClose, onSave, showNotifi
                               </>
                             ) : (
                               <span className="text-[8px] font-bold text-[#3B5FE6] uppercase tracking-widest bg-blue-50/50 px-2 py-0.5 rounded-md">
-                                {c.approvals && c.approvals.map(String).includes(String(currentUser.id)) ? "Approuvé" : "En attente"}
+                                {c.approvals && c.approvals.map(String).includes(String(currentUserId)) ? "Approuvé" : "En attente"}
                               </span>
                             )}
                           </div>
