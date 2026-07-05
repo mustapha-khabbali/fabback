@@ -81,6 +81,7 @@ export default function HomeScreen() {
             )}
           </button>
 
+          {/* 
           <button
             onClick={() => handleAuth('outlook')}
             className="w-full py-4 bg-t-surface text-t-primary font-bold text-lg rounded-2xl border border-t-border shadow-sm hover:shadow-md transition-all active:scale-95 flex items-center justify-center space-x-3"
@@ -94,6 +95,7 @@ export default function HomeScreen() {
               </>
             )}
           </button>
+          */}
         </div>
 
       </div>

@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import { poleOptions, niveauOptions, yearOptions, getFiliereOptions, getOptionChoices } from '../data/trainingData';
 import ProjectsPanel from '../components/projects/ProjectsPanel';
 import AddUserModal from '../components/users/AddUserModal';
+import InteractionsPanel from '../components/users/InteractionsPanel';
 
 export const MOCK_USERS = [
   {
@@ -44,7 +45,21 @@ export const MOCK_USERS = [
         ]
       }
     ],
-    checkins: 45
+    checkins: 45,
+    interactions: {
+      reviewedOthers: [
+        { userId: 'user-2', userName: 'Laila Bennani', projectTitle: 'Robot Solaire Autonome', date: '2026-07-04', result: 'Accepté', rating: 5, comment: 'Excellent travail sur la structure en découpe laser et la documentation!' }
+      ],
+      helpedOthers: [
+        { userId: 'user-5', userName: 'Pierre Dupont', task: 'Calibration de l\'imprimante 3D Ultimaker S5', date: '2026-07-03' }
+      ],
+      helpedBy: [
+        { userId: 'user-4', userName: 'Siham Alaoui', task: 'Configuration de la vitesse de broche CNC', date: '2026-07-02' }
+      ],
+      reviewedByOthers: [
+        { userId: 'user-4', userName: 'Siham Alaoui', projectTitle: "🔋 Système d'Énergie Solaire Intelligent", date: '2026-07-01', result: 'Approuvé', rating: 4.8, comment: 'Excellente gestion de l\'alimentation MPPT et code soigné.' }
+      ]
+    }
   },
   {
     id: 'user-2',
@@ -69,7 +84,21 @@ export const MOCK_USERS = [
     projects: [
       { id: 'proj-2', title: 'Robot Solaire Autonome', description: "Un petit robot capable de suivre la lumière du soleil pour optimiser sa charge, conçu avec une structure découpée au laser.", phase: 'MOC' }
     ],
-    checkins: 20
+    checkins: 20,
+    interactions: {
+      reviewedOthers: [
+        { userId: 'user-1', userName: 'Ahmed El Mansouri', projectTitle: "🔋 Système d'Énergie Solaire Intelligent", date: '2026-07-03', result: 'Accepté', rating: 4.5, comment: 'Très bonne conception du circuit de puissance.' }
+      ],
+      helpedOthers: [
+        { userId: 'user-1', userName: 'Ahmed El Mansouri', task: 'Résolution de conflit Git sur App.jsx', date: '2026-07-02' }
+      ],
+      helpedBy: [
+        { userId: 'user-1', userName: 'Ahmed El Mansouri', task: 'Montage mécanique des engrenages', date: '2026-07-01' }
+      ],
+      reviewedByOthers: [
+        { userId: 'user-1', userName: 'Ahmed El Mansouri', projectTitle: 'Robot Solaire Autonome', date: '2026-07-04', result: 'Accepté', rating: 5, comment: 'Excellent travail sur la structure en découpe laser et la documentation!' }
+      ]
+    }
   },
   {
     id: 'user-3',
@@ -471,7 +500,7 @@ export default function UsersView({ profileTarget, onProfileTargetHandled }) {
           {/* Column 2 & 3 (spanning 2 columns on desktop): Info */}
           <div className="lg:col-span-2 space-y-6">
 
-            {/* Tab Bar (Projet tab is Stagiaire-only — only stagiaires own projects) */}
+            {/* Tab Bar (Projet & Interaction tabs are Stagiaire-only) */}
             {isStagiaire ? (
               <div className="flex items-center gap-1 p-1 bg-white/[0.03] border border-white/10 rounded-xl w-fit">
                 <button
@@ -489,6 +518,14 @@ export default function UsersView({ profileTarget, onProfileTargetHandled }) {
                   }`}
                 >
                   Projet
+                </button>
+                <button
+                  onClick={() => setActiveProfileTab('interactions')}
+                  className={`px-5 py-2 rounded-lg text-[12px] font-bold transition-colors cursor-pointer ${
+                    activeProfileTab === 'interactions' ? 'bg-accent-blue text-white' : 'text-white/50 hover:text-white'
+                  }`}
+                >
+                  Interaction
                 </button>
               </div>
             ) : null}
@@ -733,6 +770,14 @@ export default function UsersView({ profileTarget, onProfileTargetHandled }) {
                 onUpdateProjects={updateSelectedUserProjects}
                 onUpdateRecycleBin={updateSelectedUserRecycleBin}
                 onAddUser={addUser}
+              />
+            )}
+
+            {/* Interactions Tab (Stagiaire only) */}
+            {isStagiaire && activeProfileTab === 'interactions' && (
+              <InteractionsPanel
+                user={selectedUser}
+                usersList={users}
               />
             )}
 
