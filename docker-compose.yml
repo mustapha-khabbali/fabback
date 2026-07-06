@@ -1,0 +1,68 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-fablab}
+      POSTGRES_USER: ${POSTGRES_USER:-fablab}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  fablab-api:
+    build:
+      context: .
+      dockerfile: deploy/api/Dockerfile
+    restart: unless-stopped
+    environment:
+      PORT: 4000
+      DATABASE_URL: postgres://${POSTGRES_USER:-fablab}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-fablab}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      ADMIN_SEED_EMAIL: ${ADMIN_SEED_EMAIL:-sara.admin@fablab.local}
+      ADMIN_SEED_PASSWORD: ${ADMIN_SEED_PASSWORD:-change-me-now}
+      FIREBASE_SERVICE_ACCOUNT: ${FIREBASE_SERVICE_ACCOUNT:-/run/secrets/firebase-service-account.json}
+      CORS_ORIGINS: https://${MAIN_DOMAIN:-fablab.cmc.ma},https://${ADMIN_DOMAIN:-admin.fablab.cmc.ma}
+    volumes:
+      - ./secrets:/run/secrets:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  nginx:
+    build:
+      context: .
+      dockerfile: deploy/nginx/Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-/api}
+    restart: unless-stopped
+    environment:
+      MAIN_DOMAIN: ${MAIN_DOMAIN:-fablab.cmc.ma}
+      ADMIN_DOMAIN: ${ADMIN_DOMAIN:-admin.fablab.cmc.ma}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - letsencrypt:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
+    depends_on:
+      - fablab-api
+
+  certbot:
+    image: certbot/certbot:v2.11.0
+    restart: unless-stopped
+    volumes:
+      - letsencrypt:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
+    entrypoint: /bin/sh
+    command: -c "trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --quiet; sleep 12h & wait $${!}; done"
+
+volumes:
+  postgres_data:
+  letsencrypt:
+  certbot_www:

@@ -27,3 +27,4 @@
 .env.test
 .env.production
 **/.env*
+!**/.env*.example

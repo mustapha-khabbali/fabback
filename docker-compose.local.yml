@@ -1,0 +1,19 @@
+services:
+  fablab-api:
+    environment:
+      CORS_ORIGINS: http://fablab.localhost:8080,http://admin.fablab.localhost:8080
+      FIREBASE_SERVICE_ACCOUNT: ""
+    volumes: !override []
+
+  nginx:
+    environment:
+      MAIN_DOMAIN: fablab.localhost
+      ADMIN_DOMAIN: admin.fablab.localhost
+    ports: !override
+      - "8080:80"
+    volumes:
+      - ./deploy/nginx/templates/local-http.conf.template:/etc/nginx/templates/default.conf.template:ro
+
+  certbot:
+    profiles:
+      - production-certbot
