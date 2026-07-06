@@ -60,10 +60,16 @@ export default function ProjectsPanel({ projects, recycleBin, usersList, ownerId
         onUpdateRecycleBin(safeRecycleBin.filter((i) => i.id !== item.id));
         return;
       }
-      const { type, projectId, projectName, deletedAt, ...journalData } = item;
+      const journalData = { ...item };
+      delete journalData.type;
+      delete journalData.projectId;
+      delete journalData.projectName;
+      delete journalData.deletedAt;
       onUpdateProjects(safeProjects.map((p) => (p.id === item.projectId ? { ...p, journals: [journalData, ...(p.journals || [])] } : p)));
     } else {
-      const { type, deletedAt, ...projectData } = item;
+      const projectData = { ...item };
+      delete projectData.type;
+      delete projectData.deletedAt;
       onUpdateProjects([projectData, ...safeProjects]);
     }
     onUpdateRecycleBin(safeRecycleBin.filter((i) => i.id !== item.id));

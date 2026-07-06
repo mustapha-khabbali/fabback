@@ -50,7 +50,6 @@ function GateCard({ type }) {
   const [payload, setPayload] = useState(null);
 
   const isIn = type === 'in';
-  const isOut = type === 'out';
   const isEvent = type === 'event';
 
   const handleGenerate = async () => {

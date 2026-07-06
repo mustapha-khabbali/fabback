@@ -2,13 +2,26 @@ import { useState, useMemo } from 'react';
 import { UserService } from '../../services/UserService';
 import { InteractionService } from '../../services/InteractionService';
 
+const EMPTY_INTERACTIONS = {
+  reviewedOthers: [],
+  helpedOthers: [],
+  helpedBy: [],
+  reviewedByOthers: []
+};
+
+function ClickableLink({ text }) {
+  return (
+    <span 
+      className="font-bold text-accent-blue hover:text-white cursor-pointer hover:underline transition-colors"
+      onClick={(e) => { e.stopPropagation(); /* Navigation logic here later */ }}
+    >
+      {text}
+    </span>
+  );
+}
+
 export default function InteractionsPanel({ user, usersList }) {
-  const interactions = user?.interactions || {
-    reviewedOthers: [],
-    helpedOthers: [],
-    helpedBy: [],
-    reviewedByOthers: []
-  };
+  const interactions = user?.interactions || EMPTY_INTERACTIONS;
 
   const [activeCategory, setActiveCategory] = useState('all');
   const [expandedReviewId, setExpandedReviewId] = useState(null);
@@ -89,15 +102,6 @@ export default function InteractionsPanel({ user, usersList }) {
       </svg>
       <p className="text-[12px] text-white/50">{message}</p>
     </div>
-  );
-
-  const ClickableLink = ({ text }) => (
-    <span 
-      className="font-bold text-accent-blue hover:text-white cursor-pointer hover:underline transition-colors"
-      onClick={(e) => { e.stopPropagation(); /* Navigation logic here later */ }}
-    >
-      {text}
-    </span>
   );
 
   const navItems = [

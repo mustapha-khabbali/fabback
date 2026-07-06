@@ -92,12 +92,6 @@ function eachDateInRange(dateFrom, dateTo) {
   return dates;
 }
 
-function formatDate(dateValue) {
-  const date = safeDate(dateValue);
-  if (!date) return '—';
-  return date.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
-}
-
 function formatTime(dateValue, fallback = '') {
   const date = safeDate(dateValue);
   if (!date) return fallback || '—';
