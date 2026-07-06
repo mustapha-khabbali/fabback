@@ -6,6 +6,7 @@ import QrCodesView from './views/QrCodesView';
 import PVView from './views/PVView';
 import UsersView from './views/UsersView';
 import AnalyseView from './views/AnalyseView';
+import { api } from './services/api';
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(
@@ -21,6 +22,7 @@ export default function App() {
 
   const handleLogout = () => {
     sessionStorage.removeItem('admin_authenticated');
+    api.logout();
     setIsAuthenticated(false);
   };
 

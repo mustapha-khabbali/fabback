@@ -1,15 +1,22 @@
 import { useState } from 'react';
+import { api } from './services/api';
 
 export default function AdminLoginOverlay({ onLogin }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showError, setShowError] = useState(false);
 
-  const handleLogin = () => {
-    // Placeholder check — no backend wired up yet.
-    if (username.trim() && password.trim()) {
-      onLogin();
-    } else {
+  const handleLogin = async () => {
+    if (!username.trim() || !password.trim()) {
+      setShowError(true);
+      setTimeout(() => setShowError(false), 3000);
+      return;
+    }
+
+    try {
+      const session = await api.adminLogin(username.trim(), password);
+      onLogin(session);
+    } catch {
       setShowError(true);
       setTimeout(() => setShowError(false), 3000);
     }

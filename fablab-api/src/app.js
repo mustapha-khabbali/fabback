@@ -3,6 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import { config } from './config.js';
 import { query } from './db/pool.js';
+import { authRouter } from './routes/auth.js';
 
 export function createApp() {
   const app = express();
@@ -32,6 +33,8 @@ export function createApp() {
   app.use('/api/health', (_req, res) => {
     res.json({ ok: true });
   });
+
+  app.use('/api/auth', authRouter);
 
   app.use((req, res) => {
     res.status(404).json({ error: 'Not found', path: req.path });

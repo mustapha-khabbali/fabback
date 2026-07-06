@@ -2,7 +2,7 @@
 
 Self-hosted Node.js + Express + PostgreSQL API for the FabLab user app and admin dashboard.
 
-This folder is step 1 only: backend skeleton, migration, and seed.
+This folder includes the backend skeleton, migrations, seed, and auth endpoints.
 
 ## Local Setup
 
@@ -20,6 +20,15 @@ The health checks are:
 curl http://localhost:4000/health
 curl http://localhost:4000/api/health
 ```
+
+## Auth
+
+- `POST /api/auth/admin` with `{ "email": "...", "password": "..." }`
+- `POST /api/auth/google` with `{ "idToken": "..." }`
+- `GET /api/auth/me` with `Authorization: Bearer <token>`
+
+`POST /api/auth/google` verifies Firebase tokens with the service account path in
+`FIREBASE_SERVICE_ACCOUNT`.
 
 ## Seeded Records
 

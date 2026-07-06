@@ -1,11 +1,14 @@
 import { useState, useCallback } from 'react';
 import { useApp, SCREENS } from '../../context/AppContext';
 import { ensureUserIdentity } from '../../utils/userIdentity';
+import { useFirebase } from '../../context/FirebaseContext';
+import { api } from '../../services/api';
 
 const introImages = ['intro.webp', 'intro1.webp', 'intro2.webp', 'intro3.webp', 'intro4.webp', 'intro5.webp', 'intro6.webp', 'intro7.webp', 'intro8.webp'];
 
 export default function HomeScreen() {
-  const { navigateTo, setCurrentUser } = useApp();
+  const { navigateTo, setCurrentUser, showLogin, showNotification } = useApp();
+  const firebase = useFirebase();
   const [currentImage, setCurrentImage] = useState(() => introImages[Math.floor(Math.random() * introImages.length)]);
   const [authLoading, setAuthLoading] = useState(null); // 'google' | 'outlook' | null
 
@@ -17,27 +20,28 @@ export default function HomeScreen() {
     setCurrentImage(newImage);
   }, [currentImage]);
 
-  const handleAuth = useCallback((provider) => {
+  const handleAuth = useCallback(async (provider) => {
     setAuthLoading(provider);
-    setTimeout(() => {
+
+    try {
+      if (provider !== 'google') return;
+
+      const credential = await firebase.signInWithPopup(firebase.auth, firebase.googleProvider);
+      const idToken = await credential.user.getIdToken();
+      const session = await api.googleLogin(idToken);
+
+      if (session.user) {
+        setCurrentUser(ensureUserIdentity(session.user));
+        showLogin();
+      } else {
+        navigateTo(SCREENS.ROLE_SELECTION);
+      }
+    } catch (error) {
+      showNotification(error.message || "Connexion impossible.", 'error');
+    } finally {
       setAuthLoading(null);
-      setCurrentUser(ensureUserIdentity({
-        prenom: "Test",
-        nom: "User",
-        cin: "AB123456",
-        cef: "2006062400264",
-        role: "stagiaire",
-        niveau: "Technicien Spécialisé",
-        filiere: "Développement Digital",
-        points: 450,
-        programs: [
-          { name: 'FabLab Hackathon 2024', type: 'Hackathon', result: 'Win' },
-          { name: 'Introduction to IoT', type: 'Workshop', result: 'Participation' }
-        ]
-      }));
-      navigateTo(SCREENS.ROLE_SELECTION);
-    }, 800);
-  }, [navigateTo, setCurrentUser]);
+    }
+  }, [firebase, navigateTo, setCurrentUser, showLogin, showNotification]);
 
   return (
     <div className="flex flex-col items-center justify-center h-full w-full transition-all duration-500 mobile-padding">
