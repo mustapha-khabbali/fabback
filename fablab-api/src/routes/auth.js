@@ -57,12 +57,11 @@ async function upsertGoogleUser(decodedToken) {
         set
           google_uid = coalesce(google_uid, $2),
           email = coalesce(email, $3),
-          avatar = coalesce(avatar, $4),
           updated_at = now()
         where id = $1
         returning *
       `,
-      [existingUser.id, decodedToken.uid, email, decodedToken.picture || null]
+      [existingUser.id, decodedToken.uid, email]
     );
     return result.rows[0];
   }
@@ -70,12 +69,12 @@ async function upsertGoogleUser(decodedToken) {
   const result = await query(
     `
       insert into users (
-        google_uid, role, prenom, nom, email, avatar
+        google_uid, role, prenom, nom, email
       )
-      values ($1, 'visiteur', $2, $3, $4, $5)
+      values ($1, 'visiteur', $2, $3, $4)
       returning *
     `,
-    [decodedToken.uid, prenom, nom, email, decodedToken.picture || null]
+    [decodedToken.uid, prenom, nom, email]
   );
 
   return result.rows[0];

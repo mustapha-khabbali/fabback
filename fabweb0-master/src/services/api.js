@@ -74,6 +74,14 @@ export const api = {
     return body.user;
   },
 
+  async updateUser(id, patch) {
+    const body = await request(`/users/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch)
+    });
+    return body.user;
+  },
+
   async getGateConfig() {
     return request('/gate/config');
   },

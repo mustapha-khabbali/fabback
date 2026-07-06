@@ -6,6 +6,29 @@ import InteractionsPanel from '../components/users/InteractionsPanel';
 import { api } from '../services/api';
 
 export const MOCK_USERS = [];
+const MAX_AVATAR_SIZE = 512;
+
+function compressAvatarFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Avatar read failed'));
+    reader.onload = () => {
+      const image = new Image();
+      image.onerror = () => reject(new Error('Avatar image failed'));
+      image.onload = () => {
+        const scale = Math.min(1, MAX_AVATAR_SIZE / Math.max(image.width, image.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(image.width * scale));
+        canvas.height = Math.max(1, Math.round(image.height * scale));
+        const context = canvas.getContext('2d');
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', 0.82));
+      };
+      image.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
 
 const ALL_COLUMNS = [
   { id: 'nom', label: 'Nom' },
@@ -40,6 +63,7 @@ export default function UsersView({ profileTarget, onProfileTargetHandled }) {
   const [showDeactivateModal, setShowDeactivateModal] = useState(false);
   const [showRemoveModal, setShowRemoveModal] = useState(false);
   const [activeProfileTab, setActiveProfileTab] = useState('info');
+  const avatarInputRef = useRef(null);
 
   const handleStartEdit = () => {
     setEditForm({ ...selectedUser });
@@ -152,6 +176,38 @@ export default function UsersView({ profileTarget, onProfileTargetHandled }) {
   const handleCancelEdit = () => {
     setIsEditing(false);
     setEditForm(null);
+  };
+
+  const handleAvatarUpload = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file || !selectedUser?.id) return;
+
+    try {
+      const avatar = await compressAvatarFile(file);
+      const updated = await api.updateUser(selectedUser.id, { avatar });
+      const updatedUsers = users.map(u => u.id === selectedUser.id ? updated : u);
+      setUsers(updatedUsers);
+      setSelectedUser(updated);
+      setEditForm((prev) => prev ? { ...prev, avatar: updated.avatar } : prev);
+    } catch (error) {
+      alert(error.message);
+    } finally {
+      event.target.value = '';
+    }
+  };
+
+  const handleAvatarRemove = async () => {
+    if (!selectedUser?.id) return;
+
+    try {
+      const updated = await api.updateUser(selectedUser.id, { avatar: null });
+      const updatedUsers = users.map(u => u.id === selectedUser.id ? updated : u);
+      setUsers(updatedUsers);
+      setSelectedUser(updated);
+      setEditForm((prev) => prev ? { ...prev, avatar: null } : prev);
+    } catch (error) {
+      alert(error.message);
+    }
   };
 
   const confirmToggleDeactivate = async () => {
@@ -296,9 +352,13 @@ export default function UsersView({ profileTarget, onProfileTargetHandled }) {
             {/* Avatar & Identity Header Card */}
             <div className="section-card p-6 flex flex-col items-center text-center">
               <div className="w-28 h-28 bg-white/5 border border-white/10 rounded-full flex items-center justify-center overflow-hidden shadow-xl mb-4 relative text-white">
-                <svg className="w-14 h-14" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
-                </svg>
+                {selectedUser.avatar ? (
+                  <img src={selectedUser.avatar} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <svg className="w-14 h-14" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+                  </svg>
+                )}
               </div>
               <h3 className="text-xl font-bold text-white tracking-tight">{selectedUser.prenom} {selectedUser.nom}</h3>
               <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
@@ -373,6 +433,36 @@ export default function UsersView({ profileTarget, onProfileTargetHandled }) {
               <div className="flex flex-col space-y-3">
                 {isEditing ? (
                   <>
+                    <input
+                      ref={avatarInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleAvatarUpload}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => avatarInputRef.current?.click()}
+                      className="w-full bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-white text-[12px] font-bold py-3 px-4 rounded-xl flex items-center justify-between transition-colors cursor-pointer"
+                    >
+                      <span>{selectedUser.avatar ? 'Remplacer la photo' : 'Ajouter une photo'}</span>
+                      <svg className="w-4 h-4 text-white/40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                    </button>
+                    {selectedUser.avatar && (
+                      <button
+                        type="button"
+                        onClick={handleAvatarRemove}
+                        className="w-full bg-white/[0.04] hover:bg-red-500/10 hover:border-red-500/20 border border-white/10 text-accent-red text-[12px] font-bold py-3 px-4 rounded-xl flex items-center justify-between transition-colors cursor-pointer"
+                      >
+                        <span>Retirer la photo</span>
+                        <svg className="w-4 h-4 text-accent-red" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    )}
                     {/* Enregistrer */}
                     <button 
                       onClick={handleSaveEdit}

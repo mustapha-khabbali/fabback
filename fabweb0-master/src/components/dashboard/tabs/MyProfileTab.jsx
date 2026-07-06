@@ -3,8 +3,32 @@ import { useApp, SCREENS, TABS } from '../../../context/AppContext';
 import { validateEmail, validatePhone } from '../../../utils/validation';
 import { buildPresenceHeatmapCells } from '../../../utils/presenceActivity';
 import SettingsView from './SettingsView';
+import { api } from '../../../services/api';
 
 const SHOW_PROFILE_LEVEL_BADGE = false;
+const MAX_AVATAR_SIZE = 512;
+
+function compressAvatarFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Avatar read failed'));
+    reader.onload = () => {
+      const image = new Image();
+      image.onerror = () => reject(new Error('Avatar image failed'));
+      image.onload = () => {
+        const scale = Math.min(1, MAX_AVATAR_SIZE / Math.max(image.width, image.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(image.width * scale));
+        canvas.height = Math.max(1, Math.round(image.height * scale));
+        const context = canvas.getContext('2d');
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', 0.82));
+      };
+      image.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
 
 export default function MyProfileTab() {
   const { 
@@ -178,6 +202,21 @@ export default function MyProfileTab() {
     showNotification("Profil mis à jour avec succès !");
   };
 
+  const handleAvatarChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !currentUser?.id) return;
+
+    try {
+      const avatar = await compressAvatarFile(file);
+      const updated = await api.updateUser(currentUser.id, { avatar });
+      setCurrentUser(updated);
+    } catch {
+      showNotification("Impossible de mettre à jour la photo de profil.", 'error');
+    } finally {
+      e.target.value = '';
+    }
+  };
+
   const roleLabel = currentUser?.role ? currentUser.role.charAt(0).toUpperCase() + currentUser.role.slice(1) : 'Stagiaire';
 
   if (showSettings) {
@@ -217,12 +256,16 @@ export default function MyProfileTab() {
       <div className="flex flex-col items-center space-y-4">
         <div className="relative">
           <div className="w-32 h-32 bg-t-surface glass-card rounded-full border-2 border-[#3B5FE6] flex items-center justify-center overflow-hidden shadow-2xl transition-transform active:scale-95">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-20 w-20 text-t-primary" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-            </svg>
+            {currentUser?.avatar ? (
+              <img src={currentUser.avatar} alt="" className="w-full h-full object-cover" />
+            ) : (
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-20 w-20 text-t-primary" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+              </svg>
+            )}
           </div>
           <label className="absolute bottom-1 right-1 w-9 h-9 bg-[#3B5FE6] text-white rounded-full flex items-center justify-center border-4 border-[#F0F7FF] cursor-pointer hover:brightness-110 shadow-lg">
-            <input type="file" className="hidden" accept="image/*" />
+            <input type="file" className="hidden" accept="image/*" onChange={handleAvatarChange} />
             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
