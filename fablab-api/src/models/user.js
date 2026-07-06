@@ -18,6 +18,7 @@ export function toPublicUser(user) {
     email: user.email,
     bio: user.bio,
     avatar: user.avatar,
+    programs: user.programs || [],
     points: user.points,
     comportementRating: Number(user.comportement_rating || 0),
     isDeactivated: user.is_deactivated,

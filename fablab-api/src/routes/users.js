@@ -10,6 +10,11 @@ const roleSchema = z.enum(['stagiaire', 'formateur', 'administrateur', 'visiteur
 const optionalText = z.string().trim().optional().nullable();
 const phoneSchema = z.string().trim().regex(/^0[67]\d{8}$/).optional().nullable();
 const emailSchema = z.string().trim().email().transform((value) => value.toLowerCase()).optional().nullable();
+const programSchema = z.object({
+  name: z.string().trim().min(1),
+  type: z.string().trim().min(1),
+  result: z.string().trim().min(1)
+}).strip();
 
 export const userProfileSchema = z.object({
   role: roleSchema,
@@ -27,6 +32,7 @@ export const userProfileSchema = z.object({
   email: emailSchema,
   bio: optionalText,
   avatar: optionalText,
+  programs: z.array(programSchema).optional(),
   charteAccepted: z.boolean().optional(),
   reproductionAccepted: z.boolean().optional()
 });
@@ -49,6 +55,7 @@ const createUserSchema = userProfileSchema.partial({
   email: true,
   bio: true,
   avatar: true,
+  programs: true,
   charteAccepted: true,
   reproductionAccepted: true
 });
@@ -68,6 +75,7 @@ const fieldMap = {
   email: 'email',
   bio: 'bio',
   avatar: 'avatar',
+  programs: 'programs',
   points: 'points'
 };
 
@@ -82,9 +90,9 @@ export function buildUserPatch(data) {
 
   Object.entries(fieldMap).forEach(([key, column]) => {
     if (Object.prototype.hasOwnProperty.call(normalized, key)) {
-      values.push(normalized[key] ?? null);
+      values.push(key === 'programs' ? JSON.stringify(normalized[key] ?? []) : normalized[key] ?? null);
       params.push(values.length);
-      columns.push(`${column} = $${values.length}`);
+      columns.push(`${column} = $${values.length}${key === 'programs' ? '::jsonb' : ''}`);
     }
   });
 

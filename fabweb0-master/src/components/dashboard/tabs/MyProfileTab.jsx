@@ -169,7 +169,7 @@ export default function MyProfileTab() {
     setIsProfileEditing(!isProfileEditing);
   };
 
-  const saveChanges = () => {
+  const saveChanges = async () => {
     if (!validateEmail(editForm.email)) {
       showNotification("Veuillez entrer une adresse email valide.", 'error');
       return;
@@ -178,11 +178,28 @@ export default function MyProfileTab() {
       showNotification("Le numéro de téléphone doit commencer par 06 ou 07 et contenir 10 chiffres au total.", 'error');
       return;
     }
-    const updated = { ...currentUser, ...editForm };
-    setCurrentUser(updated);
-    localStorage.setItem('user_profile_data', JSON.stringify(updated));
-    setIsProfileEditing(false);
-    showNotification("Profil mis à jour avec succès !");
+    if (!currentUser?.id) {
+      showNotification("Profil introuvable.", 'error');
+      return;
+    }
+
+    try {
+      const updated = await api.updateUser(currentUser.id, {
+        prenom: editForm.prenom,
+        nom: editForm.nom,
+        bio: editForm.bio,
+        cin: editForm.cin,
+        cef: editForm.cef,
+        email: editForm.email,
+        tel: editForm.tel,
+        programs: editForm.programs
+      });
+      setCurrentUser(updated);
+      setIsProfileEditing(false);
+      showNotification("Profil mis à jour avec succès !");
+    } catch (error) {
+      showNotification(error.message || "Profil impossible à mettre à jour.", 'error');
+    }
   };
 
   const handleAvatarChange = async (e) => {
@@ -667,6 +684,7 @@ export default function MyProfileTab() {
 
       {/* Action Buttons */}
       <div className="pt-6 space-y-4">
+        {/* Parked: Programs interface — re-enable when the admin can create real programs
         {!isProfileEditing && (
           <button 
             onClick={() => {
@@ -688,6 +706,7 @@ export default function MyProfileTab() {
             <span>Programmes</span>
           </button>
         )}
+        */}
 
         {!isProfileEditing ? (
           <button onClick={toggleEdit}
