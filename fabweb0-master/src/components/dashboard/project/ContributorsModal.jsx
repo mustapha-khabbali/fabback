@@ -1,9 +1,10 @@
 import { useState, useMemo } from 'react';
 import { useApp, TABS } from '../../../context/AppContext';
 import { findUserByIdentity, getPrimaryUserId, isCurrentUserId } from '../../../utils/userIdentity';
+import { api } from '../../../services/api';
 
 export default function ContributorsModal({ project, onClose, onSave, showNotification }) {
-  const { currentUser, recycleBin, saveRecycleBin, setSelectedUser: setAppSelectedUser, setActiveTab, setNavigationHistory, notifications, setNotifications, usersList } = useApp();
+  const { currentUser, recycleBin, saveRecycleBin, setSelectedUser: setAppSelectedUser, setActiveTab, setNavigationHistory, setNotifications, usersList } = useApp();
   const currentUserId = getPrimaryUserId(currentUser);
   const [searchQuery, setSearchQuery] = useState('');
   const [isAdding, setIsAdding] = useState(false);
@@ -125,7 +126,6 @@ export default function ContributorsModal({ project, onClose, onSave, showNotifi
 
       if (!newContributor.memberAccepted) {
         const inviteNotif = {
-          id: `invite-${project.id}-${selectedUser.id}-${Date.now()}`,
           type: 'project_invite',
           recipientId: selectedUser.id,
           senderId: currentUserId,
@@ -138,7 +138,9 @@ export default function ContributorsModal({ project, onClose, onSave, showNotifi
           status: 'unread',
           time: 'À l\'instant'
         };
-        setNotifications([inviteNotif, ...notifications]);
+        api.createNotification(inviteNotif)
+          .then(created => setNotifications(prev => [...created, ...prev]))
+          .catch(() => {});
       }
     }
   };

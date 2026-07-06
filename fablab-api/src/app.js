@@ -9,6 +9,8 @@ import { attendanceRouter } from './routes/attendance.js';
 import { eventsRouter } from './routes/events.js';
 import { gateRouter } from './routes/gate.js';
 import { projectsRouter } from './routes/projects.js';
+import { notificationsRouter } from './routes/notifications.js';
+import { reviewsRouter } from './routes/reviews.js';
 
 export function createApp() {
   const app = express();
@@ -45,6 +47,8 @@ export function createApp() {
   app.use('/api/events', eventsRouter);
   app.use('/api/attendance', attendanceRouter);
   app.use('/api/projects', projectsRouter);
+  app.use('/api/notifications', notificationsRouter);
+  app.use('/api/reviews', reviewsRouter);
 
   app.use((req, res) => {
     res.status(404).json({ error: 'Not found', path: req.path });

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { api } from '../../services/api';
 
 export default function HelpFeedbackModal() {
   const { showHelpFeedbackModal, setShowHelpFeedbackModal, selectedNotificationRequest, setSelectedNotificationRequest, showNotification, setNotifications } = useApp();
@@ -8,19 +9,23 @@ export default function HelpFeedbackModal() {
 
   if (!showHelpFeedbackModal || !selectedNotificationRequest) return null;
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (rating === 0) { showNotification("Veuillez donner une note de 1 à 5 étoiles.", 'error'); return; }
     
-    // Process submission
-    showNotification("Merci pour votre évaluation !");
-    
-    // Remove the notification
-    setNotifications(prev => prev.filter(n => n.id !== selectedNotificationRequest.id));
-    
-    setShowHelpFeedbackModal(false);
-    setSelectedNotificationRequest(null);
-    setRating(0);
-    setNote('');
+    try {
+      await api.updateNotification(selectedNotificationRequest.id, { status: 'read', handled: true, approved: true });
+      showNotification("Merci pour votre évaluation !");
+      
+      // Remove the notification
+      setNotifications(prev => prev.filter(n => n.id !== selectedNotificationRequest.id));
+      
+      setShowHelpFeedbackModal(false);
+      setSelectedNotificationRequest(null);
+      setRating(0);
+      setNote('');
+    } catch (error) {
+      showNotification(error.message || "Évaluation impossible.", 'error');
+    }
   };
 
   const handleClose = () => {

@@ -1,5 +1,6 @@
 import { useApp, TABS } from '../../../context/AppContext';
 import { findUserByIdentity, getPrimaryUserId } from '../../../utils/userIdentity';
+import { api } from '../../../services/api';
 
 export default function NotificationsTab() {
   const { currentUser, setSelectedUser, setActiveTab, showNotification, setPreviousTab, activeTab, selectedNotificationRequest, setSelectedNotificationRequest, setReviewingProject, setCurrentProjectId, setDirectProgramView, notifications, setNotifications, handleContactRequestResponse, setShowHelpFeedbackModal, usersList } = useApp();
@@ -16,12 +17,12 @@ export default function NotificationsTab() {
     } else if (selectedNotificationRequest?.type === 'review_request') {
       setReviewingProject(selectedNotificationRequest);
       setActiveTab(TABS.PROJECT_REVIEW);
-      setNotifications(prev => prev.filter(n => n.id !== id));
       setSelectedNotificationRequest(null);
     } else if (selectedNotificationRequest?.type === 'help_feedback_request') {
       setShowHelpFeedbackModal(true);
     } else {
       showNotification("Demande approuvée !");
+      api.updateNotification(id, { status: 'read', handled: true, approved: true }).catch(() => {});
       setNotifications(prev => prev.filter(n => n.id !== id));
       setSelectedNotificationRequest(null);
     }
@@ -32,6 +33,7 @@ export default function NotificationsTab() {
       handleContactRequestResponse(id, selectedNotificationRequest.requesterId, false);
     } else {
       showNotification("Demande refusée.", "error");
+      api.updateNotification(id, { status: 'read', handled: true, approved: false }).catch(() => {});
       setNotifications(prev => prev.filter(n => n.id !== id));
     }
     setSelectedNotificationRequest(null);
@@ -49,7 +51,9 @@ export default function NotificationsTab() {
   const handleNotificationClick = (notif) => {
     // Mark as read if it's unread
     if (notif.status === 'unread') {
-       setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, status: 'read' } : n));
+       api.updateNotification(notif.id, { status: 'read' })
+         .then(updated => setNotifications(prev => prev.map(n => n.id === notif.id ? updated : n)))
+         .catch(() => setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, status: 'read' } : n)));
     }
 
     if (notif.type === 'program_launch') {

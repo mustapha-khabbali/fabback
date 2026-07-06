@@ -100,7 +100,6 @@ export function AppProvider({ children }) {
   const sendContactRequest = (targetUserId) => {
     const requesterId = getPrimaryUserId(currentUser);
     const newNotif = {
-      id: crypto.randomUUID(),
       type: 'CONTACT_REQUEST',
       requesterId,
       requesterName: `${currentUser.prenom} ${currentUser.nom}`,
@@ -111,7 +110,9 @@ export function AppProvider({ children }) {
       targetId: targetUserId,
       createdAt: new Date().toISOString()
     };
-    setNotifications(prev => [newNotif, ...prev]);
+    api.createNotification(newNotif)
+      .then((created) => setNotifications(prev => [...created, ...prev]))
+      .catch(() => {});
     showNotification("Demande envoyée !");
   };
 
@@ -124,9 +125,17 @@ export function AppProvider({ children }) {
     } else {
       showNotification("Demande refusée.");
     }
-    setNotifications(notifications.map(n =>
-      n.id === notifId ? { ...n, status: 'read', handled: true, approved: approve } : n
-    ));
+    api.updateNotification(notifId, { status: 'read', handled: true, approved: approve })
+      .then((updated) => {
+        setNotifications(notifications.map(n =>
+          n.id === notifId ? updated : n
+        ));
+      })
+      .catch(() => {
+        setNotifications(notifications.map(n =>
+          n.id === notifId ? { ...n, status: 'read', handled: true, approved: approve } : n
+        ));
+      });
   };
 
   const [navigationHistory, setNavigationHistory] = useState([]); // Array of { selectedUser, currentProjectId }
@@ -207,14 +216,16 @@ export function AppProvider({ children }) {
           api.getRecycleBin(),
           api.getOpenAttendance()
         ]);
-        return { projects, bin, openAttendance };
+        const notifications = await api.getNotifications();
+        return { projects, bin, openAttendance, notifications };
       })
-      .then(({ projects, bin, openAttendance }) => {
+      .then(({ projects, bin, openAttendance, notifications }) => {
         if (!cancelled) {
           setUserProjects(projects);
           localStorage.setItem('user_projects', JSON.stringify(projects));
           setRecycleBin(bin);
           localStorage.setItem('recycle_bin', JSON.stringify(bin));
+          setNotifications(notifications);
         }
         if (!cancelled && openAttendance) {
           setIsUserInLab(true);

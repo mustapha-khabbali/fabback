@@ -133,6 +133,35 @@ export const api = {
     return body.recycleBin || [];
   },
 
+  async getNotifications() {
+    const body = await request('/notifications');
+    return body.notifications || [];
+  },
+
+  async createNotification(notification) {
+    const body = await request('/notifications', {
+      method: 'POST',
+      body: JSON.stringify(notification)
+    });
+    return body.notifications || [];
+  },
+
+  async updateNotification(id, patch) {
+    const body = await request(`/notifications/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch)
+    });
+    return body.notification;
+  },
+
+  async createReview(review) {
+    const body = await request('/reviews', {
+      method: 'POST',
+      body: JSON.stringify(review)
+    });
+    return body.review;
+  },
+
   logout() {
     setUserToken(null);
   }

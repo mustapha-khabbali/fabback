@@ -6,6 +6,7 @@ import JournalReaderModal from './JournalReaderModal';
 import ContributorsModal from './ContributorsModal';
 import SupervisorModal from './SupervisorModal';
 import { findUserByIdentity, getPrimaryUserId, isCurrentUserId } from '../../../utils/userIdentity';
+import { api } from '../../../services/api';
 
 const JOURNAL_COLORS = ['#FF6B6B', '#4ECDC4', '#3B5FE6', '#FF9F43', '#10AC84', '#EE5253', '#5F27CD', '#222F3E'];
 const SYSTEM_SUPERVISOR_IDS = ['user-sara', 'system-sara'];
@@ -28,7 +29,7 @@ const ALL_SDGS = Array.from({ length: 17 }, (_, i) => ({
 }));
 
 export default function ProjectDetail({ onBack }) {
-  const { currentUser, userProjects, saveProjects, currentProjectId, recycleBin, saveRecycleBin, showNotification, setActiveTab, setSelectedUser, setNavigationHistory, usersList, notifications, setNotifications, recordPresenceActivity } = useApp();
+  const { currentUser, userProjects, saveProjects, currentProjectId, recycleBin, saveRecycleBin, showNotification, setActiveTab, setSelectedUser, setNavigationHistory, usersList, setNotifications, recordPresenceActivity } = useApp();
   const currentUserId = getPrimaryUserId(currentUser);
   const [menuOpen, setMenuOpen] = useState(false);
   const [showModify, setShowModify] = useState(false);
@@ -664,7 +665,6 @@ export default function ProjectDetail({ onBack }) {
             <button
               onClick={() => {
                 const newNotif = {
-                  id: 'review-' + Date.now(),
                   type: 'review_request',
                   senderId: currentUserId,
                   senderName: `${currentUser.prenom} ${currentUser.nom}`,
@@ -675,7 +675,9 @@ export default function ProjectDetail({ onBack }) {
                   status: 'pending',
                   // level: 4
                 };
-                setNotifications([newNotif, ...notifications]);
+                api.createNotification(newNotif)
+                  .then(created => setNotifications(prev => [...created, ...prev]))
+                  .catch(() => {});
 
                 const updatedProjects = userProjects.map(p =>
                   p.id === project.id ? { ...p, reviewRequested: true, status: 'review_pending' } : p
@@ -1036,7 +1038,6 @@ export default function ProjectDetail({ onBack }) {
                 disabled={!helpDescription.trim() || !selectedHelpMachine}
                 onClick={() => {
                   const newNotif = {
-                    id: 'help-' + Date.now(),
                     type: 'help_request',
                     senderId: currentUserId,
                     senderName: `${currentUser.prenom} ${currentUser.nom}`,
@@ -1048,7 +1049,9 @@ export default function ProjectDetail({ onBack }) {
                     status: 'pending',
                     // level: 4
                   };
-                  setNotifications([newNotif, ...notifications]);
+                  api.createNotification(newNotif)
+                    .then(created => setNotifications(prev => [...created, ...prev]))
+                    .catch(() => {});
 
                   const updatedProjects = userProjects.map(p =>
                     p.id === project.id ? { ...p, helpRequested: true, helpMachine: selectedHelpMachine, helpDescription } : p

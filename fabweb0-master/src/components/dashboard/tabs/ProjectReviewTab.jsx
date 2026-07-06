@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useApp, TABS } from '../../../context/AppContext';
+import { api } from '../../../services/api';
 
 export default function ProjectReviewTab() {
-  const { reviewingProject, setReviewingProject, setActiveTab, showNotification } = useApp();
+  const { reviewingProject, setReviewingProject, setActiveTab, showNotification, setNotifications } = useApp();
   const [ratings, setRatings] = useState({
     problemSolving: 0,
     technicalExecution: 0,
@@ -35,10 +36,23 @@ export default function ProjectReviewTab() {
     setRatings(prev => ({ ...prev, [id]: value }));
   };
 
-  const handleSubmit = () => {
-    showNotification("Review soumise avec succès !");
-    setReviewingProject(null);
-    setActiveTab(TABS.NOTIFICATIONS);
+  const handleSubmit = async () => {
+    try {
+      await api.createReview({
+        projectId: reviewingProject.projectId,
+        ...ratings,
+        feedback
+      });
+      if (reviewingProject.id) {
+        await api.updateNotification(reviewingProject.id, { status: 'read', handled: true, approved: true }).catch(() => {});
+        setNotifications(prev => prev.filter(n => n.id !== reviewingProject.id));
+      }
+      showNotification("Review soumise avec succès !");
+      setReviewingProject(null);
+      setActiveTab(TABS.NOTIFICATIONS);
+    } catch (error) {
+      showNotification(error.message || "Review impossible.", "error");
+    }
   };
 
   return (
