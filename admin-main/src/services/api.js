@@ -187,6 +187,14 @@ export const api = {
     return body.config;
   },
 
+  async getPermanentGateQr(gate) {
+    const body = await request(`/gate/permanent-qr/${gate}`, {
+      method: 'POST',
+      body: JSON.stringify({})
+    });
+    return body.qr;
+  },
+
   logout() {
     setAdminToken(null);
   }

@@ -39,19 +39,18 @@ function GateCard({ type }) {
   const isEvent = type === 'event';
 
   const handleGenerate = async () => {
-    const uid = crypto.randomUUID ? crypto.randomUUID().split('-')[0] : Math.random().toString(36).substring(2, 10);
     if (isIn) {
       await api.saveGateConfig(activeConfig(DEFAULT_GATE_IN_CONFIG));
     }
+    const qr = isEvent ? { gate: 'EVENT', id: 'event' } : await api.getPermanentGateQr(isIn ? 'GATE_IN' : 'GATE_OUT');
     const data = JSON.stringify({
       action: isIn ? 'check_in' : (isEvent ? 'event' : 'check_out'),
       lab: 'CMC_BENI_MELLAL',
       gate: isIn ? 'GATE_IN' : (isEvent ? 'EVENT' : 'GATE_OUT'),
-      id: uid,
-      ts: Date.now()
+      id: qr.id
     });
 
-    setPayload({ uid });
+    setPayload({ uid: qr.id });
 
     // Wait for the canvas to mount before drawing into it.
     requestAnimationFrame(async () => {

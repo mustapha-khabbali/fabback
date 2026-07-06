@@ -104,8 +104,8 @@ curl -I http://localhost:5174
    Register as Stagiaire.
 
 6. User:
-   Open Scan tab. Scan the on-screen QR with the webcam, or press the SCAN button
-   fallback.
+   Open Scan tab. Scan the on-screen QR with the webcam, or use the development QR scan
+   shortcut below.
 
 7. User:
    Choose "Projet en cours" plus an encadrant, then validate.
@@ -134,3 +134,16 @@ curl -I http://localhost:5174
 15. User:
    Try the next action in the user app. It must be rejected because the user is
    deactivated.
+
+## Development QR Scan Shortcut
+
+In development only, the user app supports a local QR test shortcut for machines without
+a printed Gate-IN or Gate-OUT QR nearby.
+
+- Start the API with `NODE_ENV` not set to `production`.
+- Generate the permanent Gate-IN and Gate-OUT QR codes once from the admin QR page.
+- In the user app Scan tab, double-click the green `SCAN` button to fetch the permanent
+  gate id from `/api/gate/dev/permanent-qr/:gate` and simulate that camera result.
+
+Production builds strip this bypass because it is guarded by `import.meta.env.DEV`, and
+the API route returns `404` when `NODE_ENV=production`.

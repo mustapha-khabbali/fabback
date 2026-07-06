@@ -49,7 +49,9 @@ export default function RoleScanObjectiveModal() {
     setActiveTab,
     userProjects,
     allProjects,
-    showNotification
+    showNotification,
+    pendingScanPayload,
+    setPendingScanPayload
   } = useApp();
 
   const config = useMemo(loadGateInConfig, [showRoleScanObjectiveModal]);
@@ -83,6 +85,7 @@ export default function RoleScanObjectiveModal() {
 
   const close = () => {
     reset();
+    setPendingScanPayload(null);
     setShowRoleScanObjectiveModal(false);
   };
 
@@ -107,6 +110,7 @@ export default function RoleScanObjectiveModal() {
     const project = supervisedProjects.find((item) => item.id === selectedProjectId);
     const event = events.find((item) => item.id === selectedEventId);
     const logEntry = {
+      qr: pendingScanPayload,
       userId: currentUserId || 'guest',
       userName: `${currentUser.prenom || ''} ${currentUser.nom || ''}`.trim(),
       nom: currentUser.nom || '',
@@ -142,6 +146,7 @@ export default function RoleScanObjectiveModal() {
       localStorage.setItem('lab_attendance', JSON.stringify(attendance));
 
       setIsUserInLab(true);
+      setPendingScanPayload(null);
       reset();
       setShowRoleScanObjectiveModal(false);
       showNotification("Entrée enregistrée avec succès !", 'success');

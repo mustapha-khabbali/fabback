@@ -6,6 +6,10 @@ import { requireAuth, requireRole } from '../middleware/auth.js';
 export const attendanceRouter = express.Router();
 
 const checkInSchema = z.object({
+  qr: z.object({
+    gate: z.literal('GATE_IN'),
+    id: z.string().trim().min(1)
+  }).optional(),
   objective: z.string().optional(),
   comment: z.string().optional(),
   projectId: z.string().optional(),
@@ -17,9 +21,26 @@ const checkInSchema = z.object({
 });
 
 const checkOutSchema = z.object({
+  qr: z.object({
+    gate: z.literal('GATE_OUT'),
+    id: z.string().trim().min(1)
+  }).optional(),
   rating: z.number().int().min(1).max(5),
   feedbackComment: z.string().optional()
 });
+
+async function assertPermanentQr(gate, qr, res) {
+  const column = gate === 'GATE_IN' ? 'permanent_gate_in_qr_id' : 'permanent_gate_out_qr_id';
+  const result = await query(`select ${column} as permanent_qr_id from gate_config where id = 1`);
+  const permanentQrId = result.rows[0]?.permanent_qr_id;
+
+  if (!permanentQrId || !qr?.id || qr.id !== permanentQrId) {
+    res.status(403).json({ error: `Invalid ${gate} QR code` });
+    return false;
+  }
+
+  return true;
+}
 
 function mapAttendance(row) {
   return {
@@ -85,6 +106,8 @@ attendanceRouter.post('/check-in', async (req, res, next) => {
     }
 
     const data = parsed.data;
+    if (!(await assertPermanentQr('GATE_IN', data.qr, res))) return;
+
     const result = await query(
       `
         insert into attendance (
@@ -130,6 +153,8 @@ attendanceRouter.post('/check-out', async (req, res, next) => {
       res.status(400).json({ error: 'Invalid request body', details: parsed.error.flatten() });
       return;
     }
+
+    if (!(await assertPermanentQr('GATE_OUT', parsed.data.qr, res))) return;
 
     const open = await query(
       `

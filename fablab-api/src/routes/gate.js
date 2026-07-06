@@ -1,7 +1,9 @@
 import express from 'express';
+import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { query } from '../db/pool.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
+import { config } from '../config.js';
 
 export const gateRouter = express.Router();
 
@@ -16,6 +18,38 @@ const gateOptionSchema = z.object({
 const gateConfigSchema = z.object({
   config: z.record(z.array(gateOptionSchema))
 });
+
+const gateParamSchema = z.enum(['GATE_IN', 'GATE_OUT']);
+
+function qrColumn(gate) {
+  return gate === 'GATE_IN' ? 'permanent_gate_in_qr_id' : 'permanent_gate_out_qr_id';
+}
+
+function mapPermanentQr(row) {
+  return {
+    GATE_IN: row?.permanent_gate_in_qr_id || null,
+    GATE_OUT: row?.permanent_gate_out_qr_id || null
+  };
+}
+
+async function getOrCreatePermanentQr(gate) {
+  const column = qrColumn(gate);
+  const newId = randomUUID();
+  const result = await query(
+    `
+      insert into gate_config (id, config, ${column})
+      values (1, '{}'::jsonb, $1)
+      on conflict (id) do update
+      set
+        ${column} = coalesce(gate_config.${column}, excluded.${column}),
+        updated_at = case when gate_config.${column} is null then now() else gate_config.updated_at end
+      returning permanent_gate_in_qr_id, permanent_gate_out_qr_id, updated_at
+    `,
+    [newId]
+  );
+
+  return result.rows[0];
+}
 
 function mapEvent(row) {
   const toDateInput = (value) => {
@@ -43,7 +77,7 @@ gateRouter.use(requireAuth);
 
 gateRouter.get('/config', async (_req, res, next) => {
   try {
-    const configResult = await query('select config from gate_config where id = 1');
+    const configResult = await query('select config, permanent_gate_in_qr_id, permanent_gate_out_qr_id from gate_config where id = 1');
     const eventsResult = await query(
       `
         select *
@@ -56,8 +90,44 @@ gateRouter.get('/config', async (_req, res, next) => {
 
     res.json({
       config: configResult.rows[0]?.config || {},
+      permanentQr: mapPermanentQr(configResult.rows[0]),
       events: eventsResult.rows.map(mapEvent)
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+gateRouter.post('/permanent-qr/:gate', requireRole('administrateur'), async (req, res, next) => {
+  try {
+    const parsed = gateParamSchema.safeParse(String(req.params.gate || '').toUpperCase());
+    if (!parsed.success) {
+      res.status(400).json({ error: 'Invalid gate' });
+      return;
+    }
+
+    const row = await getOrCreatePermanentQr(parsed.data);
+    res.json({ qr: { gate: parsed.data, id: mapPermanentQr(row)[parsed.data] }, permanentQr: mapPermanentQr(row), updatedAt: row.updated_at });
+  } catch (error) {
+    next(error);
+  }
+});
+
+gateRouter.get('/dev/permanent-qr/:gate', async (req, res, next) => {
+  try {
+    if (config.nodeEnv === 'production') {
+      res.status(404).json({ error: 'Not found' });
+      return;
+    }
+
+    const gate = String(req.params.gate || '').toUpperCase();
+    if (!['GATE_IN', 'GATE_OUT'].includes(gate)) {
+      res.status(400).json({ error: 'Invalid gate' });
+      return;
+    }
+
+    const row = await getOrCreatePermanentQr(gate);
+    res.json({ qr: { gate, id: mapPermanentQr(row)[gate] } });
   } catch (error) {
     next(error);
   }

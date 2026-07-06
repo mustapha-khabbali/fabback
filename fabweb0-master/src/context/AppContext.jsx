@@ -247,6 +247,7 @@ export function AppProvider({ children }) {
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [showScanObjectiveModal, setShowScanObjectiveModal] = useState(false);
   const [showRoleScanObjectiveModal, setShowRoleScanObjectiveModal] = useState(false);
+  const [pendingScanPayload, setPendingScanPayload] = useState(null);
   const [showHelpFeedbackModal, setShowHelpFeedbackModal] = useState(false);
 
   // Notification system
@@ -365,6 +366,8 @@ export function AppProvider({ children }) {
     setShowScanObjectiveModal,
     showRoleScanObjectiveModal,
     setShowRoleScanObjectiveModal,
+    pendingScanPayload,
+    setPendingScanPayload,
 
     // Profile
     isProfileEditing,

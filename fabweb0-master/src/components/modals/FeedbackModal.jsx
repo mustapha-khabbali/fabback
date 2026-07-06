@@ -4,7 +4,7 @@ import { getPrimaryUserId } from '../../utils/userIdentity';
 import { api } from '../../services/api';
 
 export default function FeedbackModal() {
-  const { showFeedbackModal, setShowFeedbackModal, setIsUserInLab, currentUser, showNotification } = useApp();
+  const { showFeedbackModal, setShowFeedbackModal, setIsUserInLab, currentUser, showNotification, pendingScanPayload, setPendingScanPayload } = useApp();
   const [rating, setRating] = useState(0);
   const [note, setNote] = useState('');
 
@@ -25,7 +25,7 @@ export default function FeedbackModal() {
       String(entry.userId || '') === String(userId)
     );
 
-    const saved = await api.checkOut({ rating, feedbackComment: note.trim() });
+    const saved = await api.checkOut({ qr: pendingScanPayload, rating, feedbackComment: note.trim() });
 
     if (openEntryIndex >= 0) {
       attendance[openEntryIndex] = {
@@ -62,6 +62,7 @@ export default function FeedbackModal() {
     try {
       await saveGateOut();
       setShowFeedbackModal(false);
+      setPendingScanPayload(null);
       showNotification("Merci pour votre feedback ! À bientôt.");
       setIsUserInLab(false);
       setRating(0);

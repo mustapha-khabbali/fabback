@@ -85,7 +85,9 @@ export default function ScanObjectiveModal() {
     saveProjects,
     usersList,
     addCustomUser,
-    showNotification
+    showNotification,
+    pendingScanPayload,
+    setPendingScanPayload
   } = useApp();
 
   const config = useMemo(loadGateInConfig, [showScanObjectiveModal]);
@@ -157,6 +159,7 @@ export default function ScanObjectiveModal() {
 
   const close = () => {
     reset();
+    setPendingScanPayload(null);
     setShowScanObjectiveModal(false);
   };
 
@@ -269,6 +272,7 @@ export default function ScanObjectiveModal() {
     const finalSupervisorId = selectedSupervisorId || 'user-sara';
     const supervisor = userById[finalSupervisorId] || SARA_SUPERVISOR;
     const logEntry = {
+      qr: pendingScanPayload,
       userId: currentUserId || 'guest',
       userName: `${currentUser.prenom || ''} ${currentUser.nom || ''}`.trim(),
       nom: currentUser.nom || '',
@@ -307,6 +311,7 @@ export default function ScanObjectiveModal() {
       localStorage.setItem('lab_attendance', JSON.stringify(attendance));
 
       setIsUserInLab(true);
+      setPendingScanPayload(null);
       reset();
       setShowScanObjectiveModal(false);
       showNotification("Entrée enregistrée avec succès !", 'success');

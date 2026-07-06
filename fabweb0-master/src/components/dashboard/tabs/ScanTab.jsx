@@ -1,10 +1,10 @@
 import { useState, useCallback } from 'react';
 import { useApp, TABS } from '../../../context/AppContext';
 import { useQrScanner } from '../../../hooks/useQrScanner';
-import { api } from '../../../services/api';
+import { api, getUserToken } from '../../../services/api';
 
 export default function ScanTab() {
-  const { activeTab, isUserInLab, currentUser, setShowScanObjectiveModal, setShowRoleScanObjectiveModal, setShowFeedbackModal } = useApp();
+  const { activeTab, isUserInLab, currentUser, setShowScanObjectiveModal, setShowRoleScanObjectiveModal, setShowFeedbackModal, setPendingScanPayload, showNotification } = useApp();
   const [cameraStarted, setCameraStarted] = useState(false);
   const [cameraError, setCameraError] = useState('');
 
@@ -24,7 +24,7 @@ export default function ScanTab() {
     const isGateInScan = scanAction === 'GATE_IN' || scanAction === 'check_in' || scanAction === 'fablab';
     const isGateOutScan = scanAction === 'GATE_OUT' || scanAction === 'check_out';
 
-    if (!isGateInScan && !isGateOutScan) {
+    if (!payload?.id || (!isGateInScan && !isGateOutScan)) {
       return;
     }
 
@@ -36,15 +36,17 @@ export default function ScanTab() {
       } catch {
         return;
       }
+      setPendingScanPayload({ gate: 'GATE_IN', id: payload.id });
       if (currentUser?.role === 'stagiaire') {
         setShowScanObjectiveModal(true);
       } else {
         setShowRoleScanObjectiveModal(true);
       }
     } else if (isUserInLab && isGateOutScan) {
+      setPendingScanPayload({ gate: 'GATE_OUT', id: payload.id });
       setShowFeedbackModal(true);
     }
-  }, [isUserInLab, currentUser, setShowScanObjectiveModal, setShowRoleScanObjectiveModal, setShowFeedbackModal]);
+  }, [isUserInLab, currentUser, setPendingScanPayload, setShowScanObjectiveModal, setShowRoleScanObjectiveModal, setShowFeedbackModal]);
 
   const onScanSuccess = useCallback((decodedText) => {
     handleDecodedScan(decodedText);
@@ -62,13 +64,28 @@ export default function ScanTab() {
 
   const { startScanner, stopScanner } = useQrScanner('qr-reader', onScanSuccess, isActive, handleCameraStarted, handleCameraError);
 
-  const handleScanAction = useCallback(() => {
-    stopScanner();
-    handleDecodedScan(JSON.stringify({
-      action: isUserInLab ? 'check_out' : 'check_in',
-      gate: isUserInLab ? 'GATE_OUT' : 'GATE_IN',
-    }));
-  }, [stopScanner, handleDecodedScan, isUserInLab]);
+  const handleScanAction = useCallback(async () => {
+    await stopScanner();
+    await startScanner();
+  }, [stopScanner, startScanner]);
+
+  const handleDevScanAction = useCallback(async () => {
+    if (!import.meta.env.DEV) return;
+
+    try {
+      const gate = isUserInLab ? 'GATE_OUT' : 'GATE_IN';
+      const apiBaseUrl = (import.meta.env.VITE_API_URL || 'http://localhost:4000/api').replace(/\/$/, '');
+      const response = await fetch(`${apiBaseUrl}/gate/dev/permanent-qr/${gate}`, {
+        headers: { authorization: `Bearer ${getUserToken()}` }
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body?.error || 'Scan de test indisponible.');
+      const qr = body.qr;
+      await handleDecodedScan(JSON.stringify(qr));
+    } catch (error) {
+      showNotification(error.message || 'Scan de test indisponible.', 'error');
+    }
+  }, [handleDecodedScan, isUserInLab, showNotification]);
 
   return (
     <div className="flex flex-col items-center justify-center min-h-full p-6 space-y-8 pb-32">
@@ -105,6 +122,7 @@ export default function ScanTab() {
       <div className="w-full max-w-[320px] space-y-4">
         <div
           onClick={handleScanAction}
+          onDoubleClick={handleDevScanAction}
           className="w-full py-4 bg-emerald-500 text-white rounded-2xl flex items-center justify-center space-x-3 shadow-lg transition-all duration-500 cursor-pointer active:scale-95 active:brightness-110"
         >
           <span className="w-2.5 h-2.5 bg-t-surface glass-card rounded-full animate-pulse"></span>
