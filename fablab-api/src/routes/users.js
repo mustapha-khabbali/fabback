@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { query } from '../db/pool.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { toPublicUser } from '../models/user.js';
+import { emitRealtimeChange } from '../realtime/bus.js';
 
 export const usersRouter = express.Router();
 
@@ -200,6 +201,7 @@ usersRouter.post('/', async (req, res, next) => {
       values
     );
 
+    emitRealtimeChange({ entity: 'users', action: 'register', id: result.rows[0].id });
     res.status(201).json({ user: toPublicUser(result.rows[0]) });
   } catch (error) {
     next(error);
@@ -255,6 +257,7 @@ usersRouter.patch('/:id', async (req, res, next) => {
       return;
     }
 
+    emitRealtimeChange({ entity: 'users', action: 'patch', id: result.rows[0].id });
     res.json({ user: toPublicUser(result.rows[0]) });
   } catch (error) {
     next(error);
@@ -273,6 +276,7 @@ usersRouter.patch('/:id/deactivate', requireRole('administrateur'), async (req, 
       'update users set is_deactivated = true, updated_at = now() where id = $1 returning *',
       [req.params.id]
     );
+    emitRealtimeChange({ entity: 'users', action: 'deactivate', id: result.rows[0].id });
     res.json({ user: toPublicUser(result.rows[0]) });
   } catch (error) {
     next(error);
@@ -291,6 +295,7 @@ usersRouter.patch('/:id/reactivate', requireRole('administrateur'), async (req, 
       'update users set is_deactivated = false, updated_at = now() where id = $1 returning *',
       [req.params.id]
     );
+    emitRealtimeChange({ entity: 'users', action: 'reactivate', id: result.rows[0].id });
     res.json({ user: toPublicUser(result.rows[0]) });
   } catch (error) {
     next(error);
@@ -309,6 +314,7 @@ usersRouter.patch('/:id/behavior-rating', requireRole('administrateur'), async (
       'update users set comportement_rating = $1, updated_at = now() where id = $2 returning *',
       [parsed.data.rating, req.params.id]
     );
+    emitRealtimeChange({ entity: 'users', action: 'patch', id: result.rows[0].id });
     res.json({ user: toPublicUser(result.rows[0]) });
   } catch (error) {
     next(error);
@@ -326,6 +332,7 @@ usersRouter.delete('/:id', requireRole('administrateur'), async (req, res, next)
       return;
     }
 
+    emitRealtimeChange({ entity: 'users', action: 'delete', id: result.rows[0].id });
     res.status(204).send();
   } catch (error) {
     next(error);

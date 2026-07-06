@@ -1,4 +1,4 @@
-const API_BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:4000/api').replace(/\/$/, '');
+export const API_BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:4000/api').replace(/\/$/, '');
 const USER_TOKEN_KEY = 'fablab_api_token';
 
 export function getUserToken() {
@@ -64,6 +64,11 @@ export const api = {
     const query = new URLSearchParams(params);
     const body = await request(`/users${query.size ? `?${query}` : ''}`);
     return body.users || [];
+  },
+
+  async getUser(id) {
+    const body = await request(`/users/${id}`);
+    return body.user;
   },
 
   async createUser(user) {

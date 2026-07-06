@@ -2,6 +2,7 @@ import express from 'express';
 import { z } from 'zod';
 import { query } from '../db/pool.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
+import { emitRealtimeChange } from '../realtime/bus.js';
 
 export const eventsRouter = express.Router();
 
@@ -80,7 +81,9 @@ eventsRouter.post('/', requireRole('administrateur'), async (req, res, next) => 
       ]
     );
 
-    res.status(201).json({ event: mapEvent(result.rows[0]) });
+    const created = mapEvent(result.rows[0]);
+    emitRealtimeChange({ entity: 'events', action: 'create', id: created.id });
+    res.status(201).json({ event: created });
   } catch (error) {
     next(error);
   }
@@ -123,7 +126,9 @@ eventsRouter.patch('/:id', requireRole('administrateur'), async (req, res, next)
       ]
     );
 
-    res.json({ event: mapEvent(result.rows[0]) });
+    const updated = mapEvent(result.rows[0]);
+    emitRealtimeChange({ entity: 'events', action: updated.archived ? 'archive' : 'update', id: updated.id });
+    res.json({ event: updated });
   } catch (error) {
     next(error);
   }
@@ -136,6 +141,7 @@ eventsRouter.delete('/:id', requireRole('administrateur'), async (req, res, next
       res.status(404).json({ error: 'Event not found' });
       return;
     }
+    emitRealtimeChange({ entity: 'events', action: 'delete', id: result.rows[0].id });
     res.status(204).send();
   } catch (error) {
     next(error);

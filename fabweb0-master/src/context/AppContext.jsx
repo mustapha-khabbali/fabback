@@ -7,6 +7,7 @@ import {
 } from '../utils/presenceActivity';
 import { ensureUserIdentity, mergeUserByIdentity, getPrimaryUserId } from '../utils/userIdentity';
 import { api, getUserToken } from '../services/api';
+import { startRealtime, stopRealtime, subscribeRealtime } from '../services/realtime';
 
 const AppContext = createContext(null);
 
@@ -92,6 +93,11 @@ export function AppProvider({ children }) {
       return normalized;
     });
   }, [persistUsers]);
+  const currentUserRef = useRef(currentUser);
+
+  useEffect(() => {
+    currentUserRef.current = currentUser;
+  }, [currentUser]);
   const [searchFilter, setSearchFilter] = useState('ALL');
   const [previousTab, setPreviousTab] = useState(TABS.SEARCH);
   const [selectedNotificationRequest, setSelectedNotificationRequest] = useState(null);
@@ -200,43 +206,79 @@ export function AppProvider({ children }) {
   });
   const [currentProjectId, setCurrentProjectId] = useState(null);
 
-  useEffect(() => {
-    if (!getUserToken()) return;
-    let cancelled = false;
-
+  const refreshUsers = useCallback((cancelledRef = { current: false }) => {
     api.getUsers()
-      .then(async (users) => {
-        if (!cancelled) {
+      .then((users) => {
+        if (!cancelledRef.current) {
           const normalizedUsers = users.map(ensureUserIdentity).filter(Boolean);
           setUsersList(normalizedUsers);
           persistUsers(normalizedUsers);
         }
-        const [projects, bin, openAttendance] = await Promise.all([
-          api.getProjects(),
-          api.getRecycleBin(),
-          api.getOpenAttendance()
-        ]);
-        const notifications = await api.getNotifications();
-        return { projects, bin, openAttendance, notifications };
-      })
-      .then(({ projects, bin, openAttendance, notifications }) => {
-        if (!cancelled) {
-          setUserProjects(projects);
-          localStorage.setItem('user_projects', JSON.stringify(projects));
-          setRecycleBin(bin);
-          localStorage.setItem('recycle_bin', JSON.stringify(bin));
-          setNotifications(notifications);
-        }
-        if (!cancelled && openAttendance) {
-          setIsUserInLab(true);
-        }
       })
       .catch(() => {});
+  }, [persistUsers]);
+
+  const refreshProjects = useCallback((cancelledRef = { current: false }) => {
+    Promise.all([api.getProjects(), api.getRecycleBin()])
+      .then(([projects, bin]) => {
+        if (cancelledRef.current) return;
+        setUserProjects(projects);
+        localStorage.setItem('user_projects', JSON.stringify(projects));
+        setRecycleBin(bin);
+        localStorage.setItem('recycle_bin', JSON.stringify(bin));
+      })
+      .catch(() => {});
+  }, []);
+
+  const refreshNotifications = useCallback((cancelledRef = { current: false }) => {
+    api.getNotifications()
+      .then((loadedNotifications) => {
+        if (!cancelledRef.current) setNotifications(loadedNotifications);
+      })
+      .catch(() => {});
+  }, []);
+
+  const refreshOpenAttendance = useCallback((cancelledRef = { current: false }) => {
+    api.getOpenAttendance()
+      .then((openAttendance) => {
+        if (!cancelledRef.current) setIsUserInLab(Boolean(openAttendance));
+      })
+      .catch(() => {});
+  }, []);
+
+  const refreshGateCache = useCallback(() => {
+    api.getGateConfig()
+      .then((gate) => {
+        localStorage.setItem('gate_in_config', JSON.stringify(gate.config || {}));
+        localStorage.setItem('gate_in_events', JSON.stringify(gate.events || []));
+      })
+      .catch(() => {});
+  }, []);
+
+  const refreshCurrentUser = useCallback((cancelledRef = { current: false }) => {
+    const userId = getPrimaryUserId(currentUserRef.current);
+    if (!userId) return;
+    api.getUser(userId)
+      .then((user) => {
+        if (!cancelledRef.current) setCurrentUser(ensureUserIdentity(user));
+      })
+      .catch(() => {});
+  }, [setCurrentUser]);
+
+  useEffect(() => {
+    if (!getUserToken()) return;
+    const cancelledRef = { current: false };
+
+    refreshUsers(cancelledRef);
+    refreshProjects(cancelledRef);
+    refreshNotifications(cancelledRef);
+    refreshOpenAttendance(cancelledRef);
+    refreshGateCache();
 
     return () => {
-      cancelled = true;
+      cancelledRef.current = true;
     };
-  }, [persistUsers]);
+  }, [refreshGateCache, refreshNotifications, refreshOpenAttendance, refreshProjects, refreshUsers]);
 
   // Article management
   const [userArticles, setUserArticles] = useState(() => {
@@ -282,6 +324,50 @@ export function AppProvider({ children }) {
     navigate('/login', { replace: true });
     setActiveTab(TABS.SCAN);
   }, [navigate]);
+
+  useEffect(() => {
+    if (!getUserToken()) {
+      stopRealtime();
+      return undefined;
+    }
+
+    startRealtime();
+    const unsubscribe = subscribeRealtime((change) => {
+      const currentUserId = getPrimaryUserId(currentUserRef.current);
+      if (change.entity === 'notifications') {
+        refreshNotifications();
+      }
+      if (change.entity === 'projects') {
+        refreshProjects();
+      }
+      if (change.entity === 'users') {
+        refreshUsers();
+        if (String(change.id) === String(currentUserId)) {
+          if (change.action === 'deactivate') {
+            api.logout();
+            stopRealtime();
+            setCurrentUser({});
+            setIsUserInLab(false);
+            showNotification('Votre compte est désactivé.', 'error');
+            showLogin();
+            return;
+          }
+          refreshCurrentUser();
+        }
+      }
+      if (change.entity === 'attendance' && (!change.recipientId || String(change.recipientId) === String(currentUserId))) {
+        refreshOpenAttendance();
+      }
+      if (change.entity === 'gate-config' || change.entity === 'events') {
+        refreshGateCache();
+      }
+    });
+
+    return () => {
+      unsubscribe();
+      stopRealtime();
+    };
+  }, [refreshCurrentUser, refreshGateCache, refreshNotifications, refreshOpenAttendance, refreshProjects, refreshUsers, setCurrentUser, showLogin, showNotification]);
 
   // Project helpers with localStorage sync
   const saveProjects = useCallback((projects) => {

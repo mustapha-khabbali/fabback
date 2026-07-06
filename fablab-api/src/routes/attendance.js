@@ -2,6 +2,7 @@ import express from 'express';
 import { z } from 'zod';
 import { query } from '../db/pool.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
+import { emitRealtimeChange } from '../realtime/bus.js';
 
 export const attendanceRouter = express.Router();
 
@@ -140,7 +141,9 @@ attendanceRouter.post('/check-in', async (req, res, next) => {
       [result.rows[0].id]
     );
 
-    res.status(201).json({ attendance: mapAttendance(joined.rows[0]) });
+    const attendance = mapAttendance(joined.rows[0]);
+    emitRealtimeChange({ entity: 'attendance', action: 'check-in', id: attendance.id, recipientId: attendance.userId });
+    res.status(201).json({ attendance });
   } catch (error) {
     next(error);
   }
@@ -192,7 +195,9 @@ attendanceRouter.post('/check-out', async (req, res, next) => {
       [result.rows[0].id]
     );
 
-    res.json({ attendance: mapAttendance(joined.rows[0]) });
+    const attendance = mapAttendance(joined.rows[0]);
+    emitRealtimeChange({ entity: 'attendance', action: 'check-out', id: attendance.id, recipientId: attendance.userId });
+    res.json({ attendance });
   } catch (error) {
     next(error);
   }

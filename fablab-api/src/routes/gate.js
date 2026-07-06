@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { query } from '../db/pool.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { config } from '../config.js';
+import { emitRealtimeChange } from '../realtime/bus.js';
 
 export const gateRouter = express.Router();
 
@@ -107,6 +108,7 @@ gateRouter.post('/permanent-qr/:gate', requireRole('administrateur'), async (req
     }
 
     const row = await getOrCreatePermanentQr(parsed.data);
+    emitRealtimeChange({ entity: 'gate-config', action: 'publish', id: parsed.data });
     res.json({ qr: { gate: parsed.data, id: mapPermanentQr(row)[parsed.data] }, permanentQr: mapPermanentQr(row), updatedAt: row.updated_at });
   } catch (error) {
     next(error);
@@ -152,6 +154,7 @@ gateRouter.put('/config', requireRole('administrateur'), async (req, res, next) 
       [JSON.stringify(config)]
     );
 
+    emitRealtimeChange({ entity: 'gate-config', action: 'publish', id: 'config' });
     res.json({ config: result.rows[0].config, updatedAt: result.rows[0].updated_at });
   } catch (error) {
     next(error);

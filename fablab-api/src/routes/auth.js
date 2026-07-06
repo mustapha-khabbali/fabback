@@ -7,6 +7,7 @@ import { query } from '../db/pool.js';
 import { requireAuth } from '../middleware/auth.js';
 import { isProfileComplete, toPublicUser } from '../models/user.js';
 import { userProfileSchema, buildUserPatch } from './users.js';
+import { emitRealtimeChange } from '../realtime/bus.js';
 
 export const authRouter = express.Router();
 
@@ -63,6 +64,7 @@ async function upsertGoogleUser(decodedToken) {
       `,
       [existingUser.id, decodedToken.uid, email]
     );
+    emitRealtimeChange({ entity: 'users', action: 'patch', id: result.rows[0].id });
     return result.rows[0];
   }
 
@@ -77,6 +79,7 @@ async function upsertGoogleUser(decodedToken) {
     [decodedToken.uid, prenom, nom, email]
   );
 
+  emitRealtimeChange({ entity: 'users', action: 'register', id: result.rows[0].id });
   return result.rows[0];
 }
 
@@ -175,6 +178,7 @@ authRouter.post('/register', requireAuth, async (req, res, next) => {
       [...values, req.user.id]
     );
 
+    emitRealtimeChange({ entity: 'users', action: 'register', id: result.rows[0].id });
     res.json({ user: toPublicUser(result.rows[0]) });
   } catch (error) {
     next(error);

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import AdminLoginOverlay from './AdminLoginOverlay';
 import AdminSidebar, { ADMIN_VIEWS } from './AdminSidebar';
 import AdminOverviewView from './views/AdminOverviewView';
@@ -7,6 +7,7 @@ import PVView from './views/PVView';
 import UsersView from './views/UsersView';
 import AnalyseView from './views/AnalyseView';
 import { api } from './services/api';
+import { startRealtime, stopRealtime } from './services/realtime';
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(
@@ -23,8 +24,18 @@ export default function App() {
   const handleLogout = () => {
     sessionStorage.removeItem('admin_authenticated');
     api.logout();
+    stopRealtime();
     setIsAuthenticated(false);
   };
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      stopRealtime();
+      return undefined;
+    }
+    startRealtime();
+    return () => stopRealtime();
+  }, [isAuthenticated]);
 
   const handleNavigate = (view, payload = null) => {
     setActiveView(view);

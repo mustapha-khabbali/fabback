@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { poleOptions, niveauOptions, yearOptions, getFiliereOptions, getOptionChoices } from '../data/trainingData';
 import ProjectsPanel from '../components/projects/ProjectsPanel';
 import AddUserModal from '../components/users/AddUserModal';
@@ -7,6 +7,7 @@ import ProgramsPanel from '../components/users/ProgramsPanel';
 import AvatarCropModal from '../components/users/AvatarCropModal';
 import ImageLightbox from '../components/projects/ImageLightbox';
 import { api } from '../services/api';
+import { subscribeRealtime } from '../services/realtime';
 import { getCroppedAvatarDataUrl } from '../utils/avatarCrop';
 
 export const MOCK_USERS = [];
@@ -48,6 +49,11 @@ export default function UsersView({ profileTarget, onProfileTargetHandled }) {
   const [isSavingAvatar, setIsSavingAvatar] = useState(false);
   const [lightboxImage, setLightboxImage] = useState(null);
   const avatarInputRef = useRef(null);
+  const selectedUserRef = useRef(null);
+
+  useEffect(() => {
+    selectedUserRef.current = selectedUser;
+  }, [selectedUser]);
 
   const handleStartEdit = () => {
     setEditForm({ ...selectedUser });
@@ -67,6 +73,27 @@ export default function UsersView({ profileTarget, onProfileTargetHandled }) {
     ),
     recycleBin: recycleBin.filter((item) => item.ownerId === user.id || item.userId === user.id)
   }));
+
+  const loadUsersData = useCallback((cancelledRef = { current: false }, focusUserId = null) => {
+    Promise.all([api.getUsers(), api.getProjects(), api.getRecycleBin()])
+      .then(([loadedUsers, loadedProjects, loadedRecycleBin]) => {
+        if (cancelledRef.current) return;
+        const hydratedUsers = hydrateUsersWithProjects(loadedUsers, loadedProjects, loadedRecycleBin);
+        setAllProjects(loadedProjects);
+        setAllRecycleBin(loadedRecycleBin);
+        setUsers(hydratedUsers);
+
+        const currentSelected = selectedUserRef.current;
+        const targetId = focusUserId || currentSelected?.id;
+        if (targetId) {
+          const refreshed = hydratedUsers.find((user) => user.id === targetId);
+          if (refreshed) setSelectedUser(refreshed);
+        }
+      })
+      .catch((error) => {
+        if (!cancelledRef.current) alert(error.message);
+      });
+  }, []);
 
   const updateSelectedUserProjects = (newProjects) => {
     const otherProjects = allProjects.filter((project) =>
@@ -291,24 +318,18 @@ export default function UsersView({ profileTarget, onProfileTargetHandled }) {
   });
 
   useEffect(() => {
-    let cancelled = false;
-
-    Promise.all([api.getUsers(), api.getProjects(), api.getRecycleBin()])
-      .then(([loadedUsers, loadedProjects, loadedRecycleBin]) => {
-        if (!cancelled) {
-          setAllProjects(loadedProjects);
-          setAllRecycleBin(loadedRecycleBin);
-          setUsers(hydrateUsersWithProjects(loadedUsers, loadedProjects, loadedRecycleBin));
-        }
-      })
-      .catch((error) => {
-        if (!cancelled) alert(error.message);
-      });
-
+    const cancelledRef = { current: false };
+    loadUsersData(cancelledRef);
     return () => {
-      cancelled = true;
+      cancelledRef.current = true;
     };
-  }, []);
+  }, [loadUsersData]);
+
+  useEffect(() => subscribeRealtime((change) => {
+    if (change.entity === 'users') {
+      loadUsersData({ current: false }, change.id);
+    }
+  }), [loadUsersData]);
 
   useEffect(() => {
     if (!profileTarget) return;

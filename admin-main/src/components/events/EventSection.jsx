@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import EventForm from './EventForm';
 import ConfirmModal from '../projects/ConfirmModal';
 import { api } from '../../services/api';
+import { subscribeRealtime } from '../../services/realtime';
 
 // An event is "active" when its (end) date is today or in the future.
 function isActive(evt) {
@@ -25,22 +26,32 @@ export default function EventSection() {
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [qrDataUrl, setQrDataUrl] = useState(null);
 
-  useEffect(() => {
-    let cancelled = false;
+  const loadEventsData = useCallback((cancelledRef = { current: false }) => {
     Promise.all([api.getUsers(), api.getEvents()])
       .then(([loadedUsers, loadedEvents]) => {
-        if (!cancelled) {
+        if (!cancelledRef.current) {
           setUsers(loadedUsers);
           setEvents(loadedEvents);
         }
       })
       .catch((error) => {
-        if (!cancelled) alert(error.message);
+        if (!cancelledRef.current) alert(error.message);
       });
-    return () => {
-      cancelled = true;
-    };
   }, []);
+
+  useEffect(() => {
+    const cancelledRef = { current: false };
+    loadEventsData(cancelledRef);
+    return () => {
+      cancelledRef.current = true;
+    };
+  }, [loadEventsData]);
+
+  useEffect(() => subscribeRealtime((change) => {
+    if (change.entity === 'events') {
+      loadEventsData();
+    }
+  }), [loadEventsData]);
 
   // New intervenant → into the database with name + surname + type.
   const createUser = async (prenom, nom, type) => {

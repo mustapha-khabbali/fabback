@@ -2,6 +2,7 @@ import express from 'express';
 import { z } from 'zod';
 import { query, withTransaction } from '../db/pool.js';
 import { requireAuth } from '../middleware/auth.js';
+import { emitRealtimeChange } from '../realtime/bus.js';
 
 export const projectsRouter = express.Router();
 
@@ -243,6 +244,7 @@ projectsRouter.use(requireAuth);
 projectsRouter.get('/', async (req, res, next) => {
   try {
     const projects = await withTransaction((client) => loadProjects(client, req.user));
+    emitRealtimeChange({ entity: 'projects', action: 'sync', id: 'projects' });
     res.json({ projects });
   } catch (error) {
     next(error);
@@ -293,6 +295,7 @@ projectsRouter.post('/', async (req, res, next) => {
       return loadProjects(client, req.user);
     });
 
+    emitRealtimeChange({ entity: 'projects', action: 'create', id: projects[0]?.id || 'projects' });
     res.status(201).json({ project: projects[0], projects });
   } catch (error) {
     next(error);
@@ -370,6 +373,7 @@ projectsRouter.put('/recycle-bin', async (req, res, next) => {
       }));
     });
 
+    emitRealtimeChange({ entity: 'projects', action: 'recycle-bin', id: 'recycle-bin' });
     res.json({ recycleBin });
   } catch (error) {
     next(error);

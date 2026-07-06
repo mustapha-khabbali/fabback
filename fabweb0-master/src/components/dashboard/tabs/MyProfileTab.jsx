@@ -4,6 +4,7 @@ import { validateEmail, validatePhone } from '../../../utils/validation';
 import { buildPresenceHeatmapCells } from '../../../utils/presenceActivity';
 import SettingsView from './SettingsView';
 import { api } from '../../../services/api';
+import { stopRealtime } from '../../../services/realtime';
 import AvatarCropModal from '../../common/AvatarCropModal';
 import ImageLightbox from '../../common/ImageLightbox';
 import { getCroppedAvatarDataUrl } from '../../../utils/avatarCrop';
@@ -801,7 +802,12 @@ export default function MyProfileTab() {
           </button>
         )}
 
-        <button onClick={() => navigateTo(SCREENS.HOME)}
+        <button onClick={() => {
+          api.logout();
+          stopRealtime();
+          setCurrentUser({});
+          navigateTo(SCREENS.HOME);
+        }}
           className="w-full py-4 bg-[#EB4444]/10 text-[#EB4444] font-bold text-lg rounded-2xl border-2 border-transparent hover:border-[#EB4444] transition-all flex items-center justify-center space-x-3 active:scale-95">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />

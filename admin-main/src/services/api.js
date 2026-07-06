@@ -1,4 +1,4 @@
-const API_BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:4000/api').replace(/\/$/, '');
+export const API_BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:4000/api').replace(/\/$/, '');
 const ADMIN_TOKEN_KEY = 'admin_api_token';
 
 const ROLE_TO_UI = {
@@ -83,6 +83,11 @@ export const api = {
     const query = new URLSearchParams(params);
     const body = await request(`/users${query.size ? `?${query}` : ''}`);
     return (body.users || []).map(toUiUser);
+  },
+
+  async getUser(id) {
+    const body = await request(`/users/${id}`);
+    return toUiUser(body.user);
   },
 
   async createUser(user) {

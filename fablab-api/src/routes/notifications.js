@@ -2,6 +2,7 @@ import express from 'express';
 import { z } from 'zod';
 import { query, withTransaction } from '../db/pool.js';
 import { requireAuth } from '../middleware/auth.js';
+import { emitRealtimeChange } from '../realtime/bus.js';
 
 export const notificationsRouter = express.Router();
 
@@ -130,6 +131,9 @@ notificationsRouter.post('/', async (req, res, next) => {
       return created;
     });
 
+    notifications.forEach((notification) => {
+      emitRealtimeChange({ entity: 'notifications', action: 'create', id: notification.id, recipientId: notification.recipientId });
+    });
     res.status(201).json({ notifications });
   } catch (error) {
     next(error);
@@ -167,7 +171,9 @@ notificationsRouter.patch('/:id', async (req, res, next) => {
       [nextStatus, nextHandled, nextApproved, req.params.id, req.user.id]
     );
 
-    res.json({ notification: mapNotification(result.rows[0]) });
+    const notification = mapNotification(result.rows[0]);
+    emitRealtimeChange({ entity: 'notifications', action: 'update', id: notification.id, recipientId: notification.recipientId });
+    res.json({ notification });
   } catch (error) {
     next(error);
   }

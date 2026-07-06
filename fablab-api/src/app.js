@@ -12,6 +12,7 @@ import { gateRouter } from './routes/gate.js';
 import { projectsRouter } from './routes/projects.js';
 import { notificationsRouter } from './routes/notifications.js';
 import { reviewsRouter } from './routes/reviews.js';
+import { streamRouter } from './routes/stream.js';
 
 export function createApp() {
   const app = express();
@@ -43,7 +44,13 @@ export function createApp() {
     },
     credentials: true
   }));
-  app.use('/api', globalLimiter);
+  app.use('/api', (req, res, next) => {
+    if (req.path === '/events/stream') {
+      next();
+      return;
+    }
+    globalLimiter(req, res, next);
+  });
   app.use('/api/auth', authLimiter);
   app.use(express.json({ limit: '10mb' }));
 
@@ -63,6 +70,7 @@ export function createApp() {
   app.use('/api/auth', authRouter);
   app.use('/api/users', usersRouter);
   app.use('/api/gate', gateRouter);
+  app.use('/api/events', streamRouter);
   app.use('/api/events', eventsRouter);
   app.use('/api/attendance', attendanceRouter);
   app.use('/api/projects', projectsRouter);

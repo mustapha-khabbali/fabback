@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { api } from '../services/api';
+import { subscribeRealtime } from '../services/realtime';
 
 const MOROCCAN_HOLIDAYS_2026 = [
   { id: 'h1', name: 'Nouvel An', date: '2026-01-01' },
@@ -218,27 +219,33 @@ export default function AdminOverviewView({ onNavigate }) {
     setToastTimeoutId(id);
   };
 
+  const loadAttendance = useCallback((cancelledRef = { current: false }) => {
+    api.getAttendance()
+      .then((rows) => {
+        if (!cancelledRef.current) setAttendanceRows(rows);
+      })
+      .catch(() => {
+        if (!cancelledRef.current) setAttendanceRows([]);
+      });
+  }, []);
+
   useEffect(() => {
-    let cancelled = false;
+    const cancelledRef = { current: false };
 
-    const loadAttendance = () => {
-      api.getAttendance()
-        .then((rows) => {
-          if (!cancelled) setAttendanceRows(rows);
-        })
-        .catch(() => {
-          if (!cancelled) setAttendanceRows([]);
-        });
-    };
-
-    loadAttendance();
-    const intervalId = periodMode === 'now' ? setInterval(loadAttendance, 10000) : null;
+    loadAttendance(cancelledRef);
+    const intervalId = periodMode === 'now' ? setInterval(() => loadAttendance(cancelledRef), 10000) : null;
 
     return () => {
-      cancelled = true;
+      cancelledRef.current = true;
       if (intervalId) clearInterval(intervalId);
     };
-  }, [periodMode]);
+  }, [loadAttendance, periodMode]);
+
+  useEffect(() => subscribeRealtime((change) => {
+    if (periodMode === 'now' && change.entity === 'attendance') {
+      loadAttendance();
+    }
+  }), [loadAttendance, periodMode]);
 
   const handleTimeChange = (value, setter, previousValue, defaultValue) => {
     if (!value) {
