@@ -2,7 +2,7 @@
   "hosting": [
     {
       "target": "user",
-      "public": "dist",
+      "public": "fabweb0-master/dist",
       "ignore": [
         "firebase.json",
         "**/.*",
@@ -17,7 +17,7 @@
     },
     {
       "target": "admin",
-      "public": "../admin-main/dist",
+      "public": "admin-main/dist",
       "ignore": [
         "firebase.json",
         "**/.*",
@@ -30,8 +30,5 @@
         }
       ]
     }
-  ],
-  "firestore": {
-    "rules": "firestore.rules"
-  }
+  ]
 }

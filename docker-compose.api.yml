@@ -1,0 +1,17 @@
+services:
+  fablab-api:
+    environment:
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://fablab-bmk.web.app,https://fablab-cmc.web.app}
+
+  nginx:
+    environment:
+      API_DOMAIN: ${API_DOMAIN:-fablab-bmk-api.duckdns.org}
+    volumes:
+      - letsencrypt:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
+      - ./deploy/nginx/templates/api-only.conf.template:/etc/nginx/templates/default.conf.template:ro
+
+  certbot:
+    volumes:
+      - letsencrypt:/etc/letsencrypt
+      - certbot_www:/var/www/certbot

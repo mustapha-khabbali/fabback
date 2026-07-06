@@ -3,8 +3,8 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const defaultCorsOrigins = [
-  'https://fablab.cmc.ma',
-  'https://admin.fablab.cmc.ma',
+  'https://fablab-bmk.web.app',
+  'https://fablab-cmc.web.app',
   'http://localhost:5173',
   'http://localhost:5174',
   'http://localhost:5175',

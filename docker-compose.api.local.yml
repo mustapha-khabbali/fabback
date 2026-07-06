@@ -1,0 +1,18 @@
+services:
+  fablab-api:
+    environment:
+      CORS_ORIGINS: http://localhost:5173,http://localhost:5174,http://localhost:8081
+      FIREBASE_SERVICE_ACCOUNT: ""
+    volumes: !override []
+
+  nginx:
+    environment:
+      API_DOMAIN: api.localhost
+    ports: !override
+      - "8081:80"
+    volumes:
+      - ./deploy/nginx/templates/api-only-local-http.conf.template:/etc/nginx/templates/default.conf.template:ro
+
+  certbot:
+    profiles:
+      - production-certbot

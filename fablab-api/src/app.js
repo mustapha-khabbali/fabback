@@ -15,6 +15,7 @@ import { reviewsRouter } from './routes/reviews.js';
 
 export function createApp() {
   const app = express();
+  app.set('trust proxy', 1);
   const globalLimiter = rateLimit({
     windowMs: config.globalRateLimitWindowMs,
     limit: config.globalRateLimitMax,

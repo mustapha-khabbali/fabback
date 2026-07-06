@@ -1,119 +1,147 @@
 # FabLab Deployment
 
-This repository contains the FabLab user app, admin dashboard, and API. The school
-datacenter deployment is Docker-first, with a native fallback for teams that cannot
-run Docker.
+This repository contains the FabLab user app, admin dashboard, and self-hosted API.
 
-## Production Domains
+Primary production mode is now:
 
-Defaults:
+- User app: `https://fablab-bmk.web.app`
+- Admin app: `https://fablab-cmc.web.app`
+- API: `https://API_DOMAIN/api`, where `API_DOMAIN` is a free DuckDNS subdomain
+  such as `fablab-bmk-api.duckdns.org` pointing to the school server.
 
-- User app: `fablab.cmc.ma`
-- Admin app: `admin.fablab.cmc.ma`
-- API: same domains under `/api`
+The Firebase live channels already host old versions. Do not replace them until
+go-live is explicitly approved.
 
-Create DNS `A` records for both domains pointing to the public IP of the school
-server. Open inbound TCP ports `80` and `443`.
+## Mode B: Firebase Frontends + Datacenter API
 
-## Docker Deployment
+Use this mode first.
 
-1. Copy the repository to the server, for example `/opt/fablab`.
+### Firebase Hosting Targets
 
-2. Create runtime folders and secrets:
+Firebase project: `fablab-bmk`
+
+Existing hosting sites:
+
+- target `user` -> site `fablab-bmk`
+- target `admin` -> site `fablab-cmc`
+
+Preview deploys are safe and do not replace the old live versions:
+
+```bash
+cd fabweb0-master
+VITE_API_URL=https://API_DOMAIN/api npm run build
+cd ..
+firebase hosting:channel:deploy step10-user --only user
+
+cd admin-main
+VITE_API_URL=https://API_DOMAIN/api npm run build
+cd ..
+firebase hosting:channel:deploy step10-admin --only admin
+```
+
+Live deploys are go-live only:
+
+```bash
+npm --prefix fabweb0-master run deploy:user
+npm --prefix admin-main run deploy:admin
+```
+
+### DuckDNS API Domain
+
+1. Create a DuckDNS subdomain, for example `fablab-bmk-api.duckdns.org`.
+2. Point it to the public IP of the API server.
+3. Open inbound TCP ports `80` and `443` on that server.
+4. Put the value in `/opt/fablab/.env`:
+
+```env
+API_DOMAIN=fablab-bmk-api.duckdns.org
+USER_HOSTING_DOMAIN=fablab-bmk.web.app
+ADMIN_HOSTING_DOMAIN=fablab-cmc.web.app
+POSTGRES_DB=fablab
+POSTGRES_USER=fablab
+POSTGRES_PASSWORD=change-this-postgres-password
+JWT_SECRET=change-this-long-random-secret
+ADMIN_SEED_EMAIL=sara.admin@fablab.local
+ADMIN_SEED_PASSWORD=change-this-admin-password
+FIREBASE_SERVICE_ACCOUNT=/run/secrets/firebase-service-account.json
+VITE_API_URL=https://fablab-bmk-api.duckdns.org/api
+```
+
+Never commit `.env`.
+
+### API Server Setup
 
 ```bash
 cd /opt/fablab
-mkdir -p secrets backups
+mkdir -p fablab-api/secrets backups
 cp .env.example .env
 ```
 
-3. Edit `.env`. Use strong production values for:
-
-```env
-POSTGRES_PASSWORD=...
-JWT_SECRET=...
-ADMIN_SEED_PASSWORD=...
-MAIN_DOMAIN=fablab.cmc.ma
-ADMIN_DOMAIN=admin.fablab.cmc.ma
-LETSENCRYPT_EMAIL=it@cmc.ma
-```
-
-Never commit `.env` or files inside `secrets/`.
-
-4. Put the Firebase service-account JSON here:
+The Admin SDK service-account key is expected at:
 
 ```text
-/opt/fablab/secrets/firebase-service-account.json
+/opt/fablab/fablab-api/secrets/service-account.json
 ```
 
-The compose file exposes it inside the API container as
-`/run/secrets/firebase-service-account.json`.
+It is gitignored and must never be committed. Docker mounts it read-only into the API
+container at `/run/secrets/firebase-service-account.json`.
 
-5. Build the images:
+Build and start the API-only stack:
 
 ```bash
-docker compose build
+docker compose -f docker-compose.yml -f docker-compose.api.yml build
+docker compose -f docker-compose.yml -f docker-compose.api.yml up -d postgres fablab-api
+docker compose -f docker-compose.yml -f docker-compose.api.yml run --rm fablab-api npm run migrate
+docker compose -f docker-compose.yml -f docker-compose.api.yml run --rm fablab-api npm run seed
 ```
 
-The user and admin app builds use `VITE_API_URL=/api` by default. To change it,
-set `VITE_API_URL` in `.env` before `docker compose build`.
-
-6. Start Postgres and the API:
+Issue the first Let's Encrypt certificate. Nginx is not started yet, so certbot can
+temporarily bind port `80`:
 
 ```bash
-docker compose up -d postgres fablab-api
-```
-
-7. Run migrations and seed inside the API container:
-
-```bash
-docker compose run --rm fablab-api npm run migrate
-docker compose run --rm fablab-api npm run seed
-```
-
-8. Issue the first Let's Encrypt certificates. Nginx is not started yet, so certbot
-can temporarily bind port `80`:
-
-```bash
-docker compose run --rm -p 80:80 certbot certonly \
+docker compose -f docker-compose.yml -f docker-compose.api.yml run --rm -p 80:80 certbot certonly \
   --standalone \
-  -d fablab.cmc.ma \
-  -d admin.fablab.cmc.ma \
-  --email it@cmc.ma \
+  -d "$API_DOMAIN" \
+  --email "$LETSENCRYPT_EMAIL" \
   --agree-tos \
   --no-eff-email
 ```
 
-9. Start nginx and the renewal worker:
+Start nginx and the renewal worker:
 
 ```bash
-docker compose up -d
+docker compose -f docker-compose.yml -f docker-compose.api.yml up -d
 ```
 
-10. Smoke test:
+Smoke test:
 
 ```bash
-curl -I https://fablab.cmc.ma
-curl -I https://admin.fablab.cmc.ma
-curl https://fablab.cmc.ma/api/health
+curl https://$API_DOMAIN/api/health
 ```
 
-## Frontend Production Env
+## Frontend Env
 
 Both apps include `.env.production.example`:
 
 ```env
-VITE_API_URL=/api
+VITE_API_URL=https://API_DOMAIN/api
 ```
 
-For manual builds, copy it to `.env.production` in each app before building:
+For a real production build, copy the example to `.env.production` and replace
+`API_DOMAIN` with the DuckDNS API domain.
 
-```bash
-cp fabweb0-master/.env.production.example fabweb0-master/.env.production
-cp admin-main/.env.production.example admin-main/.env.production
-npm --prefix fabweb0-master run build
-npm --prefix admin-main run build
-```
+## Firebase Console Checklist
+
+Already done for this project, but keep this checklist for future audits:
+
+- Google sign-in provider enabled.
+- Authorized domains include:
+  - `fablab-bmk.web.app`
+  - `fablab-cmc.web.app`
+  - `localhost`
+- Admin SDK service-account JSON stored only at
+  `fablab-api/secrets/service-account.json` locally or
+  `/opt/fablab/fablab-api/secrets/service-account.json` on the server.
 
 ## Backups
 
@@ -123,14 +151,11 @@ Nightly backup script:
 /opt/fablab/deploy/scripts/backup-postgres.sh
 ```
 
-Cron line for root or the deployment user:
+Cron line:
 
 ```cron
 15 2 * * * PROJECT_DIR=/opt/fablab BACKUP_DIR=/opt/fablab/backups POSTGRES_DB=fablab POSTGRES_USER=fablab /opt/fablab/deploy/scripts/backup-postgres.sh >> /opt/fablab/backups/backup.log 2>&1
 ```
-
-Backups are `pg_dump -F c` files in `/opt/fablab/backups`. The script keeps 14 days
-by default; override with `KEEP_DAYS=30` if needed.
 
 Restore example:
 
@@ -139,22 +164,45 @@ cat /opt/fablab/backups/fablab-YYYYMMDD-HHMMSS.dump | \
   docker compose exec -T postgres pg_restore -U fablab -d fablab --clean --if-exists
 ```
 
-## Firebase Console Checklist
+## Mode A: Full Datacenter Frontends + API
 
-In Firebase Console:
+Use this only if you later buy or receive control of a real domain.
 
-- Enable Authentication -> Sign-in method -> Google provider.
-- Add authorized domains:
-  - `fablab.cmc.ma`
-  - `admin.fablab.cmc.ma`
-- Generate a service-account JSON for the API and place it at
-  `/opt/fablab/secrets/firebase-service-account.json`.
+Example placeholders:
+
+- User app: `https://app.YOUR_DOMAIN`
+- Admin app: `https://admin.YOUR_DOMAIN`
+- API: same domains under `/api`
+
+Set these in `/opt/fablab/.env`:
+
+```env
+MAIN_DOMAIN=app.YOUR_DOMAIN
+ADMIN_DOMAIN=admin.YOUR_DOMAIN
+VITE_API_URL=/api
+CORS_ORIGINS=https://app.YOUR_DOMAIN,https://admin.YOUR_DOMAIN
+```
+
+Then follow the full compose flow:
+
+```bash
+docker compose build
+docker compose up -d postgres fablab-api
+docker compose run --rm fablab-api npm run migrate
+docker compose run --rm fablab-api npm run seed
+docker compose run --rm -p 80:80 certbot certonly \
+  --standalone \
+  -d "$MAIN_DOMAIN" \
+  -d "$ADMIN_DOMAIN" \
+  --email "$LETSENCRYPT_EMAIL" \
+  --agree-tos \
+  --no-eff-email
+docker compose up -d
+```
 
 ## Non-Docker Fallback
 
 Use this only if Docker is not allowed on the school server.
-
-1. Install system packages:
 
 ```bash
 sudo apt update
@@ -162,7 +210,7 @@ sudo apt install -y nginx postgresql nodejs npm
 sudo npm install -g pm2
 ```
 
-2. Create the database and user:
+Create PostgreSQL:
 
 ```bash
 sudo -u postgres createuser fablab
@@ -170,18 +218,18 @@ sudo -u postgres createdb fablab -O fablab
 sudo -u postgres psql -c "alter user fablab with password 'change-this-password';"
 ```
 
-3. Configure API secrets in `/opt/fablab/fablab-api/.env`:
+API `.env`:
 
 ```env
 DATABASE_URL=postgres://fablab:change-this-password@localhost:5432/fablab
 JWT_SECRET=change-this-long-random-secret
 ADMIN_SEED_EMAIL=sara.admin@fablab.local
 ADMIN_SEED_PASSWORD=change-this-admin-password
-FIREBASE_SERVICE_ACCOUNT=/opt/fablab/secrets/firebase-service-account.json
-CORS_ORIGINS=https://fablab.cmc.ma,https://admin.fablab.cmc.ma
+FIREBASE_SERVICE_ACCOUNT=/opt/fablab/fablab-api/secrets/service-account.json
+CORS_ORIGINS=https://fablab-bmk.web.app,https://fablab-cmc.web.app
 ```
 
-4. Install, migrate, seed, and run the API with PM2:
+Run API:
 
 ```bash
 cd /opt/fablab/fablab-api
@@ -193,34 +241,19 @@ pm2 save
 pm2 startup
 ```
 
-5. Build both frontends:
-
-```bash
-cd /opt/fablab/fabweb0-master
-cp .env.production.example .env.production
-npm ci
-npm run build
-
-cd /opt/fablab/admin-main
-cp .env.production.example .env.production
-npm ci
-npm run build
-```
-
-6. Configure native nginx:
+Native nginx for API-only:
 
 ```nginx
 server {
   listen 80;
-  server_name fablab.cmc.ma admin.fablab.cmc.ma;
-  return 301 https://$host$request_uri;
+  server_name API_DOMAIN;
+  location /.well-known/acme-challenge/ { root /var/www/certbot; }
+  location / { return 301 https://$host$request_uri; }
 }
 
 server {
   listen 443 ssl;
-  server_name fablab.cmc.ma;
-  root /opt/fablab/fabweb0-master/dist;
-  index index.html;
+  server_name API_DOMAIN;
 
   location /api/ {
     proxy_pass http://127.0.0.1:4000;
@@ -228,36 +261,13 @@ server {
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto https;
-  }
-
-  location / {
-    try_files $uri $uri/ /index.html;
-  }
-}
-
-server {
-  listen 443 ssl;
-  server_name admin.fablab.cmc.ma;
-  root /opt/fablab/admin-main/dist;
-  index index.html;
-
-  location /api/ {
-    proxy_pass http://127.0.0.1:4000;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto https;
-  }
-
-  location / {
-    try_files $uri $uri/ /index.html;
   }
 }
 ```
 
-7. Use certbot native nginx integration:
+Use certbot:
 
 ```bash
 sudo apt install -y certbot python3-certbot-nginx
-sudo certbot --nginx -d fablab.cmc.ma -d admin.fablab.cmc.ma
+sudo certbot --nginx -d API_DOMAIN
 ```

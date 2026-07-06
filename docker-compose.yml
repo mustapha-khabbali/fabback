@@ -27,9 +27,9 @@ services:
       ADMIN_SEED_EMAIL: ${ADMIN_SEED_EMAIL:-sara.admin@fablab.local}
       ADMIN_SEED_PASSWORD: ${ADMIN_SEED_PASSWORD:-change-me-now}
       FIREBASE_SERVICE_ACCOUNT: ${FIREBASE_SERVICE_ACCOUNT:-/run/secrets/firebase-service-account.json}
-      CORS_ORIGINS: https://${MAIN_DOMAIN:-fablab.cmc.ma},https://${ADMIN_DOMAIN:-admin.fablab.cmc.ma}
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://fablab-bmk.web.app,https://fablab-cmc.web.app}
     volumes:
-      - ./secrets:/run/secrets:ro
+      - ./fablab-api/secrets:/run/secrets:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -39,11 +39,11 @@ services:
       context: .
       dockerfile: deploy/nginx/Dockerfile
       args:
-        VITE_API_URL: ${VITE_API_URL:-/api}
+        VITE_API_URL: ${VITE_API_URL:-https://API_DOMAIN/api}
     restart: unless-stopped
     environment:
-      MAIN_DOMAIN: ${MAIN_DOMAIN:-fablab.cmc.ma}
-      ADMIN_DOMAIN: ${ADMIN_DOMAIN:-admin.fablab.cmc.ma}
+      MAIN_DOMAIN: ${MAIN_DOMAIN:-app.YOUR_DOMAIN}
+      ADMIN_DOMAIN: ${ADMIN_DOMAIN:-admin.YOUR_DOMAIN}
     ports:
       - "80:80"
       - "443:443"
