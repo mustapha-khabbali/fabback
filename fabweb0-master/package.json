@@ -7,7 +7,7 @@
     "dev": "vite",
     "start": "vite",
     "build": "vite build",
-    "deploy:user": "npm run build && firebase deploy --config ../firebase.json --project fablab-bmk --only user",
+    "deploy:user": "npm run build && firebase deploy --config ../firebase.json --project fablab-bmk --only hosting:user",
     "lint": "eslint .",
     "preview": "vite preview"
   },

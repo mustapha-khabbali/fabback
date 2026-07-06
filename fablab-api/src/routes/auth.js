@@ -12,7 +12,7 @@ import { emitRealtimeChange } from '../realtime/bus.js';
 export const authRouter = express.Router();
 
 const adminLoginSchema = z.object({
-  email: z.string().email().transform((value) => value.trim().toLowerCase()),
+  email: z.string().trim().min(1).transform((value) => value.toLowerCase()),
   password: z.string().min(1)
 });
 
@@ -91,16 +91,20 @@ authRouter.post('/admin', async (req, res, next) => {
       return;
     }
 
-    const result = await query('select * from users where lower(email) = $1', [parsed.data.email]);
-    const user = result.rows[0];
+    const identifiant = parsed.data.email;
+    const result = identifiant.includes('@')
+      ? await query('select * from users where lower(email) = $1 and role = $2', [
+          identifiant,
+          'administrateur'
+        ])
+      : await query(
+          "select * from users where split_part(lower(email), '@', 1) = $1 and role = $2",
+          [identifiant, 'administrateur']
+        );
+    const user = result.rows.length === 1 ? result.rows[0] : null;
 
     if (!user || !user.password_hash) {
       res.status(401).json({ error: 'Invalid email or password' });
-      return;
-    }
-
-    if (user.role !== 'administrateur') {
-      res.status(403).json({ error: 'Admin role required' });
       return;
     }
 

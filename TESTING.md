@@ -30,8 +30,8 @@ PORT=4000
 DATABASE_URL=postgres://fablab:fablab@localhost:55432/fablab_dev
 JWT_SECRET=local-dev-secret-change-me
 JWT_EXPIRES_IN=7d
-ADMIN_SEED_EMAIL=sara.admin@fablab.local
-ADMIN_SEED_PASSWORD=change-me-now
+ADMIN_SEED_EMAIL=sara.ladouy@fablab.local
+ADMIN_SEED_PASSWORD=fablab2026
 FIREBASE_SERVICE_ACCOUNT=./secrets/service-account.json
 CORS_ORIGINS=http://localhost:5173,http://localhost:5174
 GLOBAL_RATE_LIMIT_MAX=2000
@@ -56,7 +56,7 @@ VITE_API_URL=http://localhost:4000/api
 EOF
 
 cd fabweb0-master
-npm run dev -- --host 127.0.0.1 --port 5173
+npm run dev -- --host localhost --port 5173
 ```
 
 In another terminal, create the admin app dev env and start it:
@@ -67,14 +67,14 @@ VITE_API_URL=http://localhost:4000/api
 EOF
 
 cd admin-main
-npm run dev -- --host 127.0.0.1 --port 5174
+npm run dev -- --host localhost --port 5174
 ```
 
 Seeded admin login:
 
 ```text
-Email: sara.admin@fablab.local
-Password: change-me-now
+Identifiant: sara.ladouy or sara.ladouy@fablab.local
+Password: fablab2026
 ```
 
 Quick checks:

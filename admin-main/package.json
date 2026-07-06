@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "deploy:admin": "npm run build && firebase deploy --config ../firebase.json --project fablab-bmk --only admin",
+    "deploy:admin": "npm run build && firebase deploy --config ../firebase.json --project fablab-bmk --only hosting:admin",
     "preview": "vite preview",
     "lint": "eslint ."
   },
