@@ -291,7 +291,9 @@ export default function MemberProfileTab() {
           </div>
         )}
 
-        {/* MACHINES Section */}
+        {/* Parked: Expertise Machines — re-enable when expertise is computed from real
+            help data (approved helps per machine).
+        MACHINES Section
         {isStagiaire && (
           <div className="space-y-3">
             <h4 className="text-xs font-bold text-t-tertiary uppercase tracking-widest px-1">Expertise Machines</h4>
@@ -312,6 +314,7 @@ export default function MemberProfileTab() {
             </div>
           </div>
         )}
+        */}
 
         {/* PROGRAMS Section */}
         {isStagiaire && (
