@@ -1,8 +1,21 @@
 import express from 'express';
+import { z } from 'zod';
 import { query } from '../db/pool.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 
 export const gateRouter = express.Router();
+
+const gateOptionSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  requiresProject: z.boolean().optional(),
+  requiresEvent: z.boolean().optional(),
+  requiresText: z.boolean().optional()
+});
+
+const gateConfigSchema = z.object({
+  config: z.record(z.array(gateOptionSchema))
+});
 
 function mapEvent(row) {
   const toDateInput = (value) => {
@@ -52,7 +65,13 @@ gateRouter.get('/config', async (_req, res, next) => {
 
 gateRouter.put('/config', requireRole('administrateur'), async (req, res, next) => {
   try {
-    const config = req.body?.config || req.body || {};
+    const parsed = gateConfigSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: 'Invalid request body', details: parsed.error.flatten() });
+      return;
+    }
+
+    const config = parsed.data.config;
     const result = await query(
       `
         insert into gate_config (id, config)

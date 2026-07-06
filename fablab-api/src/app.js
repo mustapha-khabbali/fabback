@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import { config } from './config.js';
 import { query } from './db/pool.js';
 import { authRouter } from './routes/auth.js';
@@ -14,18 +15,35 @@ import { reviewsRouter } from './routes/reviews.js';
 
 export function createApp() {
   const app = express();
+  const globalLimiter = rateLimit({
+    windowMs: config.globalRateLimitWindowMs,
+    limit: config.globalRateLimitMax,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false
+  });
+  const authLimiter = rateLimit({
+    windowMs: config.authRateLimitWindowMs,
+    limit: config.authRateLimitMax,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    skipSuccessfulRequests: true
+  });
 
   app.use(helmet());
   app.use(cors({
     origin(origin, callback) {
-      if (!origin || config.corsOrigins.length === 0 || config.corsOrigins.includes(origin)) {
+      if (!origin || config.corsOrigins.includes(origin)) {
         callback(null, true);
         return;
       }
-      callback(new Error('CORS origin not allowed'));
+      const error = new Error('CORS origin not allowed');
+      error.status = 403;
+      callback(error);
     },
     credentials: true
   }));
+  app.use('/api', globalLimiter);
+  app.use('/api/auth', authLimiter);
   app.use(express.json({ limit: '10mb' }));
 
   app.get('/health', async (_req, res, next) => {

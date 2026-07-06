@@ -55,7 +55,7 @@ const recycleSchema = z.object({
   projectId: z.string().optional(),
   projectName: z.string().optional(),
   memberData: z.record(z.any()).optional()
-}).passthrough();
+});
 
 function toDateInput(value) {
   if (!value) return '';

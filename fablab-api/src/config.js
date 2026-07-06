@@ -2,6 +2,17 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+const defaultCorsOrigins = [
+  'https://fablab.cmc.ma',
+  'https://admin.fablab.cmc.ma',
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'http://localhost:5175',
+  'http://localhost:8080',
+  'http://fablab.localhost:8080',
+  'http://admin.fablab.localhost:8080'
+];
+
 export const config = {
   nodeEnv: process.env.NODE_ENV || 'development',
   port: Number(process.env.PORT || 4000),
@@ -9,10 +20,14 @@ export const config = {
   jwtSecret: process.env.JWT_SECRET,
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
   firebaseServiceAccount: process.env.FIREBASE_SERVICE_ACCOUNT,
-  corsOrigins: (process.env.CORS_ORIGINS || '')
+  corsOrigins: (process.env.CORS_ORIGINS || defaultCorsOrigins.join(','))
     .split(',')
     .map((origin) => origin.trim())
-    .filter(Boolean)
+    .filter(Boolean),
+  globalRateLimitWindowMs: Number(process.env.GLOBAL_RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000),
+  globalRateLimitMax: Number(process.env.GLOBAL_RATE_LIMIT_MAX || 1000),
+  authRateLimitWindowMs: Number(process.env.AUTH_RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000),
+  authRateLimitMax: Number(process.env.AUTH_RATE_LIMIT_MAX || 20)
 };
 
 if (!config.databaseUrl) {

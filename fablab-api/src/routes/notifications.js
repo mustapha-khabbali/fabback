@@ -12,8 +12,19 @@ const notificationSchema = z.object({
   helpedUserId: z.string().optional().nullable(),
   projectId: z.string().optional().nullable(),
   projectTitle: z.string().optional().nullable(),
+  requesterId: z.string().optional().nullable(),
+  requesterName: z.string().optional().nullable(),
+  senderName: z.string().optional().nullable(),
+  title: z.string().optional().nullable(),
+  message: z.string().optional().nullable(),
+  description: z.string().optional().nullable(),
+  machineName: z.string().optional().nullable(),
+  role: z.string().optional().nullable(),
+  status: z.string().optional().nullable(),
+  time: z.string().optional().nullable(),
+  createdAt: z.string().optional().nullable(),
   payload: z.record(z.any()).optional()
-}).passthrough();
+});
 
 function mapNotification(row) {
   const payload = row.payload || {};

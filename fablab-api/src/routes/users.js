@@ -52,6 +52,7 @@ const createUserSchema = userProfileSchema.partial({
   charteAccepted: true,
   reproductionAccepted: true
 });
+const emptyBodySchema = z.object({});
 
 const fieldMap = {
   role: 'role',
@@ -249,6 +250,12 @@ usersRouter.patch('/:id', async (req, res, next) => {
 
 usersRouter.patch('/:id/deactivate', requireRole('administrateur'), async (req, res, next) => {
   try {
+    const parsed = emptyBodySchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: 'Invalid request body', details: parsed.error.flatten() });
+      return;
+    }
+
     const result = await query(
       'update users set is_deactivated = true, updated_at = now() where id = $1 returning *',
       [req.params.id]
@@ -261,6 +268,12 @@ usersRouter.patch('/:id/deactivate', requireRole('administrateur'), async (req, 
 
 usersRouter.patch('/:id/reactivate', requireRole('administrateur'), async (req, res, next) => {
   try {
+    const parsed = emptyBodySchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: 'Invalid request body', details: parsed.error.flatten() });
+      return;
+    }
+
     const result = await query(
       'update users set is_deactivated = false, updated_at = now() where id = $1 returning *',
       [req.params.id]
