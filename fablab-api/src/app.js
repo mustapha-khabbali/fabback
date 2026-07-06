@@ -5,6 +5,9 @@ import { config } from './config.js';
 import { query } from './db/pool.js';
 import { authRouter } from './routes/auth.js';
 import { usersRouter } from './routes/users.js';
+import { attendanceRouter } from './routes/attendance.js';
+import { eventsRouter } from './routes/events.js';
+import { gateRouter } from './routes/gate.js';
 
 export function createApp() {
   const app = express();
@@ -37,6 +40,9 @@ export function createApp() {
 
   app.use('/api/auth', authRouter);
   app.use('/api/users', usersRouter);
+  app.use('/api/gate', gateRouter);
+  app.use('/api/events', eventsRouter);
+  app.use('/api/attendance', attendanceRouter);
 
   app.use((req, res) => {
     res.status(404).json({ error: 'Not found', path: req.path });

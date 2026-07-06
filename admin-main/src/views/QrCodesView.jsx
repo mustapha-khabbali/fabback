@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import EventSection from '../components/events/EventSection';
+import { api } from '../services/api';
 
 const DEFAULT_GATE_IN_CONFIG = {
   stagiaire: [
@@ -30,21 +31,6 @@ function activeConfig(config) {
   };
 }
 
-function loadActiveEvents() {
-  try {
-    return JSON.parse(localStorage.getItem('admin_events') || '[]').filter((event) => {
-      if (event.archived) return false;
-      const end = event.dateMode === 'range' ? event.dateTo : event.date;
-      if (!end) return false;
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      return new Date(end) >= today;
-    }).map((event) => ({ id: event.id, title: event.title }));
-  } catch {
-    return [];
-  }
-}
-
 function GateCard({ type }) {
   const canvasRef = useRef(null);
   const [payload, setPayload] = useState(null);
@@ -54,13 +40,15 @@ function GateCard({ type }) {
 
   const handleGenerate = async () => {
     const uid = crypto.randomUUID ? crypto.randomUUID().split('-')[0] : Math.random().toString(36).substring(2, 10);
+    if (isIn) {
+      await api.saveGateConfig(activeConfig(DEFAULT_GATE_IN_CONFIG));
+    }
     const data = JSON.stringify({
       action: isIn ? 'check_in' : (isEvent ? 'event' : 'check_out'),
       lab: 'CMC_BENI_MELLAL',
       gate: isIn ? 'GATE_IN' : (isEvent ? 'EVENT' : 'GATE_OUT'),
       id: uid,
-      ts: Date.now(),
-      ...(isIn ? { gateInConfig: activeConfig(DEFAULT_GATE_IN_CONFIG), events: loadActiveEvents() } : {})
+      ts: Date.now()
     });
 
     setPayload({ uid });

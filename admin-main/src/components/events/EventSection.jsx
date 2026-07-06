@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
-import { MOCK_USERS } from '../../views/UsersView';
 import EventForm from './EventForm';
 import ConfirmModal from '../projects/ConfirmModal';
+import { api } from '../../services/api';
 
 // An event is "active" when its (end) date is today or in the future.
 function isActive(evt) {
@@ -17,10 +17,8 @@ function isActive(evt) {
 const EVENT_QR_PAYLOAD = JSON.stringify({ action: 'event', lab: 'CMC_BENI_MELLAL', gate: 'EVENT' });
 
 export default function EventSection() {
-  const [users, setUsers] = useState(MOCK_USERS);
-  const [events, setEvents] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('admin_events') || '[]'); } catch { return []; }
-  });
+  const [users, setUsers] = useState([]);
+  const [events, setEvents] = useState([]);
   const [mode, setMode] = useState('list'); // 'list' | 'form' | 'history'
   const [returnTo, setReturnTo] = useState('list'); // where the form's Back returns to
   const [editing, setEditing] = useState(null);
@@ -28,35 +26,67 @@ export default function EventSection() {
   const [qrDataUrl, setQrDataUrl] = useState(null);
 
   useEffect(() => {
-    localStorage.setItem('admin_events', JSON.stringify(events));
-  }, [events]);
+    let cancelled = false;
+    Promise.all([api.getUsers(), api.getEvents()])
+      .then(([loadedUsers, loadedEvents]) => {
+        if (!cancelled) {
+          setUsers(loadedUsers);
+          setEvents(loadedEvents);
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) alert(error.message);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // New intervenant → into the database with name + surname + type.
-  const createUser = (prenom, nom, type) => {
-    const newUser = { id: 'intervenant-' + Date.now(), prenom, nom, role: type };
-    setUsers((prev) => [...prev, newUser]);
+  const createUser = async (prenom, nom, type) => {
+    const newUser = await api.createUser({ prenom, nom, role: type });
+    setUsers((prev) => [newUser, ...prev]);
     return newUser;
   };
 
   const openNew = () => { setEditing(null); setReturnTo('list'); setMode('form'); };
   const openEdit = (evt, from) => { setEditing(evt); setReturnTo(from); setMode('form'); };
 
-  const saveEvent = (evt) => {
+  const saveEvent = async (evt) => {
     // A present/future date brings the event (back) into the active box on save.
     const finalEvt = { ...evt, archived: isActive(evt) ? false : evt.archived };
-    setEvents((prev) => {
-      const exists = prev.some((e) => e.id === finalEvt.id);
-      return exists ? prev.map((e) => (e.id === finalEvt.id ? finalEvt : e)) : [finalEvt, ...prev];
-    });
-    // Go to where the event now lives: active box (list) or history.
-    setMode(isActive(finalEvt) && !finalEvt.archived ? 'list' : 'history');
-    setEditing(null);
+    try {
+      const saved = await api.saveEvent(finalEvt);
+      setEvents((prev) => {
+        const exists = prev.some((e) => e.id === saved.id);
+        return exists ? prev.map((e) => (e.id === saved.id ? saved : e)) : [saved, ...prev];
+      });
+      // Go to where the event now lives: active box (list) or history.
+      setMode(isActive(saved) && !saved.archived ? 'list' : 'history');
+      setEditing(null);
+    } catch (error) {
+      alert(error.message);
+    }
   };
 
-  const archiveEvent = (id) => setEvents((prev) => prev.map((e) => (e.id === id ? { ...e, archived: true } : e)));
-  const permanentDelete = () => {
-    setEvents((prev) => prev.filter((e) => e.id !== confirmDeleteId));
-    setConfirmDeleteId(null);
+  const archiveEvent = async (id) => {
+    const event = events.find((e) => e.id === id);
+    if (!event) return;
+    try {
+      const saved = await api.saveEvent({ ...event, archived: true });
+      setEvents((prev) => prev.map((e) => (e.id === id ? saved : e)));
+    } catch (error) {
+      alert(error.message);
+    }
+  };
+  const permanentDelete = async () => {
+    try {
+      await api.deleteEvent(confirmDeleteId);
+      setEvents((prev) => prev.filter((e) => e.id !== confirmDeleteId));
+      setConfirmDeleteId(null);
+    } catch (error) {
+      alert(error.message);
+    }
   };
 
   const toggleQr = async () => {

@@ -61,10 +61,10 @@ export default function EventForm({ event, users, onCreateUser, onSave, onBack }
     setIntervenants([...intervenants, { id: u.id, prenom: u.prenom, nom: u.nom, roleType: 'INTERVENANT', customRole: '' }]);
     setSearch('');
   };
-  const addNew = () => {
+  const addNew = async () => {
     if (!newPrenom.trim() || !newNom.trim()) return;
     // Added straight to the database with only name + surname + type.
-    const created = onCreateUser(newPrenom.trim(), newNom.trim(), newType);
+    const created = await onCreateUser(newPrenom.trim(), newNom.trim(), newType);
     setIntervenants([...intervenants, { id: created.id, prenom: created.prenom, nom: created.nom, roleType: 'INTERVENANT', customRole: '' }]);
     setNewPrenom('');
     setNewNom('');
@@ -86,7 +86,7 @@ export default function EventForm({ event, users, onCreateUser, onSave, onBack }
   const isValid = title.trim() && descPlain && intervenantsValid && spaces.length > 0 && dateValid;
 
   const buildEvent = () => ({
-    id: event?.id || (crypto.randomUUID ? crypto.randomUUID() : 'evt-' + Date.now()),
+    ...(event?.id ? { id: event.id } : {}),
     title: title.trim(),
     description,
     intervenants: intervenants.map((i) => ({ id: i.id, prenom: i.prenom, nom: i.nom, role: roleLabel(i.roleType, i.customRole) })),

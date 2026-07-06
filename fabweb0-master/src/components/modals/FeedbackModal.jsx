@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { getPrimaryUserId } from '../../utils/userIdentity';
+import { api } from '../../services/api';
 
 export default function FeedbackModal() {
   const { showFeedbackModal, setShowFeedbackModal, setIsUserInLab, currentUser, showNotification } = useApp();
@@ -9,7 +10,7 @@ export default function FeedbackModal() {
 
   if (!showFeedbackModal) return null;
 
-  const saveGateOut = () => {
+  const saveGateOut = async () => {
     const userId = getPrimaryUserId(currentUser) || 'guest';
     const timestampOut = new Date().toISOString();
     let attendance;
@@ -24,10 +25,13 @@ export default function FeedbackModal() {
       String(entry.userId || '') === String(userId)
     );
 
+    const saved = await api.checkOut({ rating, feedbackComment: note.trim() });
+
     if (openEntryIndex >= 0) {
       attendance[openEntryIndex] = {
         ...attendance[openEntryIndex],
-        timestampOut,
+        ...(saved || {}),
+        timestampOut: saved?.timestampOut || timestampOut,
         rating,
         feedbackComment: note.trim()
       };
@@ -53,15 +57,19 @@ export default function FeedbackModal() {
     localStorage.setItem('lab_attendance', JSON.stringify(attendance));
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (rating === 0) { showNotification("Veuillez donner une note de 1 à 5 étoiles.", 'error'); return; }
-    saveGateOut();
-    setShowFeedbackModal(false);
-    showNotification("Merci pour votre feedback ! À bientôt.");
-    setIsUserInLab(false);
-    setRating(0);
-    setNote('');
-    setShowFeedbackModal(false);
+    try {
+      await saveGateOut();
+      setShowFeedbackModal(false);
+      showNotification("Merci pour votre feedback ! À bientôt.");
+      setIsUserInLab(false);
+      setRating(0);
+      setNote('');
+      setShowFeedbackModal(false);
+    } catch (error) {
+      showNotification(error.message || "Sortie impossible.", 'error');
+    }
   };
 
   return (

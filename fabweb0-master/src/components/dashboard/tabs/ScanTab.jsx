@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useApp, TABS } from '../../../context/AppContext';
 import { useQrScanner } from '../../../hooks/useQrScanner';
+import { api } from '../../../services/api';
 
 export default function ScanTab() {
   const { activeTab, isUserInLab, currentUser, setShowScanObjectiveModal, setShowRoleScanObjectiveModal, setShowFeedbackModal } = useApp();
@@ -17,7 +18,7 @@ export default function ScanTab() {
     }
   };
 
-  const handleDecodedScan = useCallback((decodedText) => {
+  const handleDecodedScan = useCallback(async (decodedText) => {
     const payload = readScanPayload(decodedText);
     const scanAction = payload?.gate || payload?.action || decodedText;
     const isGateInScan = scanAction === 'GATE_IN' || scanAction === 'check_in' || scanAction === 'fablab';
@@ -27,14 +28,14 @@ export default function ScanTab() {
       return;
     }
 
-    if (payload?.gateInConfig) {
-      localStorage.setItem('gate_in_config', JSON.stringify(payload.gateInConfig));
-    }
-    if (payload?.events) {
-      localStorage.setItem('gate_in_events', JSON.stringify(payload.events));
-    }
-
     if (!isUserInLab && isGateInScan) {
+      try {
+        const gate = await api.getGateConfig();
+        localStorage.setItem('gate_in_config', JSON.stringify(gate.config || {}));
+        localStorage.setItem('gate_in_events', JSON.stringify(gate.events || []));
+      } catch {
+        return;
+      }
       if (currentUser?.role === 'stagiaire') {
         setShowScanObjectiveModal(true);
       } else {

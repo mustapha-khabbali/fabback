@@ -121,6 +121,32 @@ export const api = {
     await request(`/users/${id}`, { method: 'DELETE' });
   },
 
+  async getEvents() {
+    const body = await request('/events');
+    return body.events || [];
+  },
+
+  async saveEvent(event) {
+    const path = event.id ? `/events/${event.id}` : '/events';
+    const body = await request(path, {
+      method: event.id ? 'PATCH' : 'POST',
+      body: JSON.stringify(event)
+    });
+    return body.event;
+  },
+
+  async deleteEvent(id) {
+    await request(`/events/${id}`, { method: 'DELETE' });
+  },
+
+  async saveGateConfig(config) {
+    const body = await request('/gate/config', {
+      method: 'PUT',
+      body: JSON.stringify({ config })
+    });
+    return body.config;
+  },
+
   logout() {
     setAdminToken(null);
   }

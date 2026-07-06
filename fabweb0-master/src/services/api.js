@@ -66,6 +66,31 @@ export const api = {
     return body.users || [];
   },
 
+  async getGateConfig() {
+    return request('/gate/config');
+  },
+
+  async checkIn(payload) {
+    const body = await request('/attendance/check-in', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+    return body.attendance;
+  },
+
+  async checkOut(payload) {
+    const body = await request('/attendance/check-out', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+    return body.attendance;
+  },
+
+  async getOpenAttendance() {
+    const body = await request('/attendance/open');
+    return body.attendance;
+  },
+
   logout() {
     setUserToken(null);
   }

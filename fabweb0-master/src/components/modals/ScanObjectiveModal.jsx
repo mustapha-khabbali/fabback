@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { getPrimaryUserId, isCurrentUserId } from '../../utils/userIdentity';
+import { api } from '../../services/api';
 
 const SYSTEM_SUPERVISOR_IDS = ['user-sara', 'system-sara'];
 const SARA_SUPERVISOR = {
@@ -243,7 +244,7 @@ export default function ScanObjectiveModal() {
     setNewType('');
   };
 
-  const finalize = () => {
+  const finalize = async () => {
     if (!selectedOption) {
       showNotification('Veuillez sélectionner un objectif.', 'error');
       return;
@@ -293,17 +294,22 @@ export default function ScanObjectiveModal() {
       logEntry.comment = customText.trim();
     }
 
-    let attendance;
-    try { attendance = JSON.parse(localStorage.getItem('lab_attendance') || '[]'); } catch {
-      attendance = [];
-    }
-    attendance.unshift(logEntry);
-    localStorage.setItem('lab_attendance', JSON.stringify(attendance));
+    try {
+      const saved = await api.checkIn(logEntry);
+      let attendance;
+      try { attendance = JSON.parse(localStorage.getItem('lab_attendance') || '[]'); } catch {
+        attendance = [];
+      }
+      attendance.unshift(saved || logEntry);
+      localStorage.setItem('lab_attendance', JSON.stringify(attendance));
 
-    setIsUserInLab(true);
-    reset();
-    setShowScanObjectiveModal(false);
-    showNotification("Entrée enregistrée avec succès !", 'success');
+      setIsUserInLab(true);
+      reset();
+      setShowScanObjectiveModal(false);
+      showNotification("Entrée enregistrée avec succès !", 'success');
+    } catch (error) {
+      showNotification(error.message || "Entrée impossible.", 'error');
+    }
   };
 
   return (

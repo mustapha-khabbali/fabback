@@ -75,25 +75,6 @@ export function AppProvider({ children }) {
     });
   }, [persistUsers]);
 
-  useEffect(() => {
-    if (!getUserToken()) return;
-    let cancelled = false;
-
-    api.getUsers()
-      .then((users) => {
-        if (!cancelled) {
-          const normalizedUsers = users.map(ensureUserIdentity).filter(Boolean);
-          setUsersList(normalizedUsers);
-          persistUsers(normalizedUsers);
-        }
-      })
-      .catch(() => {});
-
-    return () => {
-      cancelled = true;
-    };
-  }, [persistUsers]);
-
   const setCurrentUser = useCallback((nextUser) => {
     setCurrentUserState((prevUser) => {
       const resolved = typeof nextUser === 'function' ? nextUser(prevUser) : nextUser;
@@ -157,6 +138,31 @@ export function AppProvider({ children }) {
   const [presenceActivityEvents, setPresenceActivityEvents] = useState(() => {
     try { return JSON.parse(localStorage.getItem(PRESENCE_ACTIVITY_STORAGE_KEY) || '[]'); } catch { return []; }
   });
+
+  useEffect(() => {
+    if (!getUserToken()) return;
+    let cancelled = false;
+
+    api.getUsers()
+      .then(async (users) => {
+        if (!cancelled) {
+          const normalizedUsers = users.map(ensureUserIdentity).filter(Boolean);
+          setUsersList(normalizedUsers);
+          persistUsers(normalizedUsers);
+        }
+        return api.getOpenAttendance();
+      })
+      .then((openAttendance) => {
+        if (!cancelled && openAttendance) {
+          setIsUserInLab(true);
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [persistUsers]);
 
   // Feedback state
   const [currentRating, setCurrentRating] = useState(0);

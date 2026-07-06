@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useApp, TABS } from '../../context/AppContext';
 import { getPrimaryUserId } from '../../utils/userIdentity';
+import { api } from '../../services/api';
 
 const DEFAULT_GATE_IN_CONFIG = {
   staff: [
@@ -85,7 +86,7 @@ export default function RoleScanObjectiveModal() {
     setShowRoleScanObjectiveModal(false);
   };
 
-  const finalize = () => {
+  const finalize = async () => {
     if (!selectedOption) {
       showNotification('Veuillez sélectionner un objectif.', 'error');
       return;
@@ -131,18 +132,23 @@ export default function RoleScanObjectiveModal() {
       logEntry.eventTitle = event?.title || '';
     }
 
-    let attendance;
-    try { attendance = JSON.parse(localStorage.getItem('lab_attendance') || '[]'); } catch {
-      attendance = [];
-    }
-    attendance.unshift(logEntry);
-    localStorage.setItem('lab_attendance', JSON.stringify(attendance));
+    try {
+      const saved = await api.checkIn(logEntry);
+      let attendance;
+      try { attendance = JSON.parse(localStorage.getItem('lab_attendance') || '[]'); } catch {
+        attendance = [];
+      }
+      attendance.unshift(saved || logEntry);
+      localStorage.setItem('lab_attendance', JSON.stringify(attendance));
 
-    setIsUserInLab(true);
-    reset();
-    setShowRoleScanObjectiveModal(false);
-    showNotification("Entrée enregistrée avec succès !", 'success');
-    setActiveTab(TABS.FABLAB);
+      setIsUserInLab(true);
+      reset();
+      setShowRoleScanObjectiveModal(false);
+      showNotification("Entrée enregistrée avec succès !", 'success');
+      setActiveTab(TABS.FABLAB);
+    } catch (error) {
+      showNotification(error.message || "Entrée impossible.", 'error');
+    }
   };
 
   return (
