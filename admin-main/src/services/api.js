@@ -139,6 +139,12 @@ export const api = {
     await request(`/events/${id}`, { method: 'DELETE' });
   },
 
+  async getAttendance(params = {}) {
+    const query = new URLSearchParams(params);
+    const body = await request(`/attendance${query.size ? `?${query}` : ''}`);
+    return body.attendance || [];
+  },
+
   async saveGateConfig(config) {
     const body = await request('/gate/config', {
       method: 'PUT',

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { mockMetrics, mockPresentStagiaires, mockHistory } from '../data/adminMockData';
+import { api } from '../services/api';
 
 const MOROCCAN_HOLIDAYS_2026 = [
   { id: 'h1', name: 'Nouvel An', date: '2026-01-01' },
@@ -115,19 +115,6 @@ function presenceTypeLabel(item, showProjectName = false) {
   return item?.presenceType || '—';
 }
 
-function readJsonStorage(key, fallback) {
-  try {
-    return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback));
-  } catch {
-    return fallback;
-  }
-}
-
-function readAttendanceSource() {
-  const stored = readJsonStorage('lab_attendance', []);
-  return stored.length > 0 ? stored : mockHistory;
-}
-
 function toISODate(date) {
   return date.toISOString().split('T')[0];
 }
@@ -190,13 +177,10 @@ function rowMatchesPeriod(row, dateMode, singleDate, dateFrom, dateTo, timeFrom,
   return timestamp >= start && timestamp <= end;
 }
 
-function readCurrentPresenceRows() {
-  const stored = readJsonStorage('lab_attendance', []);
-  if (stored.length === 0) return mockPresentStagiaires;
-
+function readCurrentPresenceRows(attendanceRows) {
   const now = new Date();
   const today = toISODate(now);
-  return stored
+  return attendanceRows
     .map(normalizeDashboardJournalRow)
     .filter((row) => {
       const timestampIn = safeDate(row.timestampIn || `${row.date}T${row.timeIn}:00`);
@@ -219,6 +203,7 @@ export default function AdminOverviewView({ onNavigate }) {
   const [dashboardEventFilter, setDashboardEventFilter] = useState('');
   const [openPresenceMenu, setOpenPresenceMenu] = useState(null);
   const [presenceMenuPosition, setPresenceMenuPosition] = useState({ top: 0, left: 0, width: 0 });
+  const [attendanceRows, setAttendanceRows] = useState([]);
 
   // Toast state for validation errors
   const [toast, setToast] = useState({ show: false, message: '' });
@@ -232,6 +217,28 @@ export default function AdminOverviewView({ onNavigate }) {
     }, 4000);
     setToastTimeoutId(id);
   };
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadAttendance = () => {
+      api.getAttendance()
+        .then((rows) => {
+          if (!cancelled) setAttendanceRows(rows);
+        })
+        .catch(() => {
+          if (!cancelled) setAttendanceRows([]);
+        });
+    };
+
+    loadAttendance();
+    const intervalId = periodMode === 'now' ? setInterval(loadAttendance, 10000) : null;
+
+    return () => {
+      cancelled = true;
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [periodMode]);
 
   const handleTimeChange = (value, setter, previousValue, defaultValue) => {
     if (!value) {
@@ -428,14 +435,14 @@ export default function AdminOverviewView({ onNavigate }) {
   // Determine dynamic stats and logs based on the selected dashboard period mode.
   const getDynamicData = () => {
     if (periodMode === 'now') {
-      const liveRows = readCurrentPresenceRows();
+      const liveRows = readCurrentPresenceRows(attendanceRows);
       return {
-        metrics: liveRows === mockPresentStagiaires ? mockMetrics : { present: liveRows.length, total: liveRows.length, exits: 0, avgRating: 0 },
+        metrics: { present: liveRows.length, total: attendanceRows.length, exits: attendanceRows.filter(row => row.timestampOut).length, avgRating: 0 },
         presents: liveRows
       };
     }
 
-    const rows = readAttendanceSource()
+    const rows = attendanceRows
       .map(normalizeDashboardJournalRow)
       .filter((row) => rowMatchesPeriod(row, customDateMode, selectedDate, dateFrom, dateTo, workingHoursStart, workingHoursEnd));
 

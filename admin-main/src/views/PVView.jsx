@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { mockHistory } from '../data/adminMockData';
+import { api } from '../services/api';
 
 const ROLE_OPTIONS = [
   { value: 'all', label: 'Tous' },
@@ -111,19 +111,6 @@ function presenceTypeLabel(row) {
   return row?.presenceType || '—';
 }
 
-function readJsonStorage(key, fallback) {
-  try {
-    return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback));
-  } catch {
-    return fallback;
-  }
-}
-
-function readAttendanceSource() {
-  const stored = readJsonStorage('lab_attendance', []);
-  return stored.length > 0 ? stored : mockHistory;
-}
-
 function normalizePresenceType(entry) {
   return entry.presenceType || entry.objective || entry.typePresence || '—';
 }
@@ -185,13 +172,12 @@ function rowMatchesRange(row, start, end) {
 }
 
 function readAdminEvents(rows) {
-  const storedEvents = readJsonStorage('admin_events', []);
   const fromRows = rows
     .filter((row) => row.eventId || row.eventTitle)
     .map((row) => ({ id: row.eventId || row.eventTitle, title: row.eventTitle || row.eventId }));
 
   const seen = new Set();
-  return [...storedEvents, ...fromRows]
+  return fromRows
     .filter((event) => event?.id || event?.title)
     .map((event) => ({ id: event.id || event.title, title: event.title || event.id }))
     .filter((event) => {
@@ -219,8 +205,23 @@ export default function PVView() {
   const [report, setReport] = useState(null);
   const [toast, setToast] = useState({ show: false, message: '' });
   const [toastTimeoutId, setToastTimeoutId] = useState(null);
+  const [attendanceRows, setAttendanceRows] = useState([]);
 
-  const allRows = useMemo(() => readAttendanceSource().map(normalizeAttendanceRow), []);
+  useEffect(() => {
+    let cancelled = false;
+    api.getAttendance()
+      .then((rows) => {
+        if (!cancelled) setAttendanceRows(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setAttendanceRows([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const allRows = useMemo(() => attendanceRows.map(normalizeAttendanceRow), [attendanceRows]);
   const presenceOptions = useMemo(() => getPresenceOptions(roleFilter), [roleFilter]);
   const selectedPresenceOption = useMemo(() => (
     presenceOptions.find((option) => option.value === presenceType) || presenceOptions[0]
