@@ -13,7 +13,12 @@ const emailSchema = z.string().trim().email().transform((value) => value.toLower
 const programSchema = z.object({
   name: z.string().trim().min(1),
   type: z.string().trim().min(1),
-  result: z.string().trim().min(1)
+  result: z.string().trim().min(1),
+  description: z.string().trim().optional().nullable(),
+  dateMode: z.enum(['single', 'range']).optional().nullable(),
+  date: z.string().trim().optional().nullable(),
+  dateFrom: z.string().trim().optional().nullable(),
+  dateTo: z.string().trim().optional().nullable()
 }).strip();
 
 export const userProfileSchema = z.object({

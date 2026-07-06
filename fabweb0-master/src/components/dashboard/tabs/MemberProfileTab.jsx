@@ -15,6 +15,16 @@ const ALL_SDGS = Array.from({ length: 17 }, (_, i) => ({
 
 const SHOW_PROFILE_LEVEL_BADGE = false;
 
+function formatProgramDate(program) {
+  if (program.dateMode === 'range') {
+    if (program.dateFrom && program.dateTo) return `Du ${program.dateFrom} au ${program.dateTo}`;
+    if (program.dateFrom) return `Depuis ${program.dateFrom}`;
+    if (program.dateTo) return `Jusqu'au ${program.dateTo}`;
+    return '';
+  }
+  return program.date || '';
+}
+
 export default function MemberProfileTab() {
   const { currentUser, setSelectedUser, selectedUser, setActiveTab, allProjects, userProjects, showNotification, previousTab, currentProjectId, setCurrentProjectId, navigationHistory, setNavigationHistory, sendContactRequest, presenceActivityEvents, usersList, contactPrivacyMode, allowedContactUsers } = useApp();
 
@@ -489,6 +499,12 @@ export default function MemberProfileTab() {
                         {p.result}
                       </span>
                     </div>
+                    {(p.description || formatProgramDate(p)) && (
+                      <div className="space-y-1">
+                        {p.description && <p className="text-[11px] text-t-secondary font-medium leading-relaxed">{p.description}</p>}
+                        {formatProgramDate(p) && <p className="text-[10px] text-t-tertiary font-bold uppercase tracking-widest">{formatProgramDate(p)}</p>}
+                      </div>
+                    )}
                   </div>
                 ))}
             </div>

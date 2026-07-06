@@ -9,6 +9,17 @@ import ImageLightbox from '../../common/ImageLightbox';
 import { getCroppedAvatarDataUrl } from '../../../utils/avatarCrop';
 
 const SHOW_PROFILE_LEVEL_BADGE = false;
+const PROGRAM_TYPES = ['Hackathon', 'Event', 'Bootcamp', 'Workshop', 'Formation', 'Autre'];
+
+function formatProgramDate(program) {
+  if (program.dateMode === 'range') {
+    if (program.dateFrom && program.dateTo) return `Du ${program.dateFrom} au ${program.dateTo}`;
+    if (program.dateFrom) return `Depuis ${program.dateFrom}`;
+    if (program.dateTo) return `Jusqu'au ${program.dateTo}`;
+    return '';
+  }
+  return program.date || '';
+}
 
 export default function MyProfileTab() {
   const { 
@@ -92,7 +103,7 @@ export default function MyProfileTab() {
     programs: currentUser?.programs || [],
   });
   const [selectedProgramType, setSelectedProgramType] = useState(null);
-  const [newProgForm, setNewProgForm] = useState({ name: '', type: '', result: '' });
+  const [newProgForm, setNewProgForm] = useState({ name: '', description: '', dateMode: 'single', date: '', dateFrom: '', dateTo: '', type: '', result: '' });
 
   // Programs feature state
   const [showProgramsView, setShowProgramsView] = useState(false);
@@ -514,9 +525,64 @@ export default function MyProfileTab() {
                         placeholder="Nom (ex: Hackathon 2024)"
                         className="w-full text-sm font-bold text-t-primary bg-t-surface glass-card rounded-xl outline-none px-4 py-3 border-2 border-transparent focus:border-[#3B5FE6]"
                       />
+                      <textarea
+                        value={newProgForm.description}
+                        onChange={(e) => setNewProgForm(prev => ({ ...prev, description: e.target.value }))}
+                        placeholder="Description"
+                        className="w-full h-24 text-sm font-bold text-t-primary bg-t-surface glass-card rounded-xl outline-none px-4 py-3 border-2 border-transparent focus:border-[#3B5FE6] resize-none"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <p className="text-[10px] font-black text-t-tertiary uppercase px-1">Date</p>
+                      <div className="flex items-center space-x-2">
+                        <button
+                          onClick={() => setNewProgForm(prev => ({ ...prev, dateMode: 'single' }))}
+                          className={`flex-1 py-2 text-[10px] font-black rounded-xl border uppercase transition-all ${
+                            newProgForm.dateMode === 'single'
+                              ? 'bg-[#3B5FE6] text-white border-transparent shadow-md'
+                              : 'bg-t-surface glass-card text-t-tertiary border-blue-100'
+                          }`}
+                        >
+                          Date
+                        </button>
+                        <button
+                          onClick={() => setNewProgForm(prev => ({ ...prev, dateMode: 'range' }))}
+                          className={`flex-1 py-2 text-[10px] font-black rounded-xl border uppercase transition-all ${
+                            newProgForm.dateMode === 'range'
+                              ? 'bg-[#3B5FE6] text-white border-transparent shadow-md'
+                              : 'bg-t-surface glass-card text-t-tertiary border-blue-100'
+                          }`}
+                        >
+                          Du - Au
+                        </button>
+                      </div>
+                      {newProgForm.dateMode === 'single' ? (
+                        <input
+                          type="date"
+                          value={newProgForm.date}
+                          onChange={(e) => setNewProgForm(prev => ({ ...prev, date: e.target.value }))}
+                          className="w-full text-sm font-bold text-t-primary bg-t-surface glass-card rounded-xl outline-none px-4 py-3 border-2 border-transparent focus:border-[#3B5FE6]"
+                        />
+                      ) : (
+                        <div className="grid grid-cols-2 gap-2">
+                          <input
+                            type="date"
+                            value={newProgForm.dateFrom}
+                            onChange={(e) => setNewProgForm(prev => ({ ...prev, dateFrom: e.target.value }))}
+                            className="w-full text-sm font-bold text-t-primary bg-t-surface glass-card rounded-xl outline-none px-3 py-3 border-2 border-transparent focus:border-[#3B5FE6]"
+                          />
+                          <input
+                            type="date"
+                            value={newProgForm.dateTo}
+                            min={newProgForm.dateFrom || undefined}
+                            onChange={(e) => setNewProgForm(prev => ({ ...prev, dateTo: e.target.value }))}
+                            className="w-full text-sm font-bold text-t-primary bg-t-surface glass-card rounded-xl outline-none px-3 py-3 border-2 border-transparent focus:border-[#3B5FE6]"
+                          />
+                        </div>
+                      )}
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      {['Hackathon', 'Event', 'Bootcamp', 'Workshop', 'Formation'].map(type => (
+                      {PROGRAM_TYPES.map(type => (
                         <button
                           key={type}
                           onClick={() => setNewProgForm(prev => ({ ...prev, type }))}
@@ -560,7 +626,7 @@ export default function MyProfileTab() {
                         }
 
                         updateEdit('programs', [...editForm.programs, { ...newProgForm }]);
-                        setNewProgForm({ name: '', type: '', result: '' });
+                        setNewProgForm({ name: '', description: '', dateMode: 'single', date: '', dateFrom: '', dateTo: '', type: '', result: '' });
                         showNotification("Programme ajouté à la liste !");
                       }}
                       className="w-full py-4 bg-midnight-blue text-white text-[11px] font-black rounded-2xl shadow-xl active:scale-95 transition-all uppercase tracking-widest"
@@ -629,6 +695,12 @@ export default function MyProfileTab() {
                           {p.result}
                         </span>
                       </div>
+                      {(p.description || formatProgramDate(p)) && (
+                        <div className="space-y-1">
+                          {p.description && <p className="text-[11px] text-t-secondary font-medium leading-relaxed">{p.description}</p>}
+                          {formatProgramDate(p) && <p className="text-[10px] text-t-tertiary font-bold uppercase tracking-widest">{formatProgramDate(p)}</p>}
+                        </div>
+                      )}
                     </div>
                   ))}
               </div>

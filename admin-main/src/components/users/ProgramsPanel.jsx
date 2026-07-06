@@ -1,27 +1,72 @@
 import { useMemo, useState } from 'react';
 
-const PROGRAM_TYPES = ['Hackathon', 'Event', 'Bootcamp', 'Workshop', 'Formation'];
+const PROGRAM_TYPES = ['Hackathon', 'Event', 'Bootcamp', 'Workshop', 'Formation', 'Autre'];
 const PROGRAM_RESULTS = ['Win', 'Participation'];
+const CHIP_STYLES = [
+  'bg-accent-blue/15 text-accent-blue border-accent-blue/35',
+  'bg-accent-green/15 text-accent-green border-accent-green/35',
+  'bg-accent-purple/15 text-accent-purple border-accent-purple/35',
+  'bg-accent-amber/15 text-accent-amber border-accent-amber/35',
+  'bg-white/[0.06] text-white/70 border-white/15',
+  'bg-accent-red/10 text-accent-red border-accent-red/30'
+];
 
-function groupProgramsByType(programs) {
+const EMPTY_FORM = {
+  name: '',
+  description: '',
+  dateMode: 'single',
+  date: '',
+  dateFrom: '',
+  dateTo: '',
+  type: '',
+  result: ''
+};
+
+function countByType(programs) {
   return programs.reduce((acc, program) => {
-    if (!program.type) return acc;
-    acc[program.type] = acc[program.type] || [];
-    acc[program.type].push(program);
+    if (program.type) acc[program.type] = (acc[program.type] || 0) + 1;
     return acc;
   }, {});
 }
 
+function formatProgramDate(program) {
+  if (program.dateMode === 'range') {
+    if (program.dateFrom && program.dateTo) return `Du ${program.dateFrom} au ${program.dateTo}`;
+    if (program.dateFrom) return `Depuis ${program.dateFrom}`;
+    if (program.dateTo) return `Jusqu'au ${program.dateTo}`;
+    return '';
+  }
+  return program.date || '';
+}
+
+function normalizeProgram(form) {
+  return {
+    name: form.name.trim(),
+    type: form.type,
+    result: form.result,
+    description: form.description.trim() || null,
+    dateMode: form.dateMode,
+    date: form.dateMode === 'single' ? form.date || null : null,
+    dateFrom: form.dateMode === 'range' ? form.dateFrom || null : null,
+    dateTo: form.dateMode === 'range' ? form.dateTo || null : null
+  };
+}
+
 export default function ProgramsPanel({ user, onUpdatePrograms }) {
   const programs = useMemo(() => user?.programs || [], [user?.programs]);
-  const groupedPrograms = useMemo(() => groupProgramsByType(programs), [programs]);
-  const typeEntries = Object.entries(groupedPrograms);
-  const [selectedType, setSelectedType] = useState('');
-  const [form, setForm] = useState({ name: '', type: '', result: '' });
+  const typeCounts = useMemo(() => countByType(programs), [programs]);
+  const [selectedType, setSelectedType] = useState('Tous');
+  const [showTypeMenu, setShowTypeMenu] = useState(false);
+  const [deleteMode, setDeleteMode] = useState(false);
+  const [screen, setScreen] = useState('main');
+  const [selectedProgram, setSelectedProgram] = useState(null);
+  const [batch, setBatch] = useState([]);
+  const [form, setForm] = useState(EMPTY_FORM);
   const [isSaving, setIsSaving] = useState(false);
 
-  const activeType = selectedType && groupedPrograms[selectedType] ? selectedType : typeEntries[0]?.[0] || '';
-  const activePrograms = activeType ? groupedPrograms[activeType] || [] : [];
+  const visiblePrograms = selectedType === 'Tous'
+    ? programs
+    : programs.filter((program) => program.type === selectedType);
 
   const savePrograms = async (nextPrograms) => {
     setIsSaving(true);
@@ -32,127 +77,113 @@ export default function ProgramsPanel({ user, onUpdatePrograms }) {
     }
   };
 
-  const handleAddProgram = async () => {
-    if (!form.name.trim() || !form.type || !form.result) {
-      alert('Tous les champs sont obligatoires.');
+  const resetAddScreen = () => {
+    setBatch([]);
+    setForm(EMPTY_FORM);
+    setScreen('main');
+  };
+
+  const validateForm = () => {
+    if (!form.name.trim() || !form.type || !form.result) return false;
+    if (form.dateMode === 'single') return Boolean(form.date);
+    return Boolean(form.dateFrom && form.dateTo && form.dateFrom <= form.dateTo);
+  };
+
+  const handleAddToBatch = () => {
+    if (!validateForm()) {
+      alert('Veuillez compléter les champs obligatoires.');
       return;
     }
 
-    const added = { name: form.name.trim(), type: form.type, result: form.result };
-    const saved = await savePrograms([...programs, added]);
+    const nextProgram = normalizeProgram(form);
+    setBatch((prev) => [...prev, nextProgram]);
+    setForm(EMPTY_FORM);
+  };
+
+  const handleSaveBatch = async () => {
+    if (!batch.length) {
+      alert('Ajoutez au moins un programme avant d enregistrer.');
+      return;
+    }
+
+    const saved = await savePrograms([...programs, ...batch]);
     if (saved) {
-      setSelectedType(added.type);
-      setForm({ name: '', type: '', result: '' });
+      setSelectedType('Tous');
+      resetAddScreen();
     }
   };
 
   const handleRemoveProgram = async (targetIndex) => {
-    const nextPrograms = programs.filter((_, index) => index !== targetIndex);
-    const saved = await savePrograms(nextPrograms);
-    if (saved && !nextPrograms.some((program) => program.type === activeType)) {
-      setSelectedType('');
+    const program = programs[targetIndex];
+    if (!program) return;
+    const confirmed = window.confirm(`Supprimer "${program.name}" ?`);
+    if (!confirmed) return;
+
+    const saved = await savePrograms(programs.filter((_, index) => index !== targetIndex));
+    if (saved && selectedType !== 'Tous' && (typeCounts[selectedType] || 0) <= 1) {
+      setSelectedType('Tous');
     }
   };
 
-  return (
-    <div className="section-card p-6 space-y-6">
-      <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-5 border-b border-white/10 pb-5">
-        <div className="space-y-1">
-          <h4 className="text-[11px] font-bold text-white/30 uppercase tracking-[2px]">Programme</h4>
-          <p className="text-[13px] text-white/50">
-            Participations de <span className="font-bold text-accent-blue">{user?.prenom} {user?.nom}</span>
-          </p>
-        </div>
+  const openDetails = (program, index) => {
+    if (deleteMode) {
+      handleRemoveProgram(index);
+      return;
+    }
+    setSelectedProgram({ ...program, index });
+    setScreen('details');
+  };
 
-        <div className="flex flex-wrap items-center gap-2">
-          {typeEntries.length > 0 ? (
-            typeEntries.map(([type, items]) => {
-              const isActive = activeType === type;
-              return (
-                <button
-                  key={type}
-                  onClick={() => setSelectedType(type)}
-                  className={`px-4 py-2 rounded-lg border text-[12px] font-bold flex items-center gap-2 transition-colors cursor-pointer ${
-                    isActive
-                      ? 'bg-accent-blue border-accent-blue text-white'
-                      : 'bg-white/[0.02] border-white/10 text-white/50 hover:bg-white/[0.05] hover:text-white'
-                  }`}
-                >
-                  <span>{type}</span>
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded-md ${
-                    isActive ? 'bg-black/20 text-white' : 'bg-white/10 text-white/50'
-                  }`}>
-                    {items.length}
-                  </span>
-                </button>
-              );
-            })
-          ) : (
-            <div className="px-4 py-2 rounded-lg border border-white/10 bg-white/[0.02] text-[12px] text-white/40 font-semibold">
-              Aucun programme
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_360px] gap-6">
-        <div className="space-y-4">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <h5 className="text-[13px] font-bold text-white">{activeType || 'Participations'}</h5>
-              <p className="text-[11px] text-white/40 mt-1">
-                {activePrograms.length > 0 ? `${activePrograms.length} participation${activePrograms.length > 1 ? 's' : ''}` : 'Aucune participation enregistrée'}
-              </p>
-            </div>
+  if (screen === 'add') {
+    return (
+      <div className="section-card p-6 space-y-6">
+        <div className="flex items-center justify-between gap-4 border-b border-white/10 pb-5">
+          <div>
+            <h4 className="text-[16px] font-bold text-white">Ajouter des programmes</h4>
+            <p className="text-[12px] text-white/40 mt-1">Les programmes restent en attente jusqu'à Enregistrer.</p>
           </div>
+          <button
+            onClick={resetAddScreen}
+            className="px-4 py-2 rounded-lg border border-white/10 bg-white/[0.03] text-white/60 hover:text-white hover:bg-white/[0.06] text-[12px] font-bold transition-colors cursor-pointer"
+          >
+            Retour
+          </button>
+        </div>
 
-          <div className="space-y-3 max-h-[55vh] overflow-y-auto pr-2 custom-scrollbar">
-            {activePrograms.length > 0 ? (
-              activePrograms.map((program) => {
-                const originalIndex = programs.indexOf(program);
-                return (
-                  <div key={`${program.type}-${program.name}-${originalIndex}`} className="bg-white/[0.03] border border-white/10 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="text-[13px] font-bold text-white truncate">{program.name}</div>
-                      <div className="text-[11px] font-semibold text-white/40 mt-1 uppercase tracking-[1px]">{program.type}</div>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase border ${
-                        program.result === 'Win'
-                          ? 'bg-accent-blue text-white border-accent-blue'
-                          : 'bg-white/[0.04] text-white/60 border-white/10'
-                      }`}>
-                        {program.result}
-                      </span>
+        <div className="grid grid-cols-1 xl:grid-cols-[1fr_420px] gap-6">
+          <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-5 min-h-[340px]">
+            <h5 className="text-[12px] font-bold text-white/40 uppercase tracking-[2px] mb-4">Ajoutés pendant cette session</h5>
+            {batch.length > 0 ? (
+              <div className="space-y-3">
+                {batch.map((program, index) => (
+                  <div key={`${program.name}-${index}`} className="p-4 rounded-xl border border-white/10 bg-white/[0.03]">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-[13px] font-bold text-white truncate">{program.name}</p>
+                        <p className="text-[11px] text-white/40 mt-1">{program.type} - {program.result}</p>
+                      </div>
                       <button
-                        onClick={() => handleRemoveProgram(originalIndex)}
-                        disabled={isSaving}
-                        className="w-9 h-9 rounded-lg border border-white/10 bg-white/[0.03] text-white/50 hover:text-white hover:bg-white/[0.06] transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center"
-                        aria-label="Supprimer la participation"
+                        onClick={() => setBatch((prev) => prev.filter((_, i) => i !== index))}
+                        className="w-8 h-8 rounded-lg text-white/40 hover:text-white hover:bg-white/[0.06] flex items-center justify-center transition-colors"
+                        aria-label="Retirer de la session"
                       >
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                         </svg>
                       </button>
                     </div>
+                    {formatProgramDate(program) && <p className="text-[11px] text-white/40 mt-2">{formatProgramDate(program)}</p>}
                   </div>
-                );
-              })
+                ))}
+              </div>
             ) : (
-              <div className="flex items-center justify-center p-5 bg-white/[0.02] border border-white/5 rounded-xl">
-                <p className="text-[12px] text-white/50">Aucune participation dans cette catégorie.</p>
+              <div className="h-full min-h-[230px] flex items-center justify-center border border-dashed border-white/10 rounded-xl">
+                <p className="text-[12px] text-white/35">Aucun programme ajouté dans cette session.</p>
               </div>
             )}
           </div>
-        </div>
 
-        <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-5 h-fit space-y-4">
-          <div>
-            <h5 className="text-[13px] font-bold text-white">Ajouter une participation</h5>
-            <p className="text-[11px] text-white/40 mt-1">Les trois champs sont obligatoires.</p>
-          </div>
-
-          <div className="space-y-3">
+          <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-5 space-y-4 h-fit">
             <div className="flex flex-col">
               <span className="text-[10px] font-bold text-white/40 uppercase tracking-[2px] mb-2 ml-1">Nom</span>
               <input
@@ -161,6 +192,60 @@ export default function ProgramsPanel({ user, onUpdatePrograms }) {
                 onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
                 className="bg-white/[0.05] border border-white/10 text-white text-[13px] font-semibold rounded-lg px-4 py-3 min-h-[46px] outline-none focus:border-accent-blue/50"
               />
+            </div>
+
+            <div className="flex flex-col">
+              <span className="text-[10px] font-bold text-white/40 uppercase tracking-[2px] mb-2 ml-1">Description</span>
+              <textarea
+                value={form.description}
+                onChange={(event) => setForm((prev) => ({ ...prev, description: event.target.value }))}
+                rows={3}
+                className="bg-white/[0.05] border border-white/10 text-white text-[13px] font-semibold rounded-lg px-4 py-3 outline-none focus:border-accent-blue/50 resize-none"
+              />
+            </div>
+
+            <div className="space-y-3">
+              <span className="block text-[10px] font-bold text-white/40 uppercase tracking-[2px] ml-1">Date</span>
+              <div className="grid grid-cols-2 gap-2 p-1 bg-white/[0.03] border border-white/10 rounded-xl">
+                {[
+                  ['single', 'Date'],
+                  ['range', 'Du - Au']
+                ].map(([mode, label]) => (
+                  <button
+                    key={mode}
+                    onClick={() => setForm((prev) => ({ ...prev, dateMode: mode }))}
+                    className={`rounded-lg py-2 text-[11px] font-bold transition-colors ${
+                      form.dateMode === mode ? 'bg-accent-blue text-white' : 'text-white/45 hover:text-white'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {form.dateMode === 'single' ? (
+                <input
+                  type="date"
+                  value={form.date}
+                  onChange={(event) => setForm((prev) => ({ ...prev, date: event.target.value }))}
+                  className="w-full bg-white/[0.05] border border-white/10 text-white text-[13px] font-semibold rounded-lg px-4 py-3 min-h-[46px] outline-none focus:border-accent-blue/50"
+                />
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="date"
+                    value={form.dateFrom}
+                    onChange={(event) => setForm((prev) => ({ ...prev, dateFrom: event.target.value }))}
+                    className="w-full bg-white/[0.05] border border-white/10 text-white text-[13px] font-semibold rounded-lg px-4 py-3 min-h-[46px] outline-none focus:border-accent-blue/50"
+                  />
+                  <input
+                    type="date"
+                    value={form.dateTo}
+                    min={form.dateFrom || undefined}
+                    onChange={(event) => setForm((prev) => ({ ...prev, dateTo: event.target.value }))}
+                    className="w-full bg-white/[0.05] border border-white/10 text-white text-[13px] font-semibold rounded-lg px-4 py-3 min-h-[46px] outline-none focus:border-accent-blue/50"
+                  />
+                </div>
+              )}
             </div>
 
             <div className="flex flex-col">
@@ -186,17 +271,154 @@ export default function ProgramsPanel({ user, onUpdatePrograms }) {
                 {PROGRAM_RESULTS.map((result) => <option key={result} value={result}>{result}</option>)}
               </select>
             </div>
-          </div>
 
+            <div className="grid grid-cols-2 gap-2 pt-2">
+              <button
+                onClick={handleAddToBatch}
+                disabled={isSaving}
+                className="py-3 rounded-lg border border-white/10 bg-white/[0.04] text-white text-[12px] font-bold hover:bg-white/[0.08] transition-colors disabled:opacity-40"
+              >
+                Ajouter
+              </button>
+              <button
+                onClick={handleSaveBatch}
+                disabled={isSaving || !batch.length}
+                className="py-3 rounded-lg bg-accent-blue text-white text-[12px] font-bold hover:brightness-110 transition-all disabled:opacity-40"
+              >
+                Enregistrer
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (screen === 'details' && selectedProgram) {
+    const dateLabel = formatProgramDate(selectedProgram);
+    return (
+      <div className="section-card p-6 space-y-6">
+        <div className="flex items-center justify-between gap-4 border-b border-white/10 pb-5">
+          <div>
+            <h4 className="text-[16px] font-bold text-white">{selectedProgram.name}</h4>
+            <p className="text-[12px] text-white/40 mt-1">Détails du programme</p>
+          </div>
           <button
-            onClick={handleAddProgram}
-            disabled={isSaving}
-            className="w-full py-3.5 rounded-lg bg-accent-blue text-white text-[12px] font-bold hover:brightness-110 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            onClick={() => {
+              setSelectedProgram(null);
+              setScreen('main');
+            }}
+            className="px-4 py-2 rounded-lg border border-white/10 bg-white/[0.03] text-white/60 hover:text-white hover:bg-white/[0.06] text-[12px] font-bold transition-colors cursor-pointer"
+          >
+            Retour
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-[1.3fr_0.7fr] gap-5">
+          <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-6 space-y-3">
+            <p className="text-[10px] font-bold text-white/35 uppercase tracking-[2px]">Description</p>
+            <p className="text-[14px] text-white/75 leading-relaxed">{selectedProgram.description || 'Aucune description.'}</p>
+          </div>
+          <div className="space-y-3">
+            {[
+              ['Type', selectedProgram.type],
+              ['Résultat', selectedProgram.result],
+              ['Date', dateLabel || '-']
+            ].map(([label, value]) => (
+              <div key={label} className="bg-white/[0.02] border border-white/10 rounded-xl p-4">
+                <p className="text-[10px] font-bold text-white/35 uppercase tracking-[2px]">{label}</p>
+                <p className="text-[13px] font-bold text-white mt-1">{value}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="section-card p-6 space-y-6">
+      <div className="relative flex flex-col gap-4 lg:flex-row lg:items-center justify-between border-b border-white/10 pb-5">
+        <h4 className="text-[16px] font-bold text-white">Programmes</h4>
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <button
+              onClick={() => setShowTypeMenu((prev) => !prev)}
+              className="px-4 py-2 rounded-lg border border-white/10 bg-white/[0.03] text-white/70 hover:text-white hover:bg-white/[0.06] text-[12px] font-bold transition-colors cursor-pointer"
+            >
+              Type
+            </button>
+            {showTypeMenu && (
+              <div className="absolute right-0 top-full mt-2 w-48 bg-[#151b2e] border border-white/10 rounded-xl shadow-2xl p-2 z-50">
+                {['Tous', ...PROGRAM_TYPES].map((type) => {
+                  const count = type === 'Tous' ? programs.length : typeCounts[type] || 0;
+                  return (
+                    <button
+                      key={type}
+                      onClick={() => {
+                        setSelectedType(type);
+                        setShowTypeMenu(false);
+                      }}
+                      className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-[12px] font-bold transition-colors ${
+                        selectedType === type ? 'bg-accent-blue/15 text-accent-blue' : 'text-white/60 hover:bg-white/[0.05] hover:text-white'
+                      }`}
+                    >
+                      <span>{type}</span>
+                      <span>({count})</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+          <button
+            onClick={() => setDeleteMode((prev) => !prev)}
+            className={`px-4 py-2 rounded-lg border text-[12px] font-bold transition-colors cursor-pointer ${
+              deleteMode
+                ? 'bg-accent-red/10 text-accent-red border-accent-red/30'
+                : 'bg-white/[0.03] text-white/70 hover:text-white hover:bg-white/[0.06] border-white/10'
+            }`}
+          >
+            Supprimer
+          </button>
+          <button
+            onClick={() => setScreen('add')}
+            className="px-4 py-2 rounded-lg bg-accent-blue text-white text-[12px] font-bold hover:brightness-110 transition-all cursor-pointer"
           >
             Ajouter
           </button>
         </div>
       </div>
+
+      {visiblePrograms.length > 0 ? (
+        <div className="flex flex-wrap gap-3">
+          {visiblePrograms.map((program) => {
+            const originalIndex = programs.indexOf(program);
+            const style = CHIP_STYLES[originalIndex % CHIP_STYLES.length];
+            return (
+              <button
+                key={`${program.name}-${program.type}-${originalIndex}`}
+                onClick={() => openDetails(program, originalIndex)}
+                disabled={isSaving}
+                className={`group inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border text-[12px] font-black transition-all cursor-pointer disabled:opacity-40 ${style}`}
+              >
+                <span>{program.name}</span>
+                {deleteMode && (
+                  <span className="w-5 h-5 rounded-md bg-black/15 flex items-center justify-center">
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="flex items-center justify-center p-6 bg-white/[0.02] border border-white/5 rounded-xl">
+          <p className="text-[12px] text-white/50">Aucun programme.</p>
+        </div>
+      )}
     </div>
   );
 }
