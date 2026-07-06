@@ -3,6 +3,7 @@ import { poleOptions, niveauOptions, yearOptions, getFiliereOptions, getOptionCh
 import ProjectsPanel from '../components/projects/ProjectsPanel';
 import AddUserModal from '../components/users/AddUserModal';
 import InteractionsPanel from '../components/users/InteractionsPanel';
+import ProgramsPanel from '../components/users/ProgramsPanel';
 import AvatarCropModal from '../components/users/AvatarCropModal';
 import ImageLightbox from '../components/projects/ImageLightbox';
 import { api } from '../services/api';
@@ -108,6 +109,19 @@ export default function UsersView({ profileTarget, onProfileTargetHandled }) {
       patchSelectedUser(updated);
     } catch (error) {
       alert(error.message);
+    }
+  };
+
+  const updateSelectedUserPrograms = async (programs) => {
+    if (!selectedUser || selectedUser.role !== 'Stagiaire') return false;
+
+    try {
+      const updated = await api.updateUser(selectedUser.id, { programs });
+      patchSelectedUser(updated);
+      return true;
+    } catch (error) {
+      alert(error.message);
+      return false;
     }
   };
 
@@ -559,6 +573,14 @@ export default function UsersView({ profileTarget, onProfileTargetHandled }) {
                 >
                   Interaction
                 </button>
+                <button
+                  onClick={() => setActiveProfileTab('programs')}
+                  className={`px-5 py-2 rounded-lg text-[12px] font-bold transition-colors cursor-pointer ${
+                    activeProfileTab === 'programs' ? 'bg-accent-blue text-white' : 'text-white/50 hover:text-white'
+                  }`}
+                >
+                  Programme
+                </button>
               </div>
             ) : null}
 
@@ -810,6 +832,14 @@ export default function UsersView({ profileTarget, onProfileTargetHandled }) {
               <InteractionsPanel
                 user={selectedUser}
                 usersList={users}
+              />
+            )}
+
+            {/* Programme Tab (Stagiaire only) */}
+            {isStagiaire && activeProfileTab === 'programs' && (
+              <ProgramsPanel
+                user={selectedUser}
+                onUpdatePrograms={updateSelectedUserPrograms}
               />
             )}
 
