@@ -3,6 +3,7 @@ import { useApp, SCREENS } from '../../context/AppContext';
 import { poleOptions, niveauOptions, yearOptions, getFiliereOptions, getOptionChoices } from '../../data/trainingData';
 import { validateEmail, validatePhone } from '../../utils/validation';
 import { ensureUserIdentity } from '../../utils/userIdentity';
+import { api } from '../../services/api';
 
 export default function StagiaireScreen() {
   const { navigateTo, goToCharte, setCurrentUser, showLogin, registrationDraft, setRegistrationDraft, showNotification } = useApp();
@@ -38,7 +39,7 @@ export default function StagiaireScreen() {
   const filiereList = useMemo(() => getFiliereOptions(form.pole, form.niveau), [form.pole, form.niveau]);
   const optionList = useMemo(() => getOptionChoices(form.pole, form.niveau, form.filiere, form.year), [form.pole, form.niveau, form.filiere, form.year]);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const { prenom, nom, cin, pole, niveau, filiere, year, tel, email } = form;
     if (!prenom || !nom || !cin || !pole || !niveau || !filiere || !year || !tel || !email) {
       showNotification("Veuillez remplir tous les champs obligatoires.", 'error');
@@ -57,11 +58,22 @@ export default function StagiaireScreen() {
       return;
     }
 
-    const userData = ensureUserIdentity({ ...form, role: 'stagiaire' });
-    setCurrentUser(userData);
-    localStorage.setItem('temp_registration_data', JSON.stringify(userData));
-    showNotification("Compte créé avec succès !");
-    showLogin();
+    try {
+      const user = await api.register({
+        ...form,
+        role: 'stagiaire',
+        annee: form.year,
+        charteAccepted,
+        reproductionAccepted
+      });
+      const userData = ensureUserIdentity(user);
+      setCurrentUser(userData);
+      localStorage.setItem('temp_registration_data', JSON.stringify(userData));
+      showNotification("Compte créé avec succès !");
+      showLogin();
+    } catch (error) {
+      showNotification(error.message || "Création du compte impossible.", 'error');
+    }
   };
 
   return (

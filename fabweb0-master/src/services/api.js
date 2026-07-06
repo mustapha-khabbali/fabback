@@ -47,6 +47,25 @@ export const api = {
     return body;
   },
 
+  async register(profile) {
+    const body = await request('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({
+        ...profile,
+        annee: profile.annee || profile.year || null,
+        charteAccepted: profile.charteAccepted ?? true,
+        reproductionAccepted: profile.reproductionAccepted ?? true
+      })
+    });
+    return body.user;
+  },
+
+  async getUsers(params = {}) {
+    const query = new URLSearchParams(params);
+    const body = await request(`/users${query.size ? `?${query}` : ''}`);
+    return body.users || [];
+  },
+
   logout() {
     setUserToken(null);
   }

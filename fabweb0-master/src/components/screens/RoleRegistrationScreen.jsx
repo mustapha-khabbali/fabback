@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useApp, SCREENS } from '../../context/AppContext';
 import { validateEmail, validatePhone } from '../../utils/validation';
 import { ensureUserIdentity } from '../../utils/userIdentity';
+import { api } from '../../services/api';
 
 export default function RoleRegistrationScreen() {
   const { navigateTo, pendingRole, goToCharte, setCurrentUser, showLogin, registrationDraft, setRegistrationDraft, showNotification } = useApp();
@@ -19,7 +20,7 @@ export default function RoleRegistrationScreen() {
 
   const update = (field, value) => setForm(prev => ({ ...prev, [field]: value }));
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const { prenom, nom, cin, tel, email } = form;
     if (!prenom || !nom || !cin || !tel || !email || !charteAccepted) {
       showNotification("Veuillez remplir tous les champs et accepter la charte.", 'error');
@@ -33,8 +34,18 @@ export default function RoleRegistrationScreen() {
       showNotification("Le numéro de téléphone doit commencer par 06 ou 07 et contenir 10 chiffres au total.", 'error');
       return;
     }
-    setCurrentUser(ensureUserIdentity({ ...form, role: (pendingRole || 'visiteur').toLowerCase() }));
-    showLogin();
+    try {
+      const user = await api.register({
+        ...form,
+        role: (pendingRole || 'visiteur').toLowerCase(),
+        charteAccepted,
+        reproductionAccepted
+      });
+      setCurrentUser(ensureUserIdentity(user));
+      showLogin();
+    } catch (error) {
+      showNotification(error.message || "Création du compte impossible.", 'error');
+    }
   };
 
   const titleClass = pendingRole === 'Administrateur'

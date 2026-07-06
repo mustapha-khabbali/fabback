@@ -6,6 +6,7 @@ import {
   PRESENCE_ACTIVITY_STORAGE_KEY
 } from '../utils/presenceActivity';
 import { ensureUserIdentity, mergeUserByIdentity, getPrimaryUserId } from '../utils/userIdentity';
+import { api, getUserToken } from '../services/api';
 
 const AppContext = createContext(null);
 
@@ -72,6 +73,25 @@ export function AppProvider({ children }) {
       persistUsers(updated);
       return updated;
     });
+  }, [persistUsers]);
+
+  useEffect(() => {
+    if (!getUserToken()) return;
+    let cancelled = false;
+
+    api.getUsers()
+      .then((users) => {
+        if (!cancelled) {
+          const normalizedUsers = users.map(ensureUserIdentity).filter(Boolean);
+          setUsersList(normalizedUsers);
+          persistUsers(normalizedUsers);
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
   }, [persistUsers]);
 
   const setCurrentUser = useCallback((nextUser) => {

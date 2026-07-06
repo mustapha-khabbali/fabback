@@ -10,13 +10,6 @@ const emptyForm = {
   bio: ''
 };
 
-function createUserId() {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    return `user-${crypto.randomUUID()}`;
-  }
-  return `user-${Date.now()}`;
-}
-
 export default function AddUserModal({ onCreate, onClose }) {
   const [form, setForm] = useState(emptyForm);
 
@@ -42,7 +35,6 @@ export default function AddUserModal({ onCreate, onClose }) {
   const handleCreate = () => {
     if (!canCreate) return;
     const base = {
-      id: createUserId(),
       role: form.role,
       prenom: form.prenom.trim(),
       nom: form.nom.trim(),

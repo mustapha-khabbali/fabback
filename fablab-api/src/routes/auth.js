@@ -6,6 +6,7 @@ import { signUserToken } from '../auth/jwt.js';
 import { query } from '../db/pool.js';
 import { requireAuth } from '../middleware/auth.js';
 import { isProfileComplete, toPublicUser } from '../models/user.js';
+import { userProfileSchema, buildUserPatch } from './users.js';
 
 export const authRouter = express.Router();
 
@@ -154,4 +155,29 @@ authRouter.post('/google', async (req, res, next) => {
 
 authRouter.get('/me', requireAuth, (req, res) => {
   res.json({ user: req.publicUser });
+});
+
+authRouter.post('/register', requireAuth, async (req, res, next) => {
+  try {
+    const parsed = userProfileSchema.safeParse(req.body);
+    if (!parsed.success) {
+      sendValidationError(res, parsed.error);
+      return;
+    }
+
+    const { columns, values, params } = buildUserPatch(parsed.data);
+    const result = await query(
+      `
+        update users
+        set ${columns.join(', ')}, updated_at = now()
+        where id = $${params.length + 1}
+        returning *
+      `,
+      [...values, req.user.id]
+    );
+
+    res.json({ user: toPublicUser(result.rows[0]) });
+  } catch (error) {
+    next(error);
+  }
 });

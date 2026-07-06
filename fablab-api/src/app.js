@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import { config } from './config.js';
 import { query } from './db/pool.js';
 import { authRouter } from './routes/auth.js';
+import { usersRouter } from './routes/users.js';
 
 export function createApp() {
   const app = express();
@@ -35,6 +36,7 @@ export function createApp() {
   });
 
   app.use('/api/auth', authRouter);
+  app.use('/api/users', usersRouter);
 
   app.use((req, res) => {
     res.status(404).json({ error: 'Not found', path: req.path });

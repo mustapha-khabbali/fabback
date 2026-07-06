@@ -3,6 +3,7 @@ import { poleOptions, niveauOptions, yearOptions, getFiliereOptions, getOptionCh
 import ProjectsPanel from '../components/projects/ProjectsPanel';
 import AddUserModal from '../components/users/AddUserModal';
 import InteractionsPanel from '../components/users/InteractionsPanel';
+import { api } from '../services/api';
 
 export const MOCK_USERS = [];
 
@@ -44,20 +45,33 @@ export default function UsersView({ profileTarget, onProfileTargetHandled }) {
   };
 
   const patchSelectedUser = (patch) => {
-    setUsers((prevUsers) => prevUsers.map((u) => (u.id === selectedUser.id ? { ...u, ...patch } : u)));
-    setSelectedUser((prev) => ({ ...prev, ...patch }));
+    const updatedUser = { ...selectedUser, ...patch };
+    setUsers((prevUsers) => prevUsers.map((u) => (u.id === selectedUser.id ? updatedUser : u)));
+    setSelectedUser(updatedUser);
   };
 
   const updateSelectedUserProjects = (newProjects) => patchSelectedUser({ projects: newProjects });
   const updateSelectedUserRecycleBin = (newBin) => patchSelectedUser({ recycleBin: newBin });
 
-  const updateStagiaireRating = (rating) => {
+  const updateStagiaireRating = async (rating) => {
     if (!selectedUser || selectedUser.role !== 'Stagiaire') return;
-    patchSelectedUser({ comportementRating: rating });
+    try {
+      const updated = await api.updateBehaviorRating(selectedUser.id, rating);
+      patchSelectedUser(updated);
+    } catch (error) {
+      alert(error.message);
+    }
   };
 
   // Append a newly created user (e.g. a new encadrant added on the fly from a project)
-  const addUser = (newUser) => setUsers((prevUsers) => [...prevUsers, newUser]);
+  const addUser = async (newUser) => {
+    try {
+      const created = await api.createUser(newUser);
+      setUsers((prevUsers) => [created, ...prevUsers]);
+    } catch (error) {
+      alert(error.message);
+    }
+  };
 
   const updateEditForm = (field, value) => {
     const newForm = { ...editForm, [field]: value };
@@ -75,16 +89,21 @@ export default function UsersView({ profileTarget, onProfileTargetHandled }) {
   const editFiliereList = useMemo(() => getFiliereOptions(editForm?.pole, editForm?.niveau), [editForm?.pole, editForm?.niveau]);
   const editOptionList = useMemo(() => getOptionChoices(editForm?.pole, editForm?.niveau, editForm?.filiere, editForm?.year), [editForm?.pole, editForm?.niveau, editForm?.filiere, editForm?.year]);
 
-  const handleSaveEdit = () => {
+  const handleSaveEdit = async () => {
     if (!editForm.nom?.trim() || !editForm.prenom?.trim()) {
       alert("Le nom et le prénom ne peuvent pas être vides.");
       return;
     }
-    const updatedUsers = users.map(u => u.id === selectedUser.id ? { ...u, ...editForm } : u);
-    setUsers(updatedUsers);
-    setSelectedUser({ ...selectedUser, ...editForm });
-    setIsEditing(false);
-    setEditForm(null);
+    try {
+      const updated = await api.updateUser(selectedUser.id, editForm);
+      const updatedUsers = users.map(u => u.id === selectedUser.id ? updated : u);
+      setUsers(updatedUsers);
+      setSelectedUser(updated);
+      setIsEditing(false);
+      setEditForm(null);
+    } catch (error) {
+      alert(error.message);
+    }
   };
 
   const handleCancelEdit = () => {
@@ -92,12 +111,17 @@ export default function UsersView({ profileTarget, onProfileTargetHandled }) {
     setEditForm(null);
   };
 
-  const confirmToggleDeactivate = () => {
+  const confirmToggleDeactivate = async () => {
     const nextDeactivatedState = !selectedUser.isDeactivated;
-    const updatedUsers = users.map(u => u.id === selectedUser.id ? { ...u, isDeactivated: nextDeactivatedState } : u);
-    setUsers(updatedUsers);
-    setSelectedUser({ ...selectedUser, isDeactivated: nextDeactivatedState });
-    setShowDeactivateModal(false);
+    try {
+      const updated = await api.setUserDeactivated(selectedUser.id, nextDeactivatedState);
+      const updatedUsers = users.map(u => u.id === selectedUser.id ? updated : u);
+      setUsers(updatedUsers);
+      setSelectedUser(updated);
+      setShowDeactivateModal(false);
+    } catch (error) {
+      alert(error.message);
+    }
   };
 
   const removeUserFromProjectRefs = (project) => ({
@@ -106,18 +130,23 @@ export default function UsersView({ profileTarget, onProfileTargetHandled }) {
     contributors: (project.contributors || []).filter((c) => c.userId !== selectedUser.id)
   });
 
-  const confirmRemoveProfile = () => {
-    const updatedUsers = users
-      .filter(u => u.id !== selectedUser.id)
-      .map((u) => ({
-        ...u,
-        projects: (u.projects || []).map(removeUserFromProjectRefs)
-      }));
-    setUsers(updatedUsers);
-    setSelectedUser(null);
-    setIsEditing(false);
-    setEditForm(null);
-    setShowRemoveModal(false);
+  const confirmRemoveProfile = async () => {
+    try {
+      await api.deleteUser(selectedUser.id);
+      const updatedUsers = users
+        .filter(u => u.id !== selectedUser.id)
+        .map((u) => ({
+          ...u,
+          projects: (u.projects || []).map(removeUserFromProjectRefs)
+        }));
+      setUsers(updatedUsers);
+      setSelectedUser(null);
+      setIsEditing(false);
+      setEditForm(null);
+      setShowRemoveModal(false);
+    } catch (error) {
+      alert(error.message);
+    }
   };
 
   // Close dropdown on click outside
@@ -148,6 +177,22 @@ export default function UsersView({ profileTarget, onProfileTargetHandled }) {
 
     return matchesSearch && matchesRole;
   });
+
+  useEffect(() => {
+    let cancelled = false;
+
+    api.getUsers()
+      .then((loadedUsers) => {
+        if (!cancelled) setUsers(loadedUsers);
+      })
+      .catch((error) => {
+        if (!cancelled) alert(error.message);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!profileTarget) return;

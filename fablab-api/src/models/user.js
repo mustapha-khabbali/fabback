@@ -12,6 +12,7 @@ export function toPublicUser(user) {
     niveau: user.niveau,
     filiere: user.filiere,
     annee: user.annee,
+    year: user.annee,
     option: user.option,
     tel: user.tel,
     email: user.email,
@@ -22,6 +23,14 @@ export function toPublicUser(user) {
     isDeactivated: user.is_deactivated,
     charteAccepted: user.charte_accepted,
     reproductionAccepted: user.reproduction_accepted,
+    projects: [],
+    recycleBin: [],
+    interactions: {
+      reviewedOthers: [],
+      helpedOthers: [],
+      helpedBy: [],
+      reviewedByOthers: []
+    },
     createdAt: user.created_at
   };
 }
