@@ -3,32 +3,12 @@ import { poleOptions, niveauOptions, yearOptions, getFiliereOptions, getOptionCh
 import ProjectsPanel from '../components/projects/ProjectsPanel';
 import AddUserModal from '../components/users/AddUserModal';
 import InteractionsPanel from '../components/users/InteractionsPanel';
+import AvatarCropModal from '../components/users/AvatarCropModal';
+import ImageLightbox from '../components/projects/ImageLightbox';
 import { api } from '../services/api';
+import { getCroppedAvatarDataUrl } from '../utils/avatarCrop';
 
 export const MOCK_USERS = [];
-const MAX_AVATAR_SIZE = 512;
-
-function compressAvatarFile(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error('Avatar read failed'));
-    reader.onload = () => {
-      const image = new Image();
-      image.onerror = () => reject(new Error('Avatar image failed'));
-      image.onload = () => {
-        const scale = Math.min(1, MAX_AVATAR_SIZE / Math.max(image.width, image.height));
-        const canvas = document.createElement('canvas');
-        canvas.width = Math.max(1, Math.round(image.width * scale));
-        canvas.height = Math.max(1, Math.round(image.height * scale));
-        const context = canvas.getContext('2d');
-        context.drawImage(image, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL('image/jpeg', 0.82));
-      };
-      image.src = reader.result;
-    };
-    reader.readAsDataURL(file);
-  });
-}
 
 const ALL_COLUMNS = [
   { id: 'nom', label: 'Nom' },
@@ -63,6 +43,9 @@ export default function UsersView({ profileTarget, onProfileTargetHandled }) {
   const [showDeactivateModal, setShowDeactivateModal] = useState(false);
   const [showRemoveModal, setShowRemoveModal] = useState(false);
   const [activeProfileTab, setActiveProfileTab] = useState('info');
+  const [avatarCropImage, setAvatarCropImage] = useState(null);
+  const [isSavingAvatar, setIsSavingAvatar] = useState(false);
+  const [lightboxImage, setLightboxImage] = useState(null);
   const avatarInputRef = useRef(null);
 
   const handleStartEdit = () => {
@@ -182,8 +165,23 @@ export default function UsersView({ profileTarget, onProfileTargetHandled }) {
     const file = event.target.files?.[0];
     if (!file || !selectedUser?.id) return;
 
+    setAvatarCropImage(URL.createObjectURL(file));
+    event.target.value = '';
+  };
+
+  const closeAvatarCrop = () => {
+    if (avatarCropImage) {
+      URL.revokeObjectURL(avatarCropImage);
+    }
+    setAvatarCropImage(null);
+  };
+
+  const saveAvatarCrop = async (cropPixels) => {
+    if (!avatarCropImage || !selectedUser?.id) return;
+
     try {
-      const avatar = await compressAvatarFile(file);
+      setIsSavingAvatar(true);
+      const avatar = await getCroppedAvatarDataUrl(avatarCropImage, cropPixels);
       const updated = await api.updateUser(selectedUser.id, { avatar });
       const updatedUsers = users.map(u => u.id === selectedUser.id ? updated : u);
       setUsers(updatedUsers);
@@ -192,7 +190,8 @@ export default function UsersView({ profileTarget, onProfileTargetHandled }) {
     } catch (error) {
       alert(error.message);
     } finally {
-      event.target.value = '';
+      setIsSavingAvatar(false);
+      closeAvatarCrop();
     }
   };
 
@@ -351,7 +350,12 @@ export default function UsersView({ profileTarget, onProfileTargetHandled }) {
             
             {/* Avatar & Identity Header Card */}
             <div className="section-card p-6 flex flex-col items-center text-center">
-              <div className="w-28 h-28 bg-white/5 border border-white/10 rounded-full flex items-center justify-center overflow-hidden shadow-xl mb-4 relative text-white">
+              <button
+                type="button"
+                onClick={() => selectedUser.avatar && setLightboxImage(selectedUser.avatar)}
+                disabled={!selectedUser.avatar}
+                className="w-28 h-28 bg-white/5 border border-white/10 rounded-full flex items-center justify-center overflow-hidden shadow-xl mb-4 relative text-white disabled:cursor-default"
+              >
                 {selectedUser.avatar ? (
                   <img src={selectedUser.avatar} alt="" className="w-full h-full object-cover" />
                 ) : (
@@ -359,7 +363,7 @@ export default function UsersView({ profileTarget, onProfileTargetHandled }) {
                     <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
                   </svg>
                 )}
-              </div>
+              </button>
               <h3 className="text-xl font-bold text-white tracking-tight">{selectedUser.prenom} {selectedUser.nom}</h3>
               <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
                 {selectedUser.isDeactivated && (
@@ -878,6 +882,19 @@ export default function UsersView({ profileTarget, onProfileTargetHandled }) {
             </div>
           </div>
         )}
+        {avatarCropImage && (
+          <AvatarCropModal
+            image={avatarCropImage}
+            isSaving={isSavingAvatar}
+            onCancel={closeAvatarCrop}
+            onSave={saveAvatarCrop}
+          />
+        )}
+        <ImageLightbox
+          src={lightboxImage}
+          alt="Photo de profil"
+          onClose={() => setLightboxImage(null)}
+        />
       </section>
     );
   }

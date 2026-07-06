@@ -14,7 +14,8 @@
     "exceljs": "^4.4.0",
     "qrcode": "^1.5.4",
     "react": "^19.2.5",
-    "react-dom": "^19.2.5"
+    "react-dom": "^19.2.5",
+    "react-easy-crop": "^6.1.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

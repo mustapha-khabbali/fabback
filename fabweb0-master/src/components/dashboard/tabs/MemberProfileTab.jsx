@@ -3,6 +3,7 @@ import { useApp, TABS } from '../../../context/AppContext';
 import JournalReaderModal from '../project/JournalReaderModal';
 import { buildPresenceHeatmapCells } from '../../../utils/presenceActivity';
 import { findUserByIdentity, getPrimaryUserId, isCurrentUserId } from '../../../utils/userIdentity';
+import ImageLightbox from '../../common/ImageLightbox';
 
 const JOURNAL_COLORS = ['#FF6B6B', '#4ECDC4', '#3B5FE6', '#FF9F43', '#10AC84', '#EE5253', '#5F27CD', '#222F3E'];
 
@@ -22,6 +23,7 @@ export default function MemberProfileTab() {
   const [activeJournal, setActiveJournal] = useState(null);
   const [showJournalReader, setShowJournalReader] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [lightboxImage, setLightboxImage] = useState(null);
 
   // Contribution Workflow
   const [showContributionModal, setShowContributionModal] = useState(false);
@@ -136,7 +138,12 @@ export default function MemberProfileTab() {
       {/* Profile Header */}
       <div className="flex flex-col items-center space-y-4">
         <div className="relative">
-          <div className="w-32 h-32 bg-t-surface glass-card rounded-full border-2 border-[#3B5FE6] flex items-center justify-center overflow-hidden shadow-2xl transition-transform active:scale-95">
+          <button
+            type="button"
+            onClick={() => displayUser.avatar && setLightboxImage(displayUser.avatar)}
+            disabled={!displayUser.avatar}
+            className="w-32 h-32 bg-t-surface glass-card rounded-full border-2 border-[#3B5FE6] flex items-center justify-center overflow-hidden shadow-2xl transition-transform active:scale-95 disabled:cursor-default"
+          >
             {displayUser.avatar ? (
               <img src={displayUser.avatar} alt="" className="w-full h-full object-cover" />
             ) : (
@@ -144,7 +151,7 @@ export default function MemberProfileTab() {
                 <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
               </svg>
             )}
-          </div>
+          </button>
         </div>
         <div className="text-center space-y-2">
           <div className="text-2xl font-bold text-t-primary">{displayUser?.prenom} {displayUser?.nom}</div>
@@ -1075,6 +1082,11 @@ export default function MemberProfileTab() {
           </div>
         </div>
       )}
+      <ImageLightbox
+        src={lightboxImage}
+        alt="Photo de profil"
+        onClose={() => setLightboxImage(null)}
+      />
     </div>
   );
 }

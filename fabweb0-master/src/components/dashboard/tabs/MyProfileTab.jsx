@@ -4,31 +4,11 @@ import { validateEmail, validatePhone } from '../../../utils/validation';
 import { buildPresenceHeatmapCells } from '../../../utils/presenceActivity';
 import SettingsView from './SettingsView';
 import { api } from '../../../services/api';
+import AvatarCropModal from '../../common/AvatarCropModal';
+import ImageLightbox from '../../common/ImageLightbox';
+import { getCroppedAvatarDataUrl } from '../../../utils/avatarCrop';
 
 const SHOW_PROFILE_LEVEL_BADGE = false;
-const MAX_AVATAR_SIZE = 512;
-
-function compressAvatarFile(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error('Avatar read failed'));
-    reader.onload = () => {
-      const image = new Image();
-      image.onerror = () => reject(new Error('Avatar image failed'));
-      image.onload = () => {
-        const scale = Math.min(1, MAX_AVATAR_SIZE / Math.max(image.width, image.height));
-        const canvas = document.createElement('canvas');
-        canvas.width = Math.max(1, Math.round(image.width * scale));
-        canvas.height = Math.max(1, Math.round(image.height * scale));
-        const context = canvas.getContext('2d');
-        context.drawImage(image, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL('image/jpeg', 0.82));
-      };
-      image.src = reader.result;
-    };
-    reader.readAsDataURL(file);
-  });
-}
 
 export default function MyProfileTab() {
   const { 
@@ -81,6 +61,9 @@ export default function MyProfileTab() {
   const heatmapCells = buildPresenceHeatmapCells(currentUser, presenceActivityEvents);
   const containerRef = useRef(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [avatarCropImage, setAvatarCropImage] = useState(null);
+  const [isSavingAvatar, setIsSavingAvatar] = useState(false);
+  const [lightboxImage, setLightboxImage] = useState(null);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -206,14 +189,30 @@ export default function MyProfileTab() {
     const file = e.target.files?.[0];
     if (!file || !currentUser?.id) return;
 
+    setAvatarCropImage(URL.createObjectURL(file));
+    e.target.value = '';
+  };
+
+  const closeAvatarCrop = () => {
+    if (avatarCropImage) {
+      URL.revokeObjectURL(avatarCropImage);
+    }
+    setAvatarCropImage(null);
+  };
+
+  const saveAvatarCrop = async (cropPixels) => {
+    if (!avatarCropImage || !currentUser?.id) return;
+
     try {
-      const avatar = await compressAvatarFile(file);
+      setIsSavingAvatar(true);
+      const avatar = await getCroppedAvatarDataUrl(avatarCropImage, cropPixels);
       const updated = await api.updateUser(currentUser.id, { avatar });
       setCurrentUser(updated);
     } catch {
       showNotification("Impossible de mettre à jour la photo de profil.", 'error');
     } finally {
-      e.target.value = '';
+      setIsSavingAvatar(false);
+      closeAvatarCrop();
     }
   };
 
@@ -255,7 +254,12 @@ export default function MyProfileTab() {
         {/* Profile Header */}
       <div className="flex flex-col items-center space-y-4">
         <div className="relative">
-          <div className="w-32 h-32 bg-t-surface glass-card rounded-full border-2 border-[#3B5FE6] flex items-center justify-center overflow-hidden shadow-2xl transition-transform active:scale-95">
+          <button
+            type="button"
+            onClick={() => currentUser?.avatar && setLightboxImage(currentUser.avatar)}
+            disabled={!currentUser?.avatar}
+            className="w-32 h-32 bg-t-surface glass-card rounded-full border-2 border-[#3B5FE6] flex items-center justify-center overflow-hidden shadow-2xl transition-transform active:scale-95 disabled:cursor-default"
+          >
             {currentUser?.avatar ? (
               <img src={currentUser.avatar} alt="" className="w-full h-full object-cover" />
             ) : (
@@ -263,7 +267,7 @@ export default function MyProfileTab() {
                 <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
               </svg>
             )}
-          </div>
+          </button>
           <label className="absolute bottom-1 right-1 w-9 h-9 bg-[#3B5FE6] text-white rounded-full flex items-center justify-center border-4 border-[#F0F7FF] cursor-pointer hover:brightness-110 shadow-lg">
             <input type="file" className="hidden" accept="image/*" onChange={handleAvatarChange} />
             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -907,6 +911,19 @@ export default function MyProfileTab() {
           </div>
         </div>
       )}
+      {avatarCropImage && (
+        <AvatarCropModal
+          image={avatarCropImage}
+          isSaving={isSavingAvatar}
+          onCancel={closeAvatarCrop}
+          onSave={saveAvatarCrop}
+        />
+      )}
+      <ImageLightbox
+        src={lightboxImage}
+        alt="Photo de profil"
+        onClose={() => setLightboxImage(null)}
+      />
     </>
   );
 }
