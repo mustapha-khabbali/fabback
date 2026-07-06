@@ -176,7 +176,6 @@ export default function ContributorsModal({ project, onClose, onSave, showNotifi
 
       // Move to recycle bin
       const binEntry = {
-        id: Math.random().toString(36).substring(2, 15),
         type: 'member',
         projectId: project.id,
         projectName: project.title,
@@ -302,7 +301,6 @@ export default function ContributorsModal({ project, onClose, onSave, showNotifi
       if (hasAllAdminApprovals) {
         const finalContributors = updatedContributors.filter(item => item.userId !== c.userId);
         const binEntry = {
-          id: Math.random().toString(36).substring(2, 15),
           type: 'member',
           projectId: project.id,
           projectName: project.title,

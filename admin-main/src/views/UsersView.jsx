@@ -33,6 +33,8 @@ export default function UsersView({ profileTarget, onProfileTargetHandled }) {
   const dropdownRef = useRef(null);
 
   const [users, setUsers] = useState(MOCK_USERS);
+  const [allProjects, setAllProjects] = useState([]);
+  const [allRecycleBin, setAllRecycleBin] = useState([]);
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState(null);
   const [showDeactivateModal, setShowDeactivateModal] = useState(false);
@@ -50,8 +52,47 @@ export default function UsersView({ profileTarget, onProfileTargetHandled }) {
     setSelectedUser(updatedUser);
   };
 
-  const updateSelectedUserProjects = (newProjects) => patchSelectedUser({ projects: newProjects });
-  const updateSelectedUserRecycleBin = (newBin) => patchSelectedUser({ recycleBin: newBin });
+  const hydrateUsersWithProjects = (baseUsers, projects, recycleBin) => baseUsers.map((user) => ({
+    ...user,
+    projects: projects.filter((project) =>
+      project.userId === user.id || (project.contributors || []).some((contributor) => contributor.userId === user.id)
+    ),
+    recycleBin: recycleBin.filter((item) => item.ownerId === user.id || item.userId === user.id)
+  }));
+
+  const updateSelectedUserProjects = (newProjects) => {
+    const otherProjects = allProjects.filter((project) =>
+      project.userId !== selectedUser.id && !(project.contributors || []).some((contributor) => contributor.userId === selectedUser.id)
+    );
+    const mergedProjects = [...newProjects, ...otherProjects];
+    setAllProjects(mergedProjects);
+    api.syncProjects(mergedProjects)
+      .then((savedProjects) => {
+        setAllProjects(savedProjects);
+        setUsers((prev) => hydrateUsersWithProjects(prev, savedProjects, allRecycleBin));
+        setSelectedUser((prev) => prev ? {
+          ...prev,
+          projects: savedProjects.filter((project) =>
+            project.userId === prev.id || (project.contributors || []).some((contributor) => contributor.userId === prev.id)
+          )
+        } : prev);
+      })
+      .catch((error) => alert(error.message));
+    patchSelectedUser({ projects: newProjects });
+  };
+
+  const updateSelectedUserRecycleBin = (newBin) => {
+    const otherBin = allRecycleBin.filter((item) => item.ownerId !== selectedUser.id && item.userId !== selectedUser.id);
+    const mergedBin = [...newBin, ...otherBin];
+    setAllRecycleBin(mergedBin);
+    api.syncRecycleBin(mergedBin)
+      .then((savedBin) => {
+        setAllRecycleBin(savedBin);
+        setUsers((prev) => hydrateUsersWithProjects(prev, allProjects, savedBin));
+      })
+      .catch((error) => alert(error.message));
+    patchSelectedUser({ recycleBin: newBin });
+  };
 
   const updateStagiaireRating = async (rating) => {
     if (!selectedUser || selectedUser.role !== 'Stagiaire') return;
@@ -68,8 +109,10 @@ export default function UsersView({ profileTarget, onProfileTargetHandled }) {
     try {
       const created = await api.createUser(newUser);
       setUsers((prevUsers) => [created, ...prevUsers]);
+      return created;
     } catch (error) {
       alert(error.message);
+      return null;
     }
   };
 
@@ -181,9 +224,13 @@ export default function UsersView({ profileTarget, onProfileTargetHandled }) {
   useEffect(() => {
     let cancelled = false;
 
-    api.getUsers()
-      .then((loadedUsers) => {
-        if (!cancelled) setUsers(loadedUsers);
+    Promise.all([api.getUsers(), api.getProjects(), api.getRecycleBin()])
+      .then(([loadedUsers, loadedProjects, loadedRecycleBin]) => {
+        if (!cancelled) {
+          setAllProjects(loadedProjects);
+          setAllRecycleBin(loadedRecycleBin);
+          setUsers(hydrateUsersWithProjects(loadedUsers, loadedProjects, loadedRecycleBin));
+        }
       })
       .catch((error) => {
         if (!cancelled) alert(error.message);

@@ -2,13 +2,14 @@ import { useState } from 'react';
 import { useApp } from '../../../context/AppContext';
 import RichTextEditor from '../../common/RichTextEditor';
 import { getPrimaryUserId } from '../../../utils/userIdentity';
+import { api } from '../../../services/api';
 
 export default function ProjectCreateForm({ onBack }) {
   const { showNotification, userProjects, saveProjects, currentUser, recordPresenceActivity } = useApp();
   const [title, setTitle] = useState('');
   const [desc, setDesc] = useState('');
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     // Basic validation on text content
     const plainText = desc.replace(/<[^>]*>/g, '').trim();
     if (!title || !plainText) {
@@ -16,7 +17,6 @@ export default function ProjectCreateForm({ onBack }) {
       return;
     }
     const newProject = {
-      id: crypto.randomUUID(),
       userId: getPrimaryUserId(currentUser),
       title, 
       description: desc, // Save as HTML
@@ -25,14 +25,19 @@ export default function ProjectCreateForm({ onBack }) {
       color: '#3B5FE6',
       supervisorIds: ['user-sara']
     };
-    saveProjects([...userProjects, newProject]);
-    recordPresenceActivity('project:create', {
-      projectId: newProject.id,
-      projectTitle: newProject.title
-    });
-    setTitle(''); 
-    setDesc('');
-    onBack();
+    try {
+      const created = await api.createProject(newProject);
+      saveProjects([created, ...userProjects]);
+      recordPresenceActivity('project:create', {
+        projectId: created.id,
+        projectTitle: created.title
+      });
+      setTitle(''); 
+      setDesc('');
+      onBack();
+    } catch (error) {
+      showNotification(error.message || "Création du projet impossible.", 'error');
+    }
   };
 
   return (

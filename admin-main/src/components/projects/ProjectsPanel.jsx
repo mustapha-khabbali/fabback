@@ -21,7 +21,7 @@ export default function ProjectsPanel({ projects, recycleBin, usersList, ownerId
   };
 
   const createProject = (newProject) => {
-    onUpdateProjects([...safeProjects, newProject]);
+    onUpdateProjects([{ ...newProject, userId: ownerId, ownerId, supervisorIds: newProject.supervisorIds || ['user-sara'] }, ...safeProjects]);
     setView(VIEWS.HOME);
   };
 

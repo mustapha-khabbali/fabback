@@ -21,7 +21,7 @@ export default function JournalFormModal({ journal, defaultPhase = 'MOC', onSave
   const handleSave = () => {
     if (!hasContent) return;
     onSave({
-      id: journal ? journal.id : crypto.randomUUID(),
+      ...(journal ? { id: journal.id } : {}),
       date,
       phase,
       version: Number(version) || 1,

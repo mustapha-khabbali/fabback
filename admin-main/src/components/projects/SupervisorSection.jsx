@@ -90,10 +90,16 @@ export default function SupervisorSection({ supervisorIds, usersList, onSave, on
     }
   };
 
-  const addNew = () => {
+  const addNew = async () => {
     if (!newPrenom.trim() || !newNom.trim() || !newType.trim()) return;
-    const id = 'encadrant-' + Date.now();
-    setDraft([...draft, { id, prenom: newPrenom.trim(), nom: newNom.trim(), role: newRole, type: newType.trim(), isNew: true }]);
+    const created = await onAddUser({
+      prenom: newPrenom.trim(),
+      nom: newNom.trim(),
+      role: newRole,
+      bio: newType.trim()
+    });
+    if (!created) return;
+    setDraft([...draft, { id: created.id, prenom: created.prenom, nom: created.nom, role: created.role, type: created.bio || newType.trim(), isNew: false }]);
     setNewPrenom('');
     setNewNom('');
     setNewRole('Formateur');

@@ -139,31 +139,6 @@ export function AppProvider({ children }) {
     try { return JSON.parse(localStorage.getItem(PRESENCE_ACTIVITY_STORAGE_KEY) || '[]'); } catch { return []; }
   });
 
-  useEffect(() => {
-    if (!getUserToken()) return;
-    let cancelled = false;
-
-    api.getUsers()
-      .then(async (users) => {
-        if (!cancelled) {
-          const normalizedUsers = users.map(ensureUserIdentity).filter(Boolean);
-          setUsersList(normalizedUsers);
-          persistUsers(normalizedUsers);
-        }
-        return api.getOpenAttendance();
-      })
-      .then((openAttendance) => {
-        if (!cancelled && openAttendance) {
-          setIsUserInLab(true);
-        }
-      })
-      .catch(() => {});
-
-    return () => {
-      cancelled = true;
-    };
-  }, [persistUsers]);
-
   // Feedback state
   const [currentRating, setCurrentRating] = useState(0);
 
@@ -216,6 +191,42 @@ export function AppProvider({ children }) {
   });
   const [currentProjectId, setCurrentProjectId] = useState(null);
 
+  useEffect(() => {
+    if (!getUserToken()) return;
+    let cancelled = false;
+
+    api.getUsers()
+      .then(async (users) => {
+        if (!cancelled) {
+          const normalizedUsers = users.map(ensureUserIdentity).filter(Boolean);
+          setUsersList(normalizedUsers);
+          persistUsers(normalizedUsers);
+        }
+        const [projects, bin, openAttendance] = await Promise.all([
+          api.getProjects(),
+          api.getRecycleBin(),
+          api.getOpenAttendance()
+        ]);
+        return { projects, bin, openAttendance };
+      })
+      .then(({ projects, bin, openAttendance }) => {
+        if (!cancelled) {
+          setUserProjects(projects);
+          localStorage.setItem('user_projects', JSON.stringify(projects));
+          setRecycleBin(bin);
+          localStorage.setItem('recycle_bin', JSON.stringify(bin));
+        }
+        if (!cancelled && openAttendance) {
+          setIsUserInLab(true);
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [persistUsers]);
+
   // Article management
   const [userArticles, setUserArticles] = useState(() => {
     try { return JSON.parse(localStorage.getItem('user_articles') || '[]'); } catch { return []; }
@@ -264,11 +275,23 @@ export function AppProvider({ children }) {
   const saveProjects = useCallback((projects) => {
     setUserProjects(projects);
     localStorage.setItem('user_projects', JSON.stringify(projects));
+    api.syncProjects(projects)
+      .then((savedProjects) => {
+        setUserProjects(savedProjects);
+        localStorage.setItem('user_projects', JSON.stringify(savedProjects));
+      })
+      .catch(() => {});
   }, []);
 
   const saveRecycleBin = useCallback((bin) => {
     setRecycleBin(bin);
     localStorage.setItem('recycle_bin', JSON.stringify(bin));
+    api.syncRecycleBin(bin)
+      .then((savedBin) => {
+        setRecycleBin(savedBin);
+        localStorage.setItem('recycle_bin', JSON.stringify(savedBin));
+      })
+      .catch(() => {});
   }, []);
 
   const saveArticles = useCallback((articles) => {

@@ -111,7 +111,6 @@ export default function ProjectDetail({ onBack }) {
       if (hasAllAdminApprovals) {
         finalContributors = updatedContributors.filter(item => item.userId !== approvingMember.userId);
         const binEntry = {
-          id: Math.random().toString(36).substring(2, 15),
           type: 'member',
           projectId: project.id,
           projectName: project.title,
@@ -462,14 +461,13 @@ export default function ProjectDetail({ onBack }) {
       );
     } else {
       // Creating new
-      const entry = { id: crypto.randomUUID(), date, content, image: tempImage, phase, version };
+      const entry = { date, content, image: tempImage, phase, version };
       updated = userProjects.map(p =>
         p.id === currentProjectId ? { ...p, journals: [entry, ...p.journals] } : p
       );
       recordPresenceActivity('journal:create', {
         projectId: project.id,
         projectTitle: project.title,
-        journalId: entry.id,
         phase,
         version
       });

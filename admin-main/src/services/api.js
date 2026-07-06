@@ -145,6 +145,40 @@ export const api = {
     return body.attendance || [];
   },
 
+  async getProjects() {
+    const body = await request('/projects');
+    return body.projects || [];
+  },
+
+  async createProject(project) {
+    const body = await request('/projects', {
+      method: 'POST',
+      body: JSON.stringify(project)
+    });
+    return body.project;
+  },
+
+  async syncProjects(projects) {
+    const body = await request('/projects/sync', {
+      method: 'PUT',
+      body: JSON.stringify({ projects })
+    });
+    return body.projects || [];
+  },
+
+  async getRecycleBin() {
+    const body = await request('/projects/recycle-bin');
+    return body.recycleBin || [];
+  },
+
+  async syncRecycleBin(recycleBin) {
+    const body = await request('/projects/recycle-bin', {
+      method: 'PUT',
+      body: JSON.stringify({ recycleBin })
+    });
+    return body.recycleBin || [];
+  },
+
   async saveGateConfig(config) {
     const body = await request('/gate/config', {
       method: 'PUT',

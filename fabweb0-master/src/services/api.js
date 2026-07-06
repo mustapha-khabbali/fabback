@@ -66,6 +66,14 @@ export const api = {
     return body.users || [];
   },
 
+  async createUser(user) {
+    const body = await request('/users', {
+      method: 'POST',
+      body: JSON.stringify(user)
+    });
+    return body.user;
+  },
+
   async getGateConfig() {
     return request('/gate/config');
   },
@@ -89,6 +97,40 @@ export const api = {
   async getOpenAttendance() {
     const body = await request('/attendance/open');
     return body.attendance;
+  },
+
+  async getProjects() {
+    const body = await request('/projects');
+    return body.projects || [];
+  },
+
+  async createProject(project) {
+    const body = await request('/projects', {
+      method: 'POST',
+      body: JSON.stringify(project)
+    });
+    return body.project;
+  },
+
+  async syncProjects(projects) {
+    const body = await request('/projects/sync', {
+      method: 'PUT',
+      body: JSON.stringify({ projects })
+    });
+    return body.projects || [];
+  },
+
+  async getRecycleBin() {
+    const body = await request('/projects/recycle-bin');
+    return body.recycleBin || [];
+  },
+
+  async syncRecycleBin(recycleBin) {
+    const body = await request('/projects/recycle-bin', {
+      method: 'PUT',
+      body: JSON.stringify({ recycleBin })
+    });
+    return body.recycleBin || [];
   },
 
   logout() {

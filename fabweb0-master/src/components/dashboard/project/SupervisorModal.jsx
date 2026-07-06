@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useApp } from '../../../context/AppContext';
+import { api } from '../../../services/api';
 
 const SYSTEM_SUPERVISOR_IDS = ['user-sara', 'system-sara'];
 
@@ -118,15 +119,13 @@ export default function SupervisorModal({ project, onClose, onSave }) {
     setPresetPick(presetPick === preset.title ? null : preset.title);
   };
 
-  const handleCreateAndAssign = () => {
+  const handleCreateAndAssign = async () => {
     if (!newPrenom.trim() || !newNom.trim() || !newType.trim()) {
       showNotification('Prénom, Nom et Type requis.', 'error');
       return;
     }
 
-    const newId = 'encadrant-' + Date.now();
-    const newSupervisor = {
-      id: newId,
+    const newSupervisor = await api.createUser({
       prenom: newPrenom.trim(),
       nom: newNom.trim(),
       role: newRole,
@@ -138,12 +137,12 @@ export default function SupervisorModal({ project, onClose, onSave }) {
       bio: newType.trim(),
       points: 0,
       avatar: null
-    };
+    });
 
     addCustomUser(newSupervisor);
     setLocalCustomUsers((prev) => [...prev, newSupervisor]);
 
-    const nextIds = [...selectedIds, newId];
+    const nextIds = [...selectedIds, newSupervisor.id];
     setSelectedIds(nextIds);
     saveIds(nextIds);
 

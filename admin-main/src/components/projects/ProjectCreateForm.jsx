@@ -10,7 +10,6 @@ export default function ProjectCreateForm({ onCreate, onBack }) {
   const handleCreate = () => {
     if (!title.trim() || !hasDescription) return;
     onCreate({
-      id: crypto.randomUUID(),
       title: title.trim(),
       description,
       phase: 'MOC',

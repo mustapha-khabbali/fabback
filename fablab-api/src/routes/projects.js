@@ -1,0 +1,377 @@
+import express from 'express';
+import { z } from 'zod';
+import { query, withTransaction } from '../db/pool.js';
+import { requireAuth } from '../middleware/auth.js';
+
+export const projectsRouter = express.Router();
+
+const contributorSchema = z.object({
+  userId: z.string(),
+  role: z.string().optional().nullable(),
+  accessLevel: z.enum(['CO_FOUNDER', 'MEMBER']).optional().nullable(),
+  isAdmin: z.boolean().optional().nullable(),
+  status: z.enum(['PENDING', 'ACCEPTED']).optional().nullable(),
+  pendingRole: z.string().optional().nullable(),
+  pendingAccessLevel: z.string().optional().nullable(),
+  pendingIsAdmin: z.boolean().optional().nullable(),
+  pendingRemove: z.boolean().optional().nullable(),
+  approvals: z.array(z.string()).optional().nullable(),
+  memberAccepted: z.boolean().optional().nullable()
+});
+
+const journalSchema = z.object({
+  id: z.string().uuid().optional(),
+  date: z.string(),
+  title: z.string().optional().nullable(),
+  content: z.string().optional().nullable(),
+  image: z.string().optional().nullable(),
+  phase: z.string().optional().nullable(),
+  version: z.number().int().optional().nullable()
+});
+
+const projectSchema = z.object({
+  id: z.string().uuid().optional(),
+  userId: z.string().optional(),
+  ownerId: z.string().optional(),
+  title: z.string().trim().min(1),
+  description: z.string().optional().nullable(),
+  phase: z.enum(['MOC', 'POC', 'MVP', 'READY_TO_MARKET']).optional().nullable(),
+  image: z.string().optional().nullable(),
+  color: z.string().optional().nullable(),
+  contributors: z.array(contributorSchema).optional(),
+  supervisorIds: z.array(z.string()).optional(),
+  sdgIds: z.array(z.string()).optional(),
+  journals: z.array(journalSchema).optional(),
+  reviewRequested: z.boolean().optional().nullable(),
+  status: z.string().optional().nullable()
+});
+
+const recycleSchema = z.object({
+  id: z.string().uuid().optional(),
+  ownerId: z.string().optional().nullable(),
+  type: z.enum(['project', 'journal', 'member']),
+  payload: z.record(z.any()).optional(),
+  deletedAt: z.string().optional(),
+  projectId: z.string().optional(),
+  projectName: z.string().optional(),
+  memberData: z.record(z.any()).optional()
+}).passthrough();
+
+function toDateInput(value) {
+  if (!value) return '';
+  if (typeof value === 'string') return value.slice(0, 10);
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, '0');
+  const day = String(value.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+async function loadProjects(client, user) {
+  const projectResult = await client.query(
+    `
+      select p.*
+      from projects p
+      where $1 = 'administrateur'
+        or p.owner_id = $2
+        or exists (
+          select 1 from project_contributors pc
+          where pc.project_id = p.id and pc.user_id = $2
+        )
+      order by p.created_at desc
+    `,
+    [user.role, user.id]
+  );
+  const projectIds = projectResult.rows.map((row) => row.id);
+  if (!projectIds.length) return [];
+
+  const contributors = await client.query('select * from project_contributors where project_id = any($1::uuid[]) order by added_at', [projectIds]);
+  const supervisors = await client.query('select * from project_supervisors where project_id = any($1::uuid[])', [projectIds]);
+  const sdgs = await client.query('select * from project_sdgs where project_id = any($1::uuid[])', [projectIds]);
+  const journals = await client.query('select * from journals where project_id = any($1::uuid[]) order by created_at desc', [projectIds]);
+
+  return projectResult.rows.map((project) => ({
+    id: project.id,
+    userId: project.owner_id,
+    ownerId: project.owner_id,
+    title: project.title,
+    description: project.description,
+    phase: project.phase,
+    image: project.image,
+    color: '#3B5FE6',
+    contributors: contributors.rows
+      .filter((row) => row.project_id === project.id)
+      .map((row) => ({
+        userId: row.user_id,
+        role: row.role,
+        accessLevel: row.access_level,
+        isAdmin: row.is_admin,
+        status: row.status,
+        pendingRole: row.pending_role,
+        pendingAccessLevel: row.pending_access_level,
+        pendingIsAdmin: row.pending_is_admin,
+        pendingRemove: row.pending_remove,
+        approvals: row.approvals,
+        memberAccepted: row.member_accepted
+      })),
+    supervisorIds: supervisors.rows.filter((row) => row.project_id === project.id).map((row) => row.user_id),
+    sdgIds: sdgs.rows.filter((row) => row.project_id === project.id).map((row) => row.sdg_id),
+    journals: journals.rows
+      .filter((row) => row.project_id === project.id)
+      .map((row) => ({
+        id: row.id,
+        date: toDateInput(row.date),
+        title: row.title,
+        content: row.content,
+        image: row.image,
+        phase: row.phase,
+        version: row.version
+      })),
+    createdAt: project.created_at
+  }));
+}
+
+async function replaceProject(client, project, ownerId) {
+  const projectId = project.id;
+  const row = projectId
+    ? await client.query(
+      `
+        update projects
+        set title = $1, description = $2, phase = $3, image = $4, updated_at = now()
+        where id = $5
+        returning id
+      `,
+      [project.title, project.description || '', project.phase || 'MOC', project.image || null, projectId]
+    )
+    : await client.query(
+      `
+        insert into projects (owner_id, title, description, phase, image)
+        values ($1, $2, $3, $4, $5)
+        returning id
+      `,
+      [ownerId, project.title, project.description || '', project.phase || 'MOC', project.image || null]
+    );
+
+  const id = row.rows[0]?.id || projectId;
+  if (!id) return null;
+
+  await client.query('delete from project_contributors where project_id = $1', [id]);
+  await client.query('delete from project_supervisors where project_id = $1', [id]);
+  await client.query('delete from project_sdgs where project_id = $1', [id]);
+  await client.query('delete from journals where project_id = $1', [id]);
+
+  for (const contributor of project.contributors || []) {
+    await client.query(
+      `
+        insert into project_contributors (
+          project_id, user_id, role, access_level, is_admin, status,
+          pending_role, pending_access_level, pending_is_admin, pending_remove,
+          approvals, member_accepted
+        )
+        values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12)
+      `,
+      [
+        id,
+        contributor.userId,
+        contributor.role || 'Tuteur',
+        contributor.accessLevel || 'MEMBER',
+        Boolean(contributor.isAdmin),
+        contributor.status || 'PENDING',
+        contributor.pendingRole || null,
+        contributor.pendingAccessLevel || null,
+        contributor.pendingIsAdmin ?? null,
+        contributor.pendingRemove ?? null,
+        contributor.approvals ? JSON.stringify(contributor.approvals) : null,
+        contributor.memberAccepted ?? null
+      ]
+    );
+  }
+
+  for (const supervisorId of project.supervisorIds || ['user-sara']) {
+    await client.query(
+      `
+        insert into project_supervisors (project_id, user_id)
+        values ($1, $2)
+        on conflict do nothing
+      `,
+      [id, supervisorId]
+    );
+  }
+
+  for (const sdgId of (project.sdgIds || []).slice(0, 3)) {
+    await client.query(
+      'insert into project_sdgs (project_id, sdg_id) values ($1, $2) on conflict do nothing',
+      [id, sdgId]
+    );
+  }
+
+  for (const journal of project.journals || []) {
+    if (journal.id) {
+      await client.query(
+        `
+          insert into journals (id, project_id, date, title, content, image, phase, version)
+          values ($1,$2,$3,$4,$5,$6,$7,$8)
+        `,
+        [journal.id, id, journal.date, journal.title || null, journal.content || '', journal.image || null, journal.phase || null, journal.version || 1]
+      );
+    } else {
+      await client.query(
+        `
+          insert into journals (project_id, date, title, content, image, phase, version)
+          values ($1,$2,$3,$4,$5,$6,$7)
+        `,
+        [id, journal.date, journal.title || null, journal.content || '', journal.image || null, journal.phase || null, journal.version || 1]
+      );
+    }
+  }
+
+  return id;
+}
+
+function canWriteProject(user, project) {
+  if (user.role === 'administrateur') return true;
+  if (!project.id) return true;
+  if (project.userId === user.id || project.ownerId === user.id) return true;
+  return (project.contributors || []).some((contributor) =>
+    contributor.userId === user.id
+    && contributor.status === 'ACCEPTED'
+    && (contributor.accessLevel === 'CO_FOUNDER' || contributor.isAdmin)
+  );
+}
+
+projectsRouter.use(requireAuth);
+
+projectsRouter.get('/', async (req, res, next) => {
+  try {
+    const projects = await withTransaction((client) => loadProjects(client, req.user));
+    res.json({ projects });
+  } catch (error) {
+    next(error);
+  }
+});
+
+projectsRouter.get('/mine', async (req, res, next) => {
+  try {
+    const projects = await withTransaction((client) => loadProjects(client, req.user));
+    res.json({ projects });
+  } catch (error) {
+    next(error);
+  }
+});
+
+projectsRouter.put('/sync', async (req, res, next) => {
+  try {
+    const parsed = z.object({ projects: z.array(projectSchema) }).safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: 'Invalid request body', details: parsed.error.flatten() });
+      return;
+    }
+
+    const projects = await withTransaction(async (client) => {
+      for (const project of parsed.data.projects) {
+        if (!canWriteProject(req.user, project)) continue;
+        await replaceProject(client, project, project.userId || project.ownerId || req.user.id);
+      }
+      return loadProjects(client, req.user);
+    });
+
+    res.json({ projects });
+  } catch (error) {
+    next(error);
+  }
+});
+
+projectsRouter.post('/', async (req, res, next) => {
+  try {
+    const parsed = projectSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: 'Invalid request body', details: parsed.error.flatten() });
+      return;
+    }
+
+    const projects = await withTransaction(async (client) => {
+      await replaceProject(client, parsed.data, parsed.data.userId || req.user.id);
+      return loadProjects(client, req.user);
+    });
+
+    res.status(201).json({ project: projects[0], projects });
+  } catch (error) {
+    next(error);
+  }
+});
+
+projectsRouter.get('/recycle-bin', async (req, res, next) => {
+  try {
+    const result = await query(
+      `
+        select *
+        from recycle_bin
+        where $1 = 'administrateur' or owner_id = $2
+        order by deleted_at desc
+      `,
+      [req.user.role, req.user.id]
+    );
+    res.json({
+      recycleBin: result.rows.map((row) => ({
+        id: row.id,
+        ownerId: row.owner_id,
+        type: row.type,
+        deletedAt: row.deleted_at,
+        ...(row.payload || {})
+      }))
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+projectsRouter.put('/recycle-bin', async (req, res, next) => {
+  try {
+    const parsed = z.object({ recycleBin: z.array(recycleSchema) }).safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: 'Invalid request body', details: parsed.error.flatten() });
+      return;
+    }
+
+    const recycleBin = await withTransaction(async (client) => {
+      if (req.user.role === 'administrateur') {
+        await client.query('delete from recycle_bin');
+      } else {
+        await client.query('delete from recycle_bin where owner_id = $1', [req.user.id]);
+      }
+      for (const item of parsed.data.recycleBin) {
+        const { id, ownerId, type, deletedAt, ...payload } = item;
+        if (id) {
+          await client.query(
+            'insert into recycle_bin (id, owner_id, type, payload, deleted_at) values ($1,$2,$3,$4::jsonb,$5)',
+            [id, ownerId || req.user.id, type, JSON.stringify(payload.payload || payload), deletedAt || new Date().toISOString()]
+          );
+        } else {
+          await client.query(
+            'insert into recycle_bin (owner_id, type, payload, deleted_at) values ($1,$2,$3::jsonb,$4)',
+            [ownerId || req.user.id, type, JSON.stringify(payload.payload || payload), deletedAt || new Date().toISOString()]
+          );
+        }
+      }
+      const result = await client.query(
+        `
+          select *
+          from recycle_bin
+          where $1 = 'administrateur' or owner_id = $2
+          order by deleted_at desc
+        `,
+        [req.user.role, req.user.id]
+      );
+      return result.rows.map((row) => ({
+        id: row.id,
+        ownerId: row.owner_id,
+        type: row.type,
+        deletedAt: row.deleted_at,
+        ...(row.payload || {})
+      }));
+    });
+
+    res.json({ recycleBin });
+  } catch (error) {
+    next(error);
+  }
+});

@@ -157,7 +157,7 @@ usersRouter.get('/', async (req, res, next) => {
   }
 });
 
-usersRouter.post('/', requireRole('administrateur'), async (req, res, next) => {
+usersRouter.post('/', async (req, res, next) => {
   try {
     const parsed = createUserSchema.safeParse(req.body);
     if (!parsed.success) {

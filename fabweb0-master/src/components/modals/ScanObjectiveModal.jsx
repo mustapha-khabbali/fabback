@@ -210,7 +210,7 @@ export default function ScanObjectiveModal() {
     setShowNewSupervisor(false);
   };
 
-  const addSupervisorToProject = () => {
+  const addSupervisorToProject = async () => {
     if (!selectedProject) {
       showNotification('Veuillez choisir un projet.', 'error');
       return;
@@ -220,8 +220,8 @@ export default function ScanObjectiveModal() {
       return;
     }
 
-    const newSupervisor = {
-      id: 'encadrant-' + Date.now(),
+    try {
+      const newSupervisor = await api.createUser({
       prenom: newPrenom.trim(),
       nom: newNom.trim(),
       role: newRole,
@@ -233,15 +233,18 @@ export default function ScanObjectiveModal() {
       bio: newType.trim(),
       points: 0,
       avatar: null
-    };
+      });
 
-    addCustomUser(newSupervisor);
-    attachSupervisorToProject(newSupervisor.id);
+      addCustomUser(newSupervisor);
+      attachSupervisorToProject(newSupervisor.id);
 
-    setNewPrenom('');
-    setNewNom('');
-    setNewRole('formateur');
-    setNewType('');
+      setNewPrenom('');
+      setNewNom('');
+      setNewRole('formateur');
+      setNewType('');
+    } catch (error) {
+      showNotification(error.message || "Création de l'encadrant impossible.", 'error');
+    }
   };
 
   const finalize = async () => {

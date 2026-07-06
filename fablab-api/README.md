@@ -30,6 +30,11 @@ curl http://localhost:4000/api/health
 `POST /api/auth/google` verifies Firebase tokens with the service account path in
 `FIREBASE_SERVICE_ACCOUNT`.
 
+## Frontend Local Caches
+
+`lab_attendance` in the user app is only a local cache used by the profile heatmap.
+PostgreSQL is the source of truth for check-in/check-out records.
+
 ## Seeded Records
 
 - `user-sara`: Sara Ladouy, administrateur, Responsable Fab Lab, also the seeded admin login.
