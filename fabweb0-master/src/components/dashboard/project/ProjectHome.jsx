@@ -16,7 +16,6 @@ function uniqueProjectsById(projects) {
 export default function ProjectHome({ onCreateProject, onShowDetail, onShowRecycle, onShowArticles }) {
   const { currentUser, userProjects, allProjects, saveProjects, setCurrentProjectId, recycleBin, saveRecycleBin, showNotification, usersList } = useApp();
   const currentUserId = getPrimaryUserId(currentUser);
-  const canRemoveProjects = currentUser?.role !== 'stagiaire';
   const [isDeleteMode, setIsDeleteMode] = useState(false);
   const [selectedProjects, setSelectedProjects] = useState([]);
   
@@ -25,7 +24,7 @@ export default function ProjectHome({ onCreateProject, onShowDetail, onShowRecyc
   const [currentDecisionIndex, setCurrentDecisionIndex] = useState(-1);
 
   const handleProjectClick = (id) => {
-    if (canRemoveProjects && isDeleteMode) {
+    if (isDeleteMode) {
       if (selectedProjects.includes(id)) {
         setSelectedProjects(selectedProjects.filter(p => p !== id));
       } else {
@@ -38,8 +37,6 @@ export default function ProjectHome({ onCreateProject, onShowDetail, onShowRecyc
   };
 
   const confirmDelete = () => {
-    if (!canRemoveProjects) return;
-
     if (selectedProjects.length === 0) {
       setIsDeleteMode(false);
       return;
@@ -119,7 +116,7 @@ export default function ProjectHome({ onCreateProject, onShowDetail, onShowRecyc
       {/* Sticky Header */}
       <div className="sticky top-0 z-20 main-container pt-8 pb-4 px-6 shrink-0 border-b border-t-border/50 lg:bg-transparent lg:border-none lg:pt-12 lg:px-12 flex justify-between items-center">
         <h2 className="text-2xl font-bold text-t-primary lg:text-4xl">Mon Projet</h2>
-        {canRemoveProjects && isDeleteMode && (
+        {isDeleteMode && (
           <button 
             onClick={confirmDelete}
             className="px-6 py-2 bg-red-500 text-white text-[10px] font-bold uppercase tracking-widest rounded-full shadow-lg shadow-red-500/20 animate-pulse active:scale-95 transition-all"
@@ -133,7 +130,7 @@ export default function ProjectHome({ onCreateProject, onShowDetail, onShowRecyc
       <div className="flex-1 overflow-y-auto custom-scrollbar px-6 py-6 lg:px-12 lg:py-8">
         <div className="space-y-6 lg:max-w-7xl lg:mx-auto">
           <h3 className="text-[10px] font-bold text-t-muted uppercase tracking-[0.2em] px-1 lg:text-sm lg:tracking-widest">
-            {canRemoveProjects && isDeleteMode ? 'Sélectionner les projets à supprimer' : 'Mes Dossiers'}
+            {isDeleteMode ? 'Sélectionner les projets à supprimer' : 'Mes Dossiers'}
           </h3>
           <div className="grid grid-cols-3 gap-x-4 gap-y-6 lg:grid-cols-6 lg:gap-8 lg:gap-y-12">
             {(() => {
@@ -210,21 +207,19 @@ export default function ProjectHome({ onCreateProject, onShowDetail, onShowRecyc
           <span className="text-[9px] font-bold text-t-primary uppercase tracking-tight lg:text-xs lg:text-white lg:tracking-wide">Créer</span>
         </button>
 
-        {canRemoveProjects && (
-          <button 
-            onClick={() => { setIsDeleteMode(!isDeleteMode); setSelectedProjects([]); }} 
-            className={`flex-1 flex flex-col items-center justify-center p-3 border rounded-[28px] shadow-sm space-y-1 transition-all active:scale-95 lg:flex-row lg:flex-initial lg:px-6 lg:py-3 lg:rounded-full lg:h-12 lg:space-y-0 lg:space-x-2 ${
-              isDeleteMode ? 'bg-red-50 border-red-200 lg:bg-red-500 lg:border-none' : 'bg-t-surface border-t-border lg:bg-t-surface-alt lg:border-t-border-strong'
-            }`}
-          >
-            <div className={`p-1.5 rounded-xl lg:p-0 lg:bg-transparent ${isDeleteMode ? 'bg-red-100 text-red-600 lg:text-white' : 'bg-red-50 text-red-500'}`}>
-              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-            </div>
-            <span className={`text-[9px] font-bold uppercase tracking-tight lg:text-xs lg:tracking-wide ${isDeleteMode ? 'text-red-700 lg:text-white' : 'text-t-primary'}`}>
-              {isDeleteMode ? 'Annuler' : 'Supprimer'}
-            </span>
-          </button>
-        )}
+        <button 
+          onClick={() => { setIsDeleteMode(!isDeleteMode); setSelectedProjects([]); }} 
+          className={`flex-1 flex flex-col items-center justify-center p-3 border rounded-[28px] shadow-sm space-y-1 transition-all active:scale-95 lg:flex-row lg:flex-initial lg:px-6 lg:py-3 lg:rounded-full lg:h-12 lg:space-y-0 lg:space-x-2 ${
+            isDeleteMode ? 'bg-red-50 border-red-200 lg:bg-red-500 lg:border-none' : 'bg-t-surface border-t-border lg:bg-t-surface-alt lg:border-t-border-strong'
+          }`}
+        >
+          <div className={`p-1.5 rounded-xl lg:p-0 lg:bg-transparent ${isDeleteMode ? 'bg-red-100 text-red-600 lg:text-white' : 'bg-red-50 text-red-500'}`}>
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+          </div>
+          <span className={`text-[9px] font-bold uppercase tracking-tight lg:text-xs lg:tracking-wide ${isDeleteMode ? 'text-red-700 lg:text-white' : 'text-t-primary'}`}>
+            {isDeleteMode ? 'Annuler' : 'Supprimer'}
+          </span>
+        </button>
 
         {SHOW_ARTICLES_BUTTON && (
           <button onClick={onShowArticles} className="flex-1 flex flex-col items-center justify-center p-3 bg-t-surface border border-t-border rounded-[28px] shadow-sm space-y-1 hover:bg-t-surface-alt transition-all active:scale-95 lg:flex-row lg:flex-initial lg:px-6 lg:py-3 lg:rounded-full lg:h-12 lg:space-y-0 lg:space-x-2 lg:bg-t-surface-alt lg:hover:bg-t-surface-alt lg:border-t-border-strong lg:shadow-md">
@@ -235,14 +230,12 @@ export default function ProjectHome({ onCreateProject, onShowDetail, onShowRecyc
           </button>
         )}
 
-        {canRemoveProjects && (
-          <button onClick={onShowRecycle} className="flex-1 flex flex-col items-center justify-center p-3 bg-t-surface border border-t-border rounded-[28px] shadow-sm space-y-1 hover:bg-t-surface-alt transition-all active:scale-95 lg:flex-row lg:flex-initial lg:px-6 lg:py-3 lg:rounded-full lg:h-12 lg:space-y-0 lg:space-x-2 lg:bg-t-surface-alt lg:hover:bg-t-surface-alt lg:border-t-border-strong lg:shadow-md lg:group">
-            <div className="p-1.5 bg-indigo-50 text-indigo-600 rounded-xl lg:p-0 lg:bg-transparent lg:text-indigo-500">
-              <svg className="h-5 w-5 lg:h-5 lg:w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-            </div>
-            <span className="text-[9px] font-bold text-t-primary uppercase tracking-tight lg:text-xs lg:tracking-wide">Bin</span>
-          </button>
-        )}
+        <button onClick={onShowRecycle} className="flex-1 flex flex-col items-center justify-center p-3 bg-t-surface border border-t-border rounded-[28px] shadow-sm space-y-1 hover:bg-t-surface-alt transition-all active:scale-95 lg:flex-row lg:flex-initial lg:px-6 lg:py-3 lg:rounded-full lg:h-12 lg:space-y-0 lg:space-x-2 lg:bg-t-surface-alt lg:hover:bg-t-surface-alt lg:border-t-border-strong lg:shadow-md lg:group">
+          <div className="p-1.5 bg-indigo-50 text-indigo-600 rounded-xl lg:p-0 lg:bg-transparent lg:text-indigo-500">
+            <svg className="h-5 w-5 lg:h-5 lg:w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+          </div>
+          <span className="text-[9px] font-bold text-t-primary uppercase tracking-tight lg:text-xs lg:tracking-wide">Bin</span>
+        </button>
       </div>
 
       {/* Delete Decision Modal */}
