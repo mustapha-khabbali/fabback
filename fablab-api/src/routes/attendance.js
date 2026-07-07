@@ -98,7 +98,8 @@ async function autoCloseAttendance(client, attendanceId) {
     `
       update attendance
       set
-        timestamp_out = (
+        timestamp_out = greatest(
+          timestamp_in,
           ((timestamp_in at time zone $2)::date + time '18:30') at time zone $2
         ),
         rating = null,
