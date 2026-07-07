@@ -17,6 +17,8 @@ const MOROCCAN_HOLIDAYS_2026 = [
   { id: 'h12', name: '1er Moharram (Est.)', date: '2026-06-16' },
 ];
 
+const LAB_TIME_ZONE = 'Africa/Casablanca';
+
 const ROLE_OPTIONS = [
   { value: 'all', label: 'Tous' },
   { value: 'stagiaire', label: 'Stagiaire' },
@@ -120,7 +122,21 @@ function toISODate(date) {
   return date.toISOString().split('T')[0];
 }
 
+function toLabISODate(dateValue) {
+  const date = dateValue instanceof Date ? dateValue : new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return '';
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: LAB_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(date);
+  const partByType = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${partByType.year}-${partByType.month}-${partByType.day}`;
+}
+
 function formatTime(dateValue) {
+  if (!dateValue) return '';
   const date = new Date(dateValue);
   if (Number.isNaN(date.getTime())) return '';
   return date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
@@ -180,13 +196,13 @@ function rowMatchesPeriod(row, dateMode, singleDate, dateFrom, dateTo, timeFrom,
 
 function readCurrentPresenceRows(attendanceRows) {
   const now = new Date();
-  const today = toISODate(now);
+  const today = toLabISODate(now);
   return attendanceRows
     .map(normalizeDashboardJournalRow)
     .filter((row) => {
       const timestampIn = safeDate(row.timestampIn || `${row.date}T${row.timeIn}:00`);
       const timestampOut = safeDate(row.timestampOut || (row.date && row.timeOut ? `${row.date}T${row.timeOut}:00` : ''));
-      return row.date === today && timestampIn && timestampIn <= now && !timestampOut;
+      return timestampIn && toLabISODate(timestampIn) === today && timestampIn <= now && !timestampOut;
     });
 }
 

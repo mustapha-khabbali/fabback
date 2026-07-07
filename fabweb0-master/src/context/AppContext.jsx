@@ -8,6 +8,7 @@ import {
 import { ensureUserIdentity, mergeUserByIdentity, getPrimaryUserId } from '../utils/userIdentity';
 import { api, getUserToken } from '../services/api';
 import { startRealtime, stopRealtime, subscribeRealtime } from '../services/realtime';
+import { useFirebase } from './FirebaseContext';
 
 const AppContext = createContext(null);
 
@@ -35,6 +36,7 @@ export const TABS = {
 export function AppProvider({ children }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const firebase = useFirebase();
 
   // We can derive currentScreen from the pathname if really needed, but mostly we just navigate
   const currentScreen = location.pathname === '/' ? SCREENS.HOME : location.pathname.replace('/', '');
@@ -238,6 +240,19 @@ export function AppProvider({ children }) {
       .catch(() => {});
   }, []);
 
+  const mergeRealtimeNotification = useCallback((change) => {
+    if (!change.notification) return;
+    setNotifications((currentNotifications) => {
+      const withoutCurrent = currentNotifications.filter((notification) => notification.id !== change.notification.id);
+      if (change.action === 'update') {
+        return currentNotifications.map((notification) => (
+          notification.id === change.notification.id ? change.notification : notification
+        ));
+      }
+      return [change.notification, ...withoutCurrent];
+    });
+  }, []);
+
   const refreshOpenAttendance = useCallback((cancelledRef = { current: false }) => {
     api.getOpenAttendance()
       .then((openAttendance) => {
@@ -326,6 +341,28 @@ export function AppProvider({ children }) {
   }, [navigate]);
 
   useEffect(() => {
+    let cancelled = false;
+    const unsubscribe = firebase.onAuthStateChanged(firebase.auth, (firebaseUser) => {
+      if (!firebaseUser || !getUserToken()) return;
+
+      api.getCurrentUser()
+        .then((user) => {
+          if (cancelled || !user) return;
+          setCurrentUser(ensureUserIdentity(user));
+          if (location.pathname === '/') {
+            showLogin();
+          }
+        })
+        .catch(() => {});
+    });
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, [firebase, location.pathname, setCurrentUser, showLogin]);
+
+  useEffect(() => {
     if (!getUserToken()) {
       stopRealtime();
       return undefined;
@@ -335,6 +372,7 @@ export function AppProvider({ children }) {
     const unsubscribe = subscribeRealtime((change) => {
       const currentUserId = getPrimaryUserId(currentUserRef.current);
       if (change.entity === 'notifications') {
+        mergeRealtimeNotification(change);
         refreshNotifications();
       }
       if (change.entity === 'projects') {
@@ -367,7 +405,7 @@ export function AppProvider({ children }) {
       unsubscribe();
       stopRealtime();
     };
-  }, [refreshCurrentUser, refreshGateCache, refreshNotifications, refreshOpenAttendance, refreshProjects, refreshUsers, setCurrentUser, showLogin, showNotification]);
+  }, [mergeRealtimeNotification, refreshCurrentUser, refreshGateCache, refreshNotifications, refreshOpenAttendance, refreshProjects, refreshUsers, setCurrentUser, showLogin, showNotification]);
 
   // Project helpers with localStorage sync
   const saveProjects = useCallback((projects) => {

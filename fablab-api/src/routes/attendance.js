@@ -271,6 +271,25 @@ attendanceRouter.post('/check-out', async (req, res, next) => {
   }
 });
 
+attendanceRouter.get('/user/:userId', async (req, res, next) => {
+  try {
+    const result = await query(
+      `
+        select a.*, u.prenom, u.nom, u.role, u.cin, u.tel, u.email
+        from attendance a
+        left join users u on u.id = a.user_id
+        where a.user_id = $1
+        order by a.timestamp_in desc
+      `,
+      [req.params.userId]
+    );
+
+    res.json({ attendance: result.rows.map(mapAttendance) });
+  } catch (error) {
+    next(error);
+  }
+});
+
 attendanceRouter.get('/', requireRole('administrateur'), async (req, res, next) => {
   try {
     const params = [];

@@ -1,6 +1,6 @@
 import { createContext, useContext } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, OAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, OAuthProvider, signInWithPopup, signOut, onAuthStateChanged, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { getFirestore, doc, setDoc, getDoc, addDoc, collection, serverTimestamp, query, where, orderBy, limit, onSnapshot } from 'firebase/firestore';
 
 const firebaseConfig = {
@@ -14,6 +14,7 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
+const authPersistenceReady = setPersistence(auth, browserLocalPersistence).catch(() => {});
 const db = getFirestore(app);
 const googleProvider = new GoogleAuthProvider();
 const microsoftProvider = new OAuthProvider('microsoft.com');
@@ -25,6 +26,7 @@ export const firebase = {
   db,
   googleProvider,
   microsoftProvider,
+  authPersistenceReady,
   // Auth actions
   signInWithPopup,
   signOut,

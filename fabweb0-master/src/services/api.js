@@ -47,6 +47,11 @@ export const api = {
     return body;
   },
 
+  async getCurrentUser() {
+    const body = await request('/auth/me');
+    return body.user;
+  },
+
   async register(profile) {
     const body = await request('/auth/register', {
       method: 'POST',
@@ -110,6 +115,11 @@ export const api = {
   async getOpenAttendance() {
     const body = await request('/attendance/open');
     return body.attendance;
+  },
+
+  async getUserAttendance(userId) {
+    const body = await request(`/attendance/user/${encodeURIComponent(userId)}`);
+    return body.attendance || [];
   },
 
   async getProjects() {

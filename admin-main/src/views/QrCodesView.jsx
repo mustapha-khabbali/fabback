@@ -50,7 +50,7 @@ function GateCard({ type }) {
       id: qr.id
     });
 
-    setPayload({ uid: qr.id });
+    setPayload({ uid: qr.id, data });
 
     // Wait for the canvas to mount before drawing into it.
     requestAnimationFrame(async () => {
@@ -66,11 +66,20 @@ function GateCard({ type }) {
     });
   };
 
-  const handleDownload = () => {
-    if (!canvasRef.current) return;
+  const handleDownload = async () => {
+    if (!payload?.data) return;
+    const url = await QRCode.toDataURL(payload.data, {
+      width: 1024,
+      margin: 4,
+      color: {
+        dark: isIn ? '#01B574' : (isEvent ? '#4318FF' : '#E31A1A'),
+        light: '#ffffff',
+      },
+      errorCorrectionLevel: 'H',
+    });
     const link = document.createElement('a');
     link.download = `fablab_gate_${type}_${Date.now()}.png`;
-    link.href = canvasRef.current.toDataURL('image/png');
+    link.href = url;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

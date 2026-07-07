@@ -2,12 +2,14 @@ import { useState, useRef, useEffect } from 'react';
 import { useApp, SCREENS, TABS } from '../../../context/AppContext';
 import { validateEmail, validatePhone } from '../../../utils/validation';
 import { buildPresenceHeatmapCells } from '../../../utils/presenceActivity';
+import { getPrimaryUserId } from '../../../utils/userIdentity';
 import SettingsView from './SettingsView';
 import { api } from '../../../services/api';
 import { stopRealtime } from '../../../services/realtime';
 import AvatarCropModal from '../../common/AvatarCropModal';
 import ImageLightbox from '../../common/ImageLightbox';
 import { getCroppedAvatarDataUrl } from '../../../utils/avatarCrop';
+import { useFirebase } from '../../../context/FirebaseContext';
 
 const SHOW_PROFILE_LEVEL_BADGE = false;
 const PROGRAM_TYPES = ['Hackathon', 'Event', 'Bootcamp', 'Workshop', 'Formation', 'Autre'];
@@ -23,6 +25,7 @@ function formatProgramDate(program) {
 }
 
 export default function MyProfileTab() {
+  const firebase = useFirebase();
   const { 
     currentUser, 
     setCurrentUser, 
@@ -38,11 +41,14 @@ export default function MyProfileTab() {
     setNavigationHistory,
     setSelectedUser,
     setCurrentProjectId,
-    presenceActivityEvents
+    presenceActivityEvents,
+    isUserInLab
   } = useApp();
+  const [attendanceRows, setAttendanceRows] = useState([]);
   // Refs to avoid stale closures in handleBack
   const navHistoryRef = useRef(navigationHistory);
   const previousTabRef = useRef(previousTab);
+  const currentUserId = getPrimaryUserId(currentUser);
 
   useEffect(() => {
     navHistoryRef.current = navigationHistory;
@@ -51,6 +57,26 @@ export default function MyProfileTab() {
   useEffect(() => {
     previousTabRef.current = previousTab;
   }, [previousTab]);
+
+  useEffect(() => {
+    if (!currentUserId) {
+      setAttendanceRows([]);
+      return undefined;
+    }
+
+    let cancelled = false;
+    api.getUserAttendance(currentUserId)
+      .then((rows) => {
+        if (!cancelled) setAttendanceRows(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setAttendanceRows([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUserId, isUserInLab]);
 
   const handleBack = () => {
     const history = navHistoryRef.current;
@@ -70,7 +96,7 @@ export default function MyProfileTab() {
   };
 
   const isStagiaire = currentUser?.role === 'stagiaire';
-  const heatmapCells = buildPresenceHeatmapCells(currentUser, presenceActivityEvents);
+  const heatmapCells = buildPresenceHeatmapCells(currentUser, presenceActivityEvents, attendanceRows);
   const containerRef = useRef(null);
   const [showSettings, setShowSettings] = useState(false);
   const [avatarCropImage, setAvatarCropImage] = useState(null);
@@ -802,7 +828,8 @@ export default function MyProfileTab() {
           </button>
         )}
 
-        <button onClick={() => {
+        <button onClick={async () => {
+          await firebase.signOut(firebase.auth).catch(() => {});
           api.logout();
           stopRealtime();
           setCurrentUser({});

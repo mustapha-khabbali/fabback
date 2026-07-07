@@ -26,6 +26,7 @@ export default function HomeScreen() {
     try {
       if (provider !== 'google') return;
 
+      await firebase.authPersistenceReady;
       const credential = await firebase.signInWithPopup(firebase.auth, firebase.googleProvider);
       const idToken = await credential.user.getIdToken();
       const session = await api.googleLogin(idToken);

@@ -4,6 +4,7 @@ import JournalReaderModal from '../project/JournalReaderModal';
 import { buildPresenceHeatmapCells } from '../../../utils/presenceActivity';
 import { findUserByIdentity, getPrimaryUserId, isCurrentUserId } from '../../../utils/userIdentity';
 import ImageLightbox from '../../common/ImageLightbox';
+import { api } from '../../../services/api';
 
 const JOURNAL_COLORS = ['#FF6B6B', '#4ECDC4', '#3B5FE6', '#FF9F43', '#10AC84', '#EE5253', '#5F27CD', '#222F3E'];
 
@@ -26,7 +27,7 @@ function formatProgramDate(program) {
 }
 
 export default function MemberProfileTab() {
-  const { currentUser, setSelectedUser, selectedUser, setActiveTab, allProjects, userProjects, showNotification, previousTab, currentProjectId, setCurrentProjectId, navigationHistory, setNavigationHistory, sendContactRequest, presenceActivityEvents, usersList, contactPrivacyMode, allowedContactUsers } = useApp();
+  const { currentUser, setSelectedUser, selectedUser, setActiveTab, allProjects, userProjects, showNotification, previousTab, currentProjectId, setCurrentProjectId, navigationHistory, setNavigationHistory, sendContactRequest, presenceActivityEvents, usersList, contactPrivacyMode, allowedContactUsers, isUserInLab } = useApp();
 
   const [viewingProjects, setViewingProjects] = useState(false);
   const [viewingProjectDetailId, setViewingProjectDetailId] = useState(null);
@@ -40,7 +41,6 @@ export default function MemberProfileTab() {
   const [contributionText, setContributionText] = useState('');
   const displayUser = selectedUser || currentUser;
   const isStagiaire = displayUser?.role === 'stagiaire';
-  const heatmapCells = buildPresenceHeatmapCells(displayUser, presenceActivityEvents);
   const containerRef = useRef(null);
   const [selectedProgramType, setSelectedProgramType] = useState(null);
 
@@ -55,12 +55,14 @@ export default function MemberProfileTab() {
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportType, setReportType] = useState('');
   const [reportDetails, setReportDetails] = useState('');
+  const [attendanceRows, setAttendanceRows] = useState([]);
 
   const RECOGNITION_MACHINES = ['Imprimante 3D', 'Scanner 3D', 'Coupe Laser', 'Assemblage', 'Électronique'];
   const currentUserId = getPrimaryUserId(currentUser);
   const displayUserId = getPrimaryUserId(displayUser);
   const isOwnProfile = isCurrentUserId(currentUser, displayUserId);
   const findUserById = (userId) => findUserByIdentity(usersList, userId, currentUser);
+  const heatmapCells = buildPresenceHeatmapCells(displayUser, presenceActivityEvents, attendanceRows);
 
   // Refs to avoid stale closures in handleBack
   const navHistoryRef = useRef(navigationHistory);
@@ -73,6 +75,26 @@ export default function MemberProfileTab() {
   useEffect(() => {
     previousTabRef.current = previousTab;
   }, [previousTab]);
+
+  useEffect(() => {
+    if (!displayUserId) {
+      setAttendanceRows([]);
+      return undefined;
+    }
+
+    let cancelled = false;
+    api.getUserAttendance(displayUserId)
+      .then((rows) => {
+        if (!cancelled) setAttendanceRows(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setAttendanceRows([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [displayUserId, isOwnProfile, isUserInLab]);
 
   // Handle deep-link to project from notification
   useEffect(() => {

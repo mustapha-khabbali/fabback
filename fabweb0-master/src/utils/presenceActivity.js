@@ -16,6 +16,7 @@ const ACTIVITY_COLOR_CLASSES = [
 ];
 
 function safeParseStorage(key, fallback = []) {
+  if (typeof localStorage === 'undefined') return fallback;
   try {
     return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback));
   } catch {
@@ -112,6 +113,32 @@ function activityLevel(count) {
   return count;
 }
 
+function getAttendanceTimestamp(entry) {
+  return entry?.timestamp || entry?.timestampIn || entry?.createdAt || entry?.date;
+}
+
+function countServerAttendance(attendance, daysOff, userId) {
+  const counts = new Map();
+
+  attendance
+    .filter((entry) => isSameUser(entry, userId))
+    .forEach((entry) => {
+      const timestamp = getAttendanceTimestamp(entry);
+      const date = new Date(timestamp);
+      if (Number.isNaN(date.getTime())) return;
+      if (isWeekend(date) || daysOff.has(dateKey(date))) return;
+
+      const minutes = minutesFromDayStart(date);
+      if (minutes < WORKDAY_START_MINUTES || minutes >= WORKDAY_END_MINUTES) return;
+
+      const row = Math.floor((minutes - WORKDAY_START_MINUTES) / 60);
+      const key = `${dateKey(date)}-${row}`;
+      counts.set(key, (counts.get(key) || 0) + 1);
+    });
+
+  return counts;
+}
+
 export function createPresenceActivityEvent(user, type, metadata = {}, timestamp = new Date().toISOString()) {
   return {
     id: crypto.randomUUID(),
@@ -130,21 +157,26 @@ export function savePresenceActivityEvent(event) {
   return updated;
 }
 
-export function buildPresenceHeatmapCells(user, events = readPresenceActivityEvents()) {
+export function buildPresenceHeatmapCells(user, events = readPresenceActivityEvents(), serverAttendance = null) {
   const userId = toUserId(user);
   const attendance = readAttendance();
   const daysOff = readDaysOff();
   const startDate = buildHeatmapStartDate();
 
-  const counts = new Map();
-  events
-    .filter((event) => isCountableActivity(event, attendance, daysOff, userId))
-    .forEach((event) => {
-      const date = new Date(getTimestamp(event));
-      const row = Math.floor((minutesFromDayStart(date) - WORKDAY_START_MINUTES) / 60);
-      const key = `${dateKey(date)}-${row}`;
-      counts.set(key, (counts.get(key) || 0) + 1);
-    });
+  const counts = Array.isArray(serverAttendance)
+    ? countServerAttendance(serverAttendance, daysOff, userId)
+    : new Map();
+
+  if (!Array.isArray(serverAttendance)) {
+    events
+      .filter((event) => isCountableActivity(event, attendance, daysOff, userId))
+      .forEach((event) => {
+        const date = new Date(getTimestamp(event));
+        const row = Math.floor((minutesFromDayStart(date) - WORKDAY_START_MINUTES) / 60);
+        const key = `${dateKey(date)}-${row}`;
+        counts.set(key, (counts.get(key) || 0) + 1);
+      });
+  }
 
   return Array.from({ length: HEATMAP_DAYS * WORKDAY_HOURS }).map((_, i) => {
     const col = i % HEATMAP_DAYS;

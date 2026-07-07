@@ -132,7 +132,7 @@ notificationsRouter.post('/', async (req, res, next) => {
     });
 
     notifications.forEach((notification) => {
-      emitRealtimeChange({ entity: 'notifications', action: 'create', id: notification.id, recipientId: notification.recipientId });
+      emitRealtimeChange({ entity: 'notifications', action: 'create', id: notification.id, recipientId: notification.recipientId, notification });
     });
     res.status(201).json({ notifications });
   } catch (error) {
@@ -172,7 +172,7 @@ notificationsRouter.patch('/:id', async (req, res, next) => {
     );
 
     const notification = mapNotification(result.rows[0]);
-    emitRealtimeChange({ entity: 'notifications', action: 'update', id: notification.id, recipientId: notification.recipientId });
+    emitRealtimeChange({ entity: 'notifications', action: 'update', id: notification.id, recipientId: notification.recipientId, notification });
     res.json({ notification });
   } catch (error) {
     next(error);

@@ -9,11 +9,17 @@ import AnalyseView from './views/AnalyseView';
 import { api } from './services/api';
 import { startRealtime, stopRealtime } from './services/realtime';
 
+const ADMIN_ACTIVE_VIEW_KEY = 'admin_active_view';
+const ADMIN_VIEW_VALUES = new Set(Object.values(ADMIN_VIEWS));
+
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(
     () => sessionStorage.getItem('admin_authenticated') === 'true'
   );
-  const [activeView, setActiveView] = useState(ADMIN_VIEWS.DASHBOARD);
+  const [activeView, setActiveView] = useState(() => {
+    const storedView = sessionStorage.getItem(ADMIN_ACTIVE_VIEW_KEY);
+    return ADMIN_VIEW_VALUES.has(storedView) ? storedView : ADMIN_VIEWS.DASHBOARD;
+  });
   const [userProfileTarget, setUserProfileTarget] = useState(null);
 
   const handleLogin = () => {
@@ -23,6 +29,7 @@ export default function App() {
 
   const handleLogout = () => {
     sessionStorage.removeItem('admin_authenticated');
+    sessionStorage.removeItem(ADMIN_ACTIVE_VIEW_KEY);
     api.logout();
     stopRealtime();
     setIsAuthenticated(false);
@@ -38,6 +45,7 @@ export default function App() {
   }, [isAuthenticated]);
 
   const handleNavigate = (view, payload = null) => {
+    sessionStorage.setItem(ADMIN_ACTIVE_VIEW_KEY, view);
     setActiveView(view);
     setUserProfileTarget(view === ADMIN_VIEWS.USERS ? payload : null);
   };
