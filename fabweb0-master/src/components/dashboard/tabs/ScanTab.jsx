@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useApp, TABS } from '../../../context/AppContext';
 import { useQrScanner } from '../../../hooks/useQrScanner';
 import { api, getUserToken } from '../../../services/api';
@@ -9,6 +9,9 @@ export default function ScanTab() {
   const [cameraError, setCameraError] = useState('');
 
   const isActive = activeTab === TABS.SCAN;
+  const effectiveIsUserInLab = import.meta.env.DEV && new URLSearchParams(window.location.search).get('devInside') === '1'
+    ? true
+    : isUserInLab;
 
   const readScanPayload = (decodedText) => {
     try {
@@ -25,15 +28,27 @@ export default function ScanTab() {
     const isGateOutScan = scanAction === 'GATE_OUT' || scanAction === 'check_out';
 
     if (!payload?.id || (!isGateInScan && !isGateOutScan)) {
+      showNotification('QR code non reconnu.', 'error');
       return;
     }
 
-    if (!isUserInLab && isGateInScan) {
+    if (effectiveIsUserInLab && isGateInScan) {
+      showNotification('Vous êtes déjà dans le FabLab — scannez le QR Gate-OUT pour sortir.', 'error');
+      return;
+    }
+
+    if (!effectiveIsUserInLab && isGateOutScan) {
+      showNotification("Vous n'êtes pas dans le FabLab — scannez le QR Gate-IN pour entrer.", 'error');
+      return;
+    }
+
+    if (isGateInScan) {
       try {
         const gate = await api.getGateConfig();
         localStorage.setItem('gate_in_config', JSON.stringify(gate.config || {}));
         localStorage.setItem('gate_in_events', JSON.stringify(gate.events || []));
-      } catch {
+      } catch (error) {
+        showNotification(error.message || 'Configuration Gate indisponible.', 'error');
         return;
       }
       setPendingScanPayload({ gate: 'GATE_IN', id: payload.id });
@@ -42,14 +57,23 @@ export default function ScanTab() {
       } else {
         setShowRoleScanObjectiveModal(true);
       }
-    } else if (isUserInLab && isGateOutScan) {
+    } else if (isGateOutScan) {
       setPendingScanPayload({ gate: 'GATE_OUT', id: payload.id });
       setShowFeedbackModal(true);
     }
-  }, [isUserInLab, currentUser, setPendingScanPayload, setShowScanObjectiveModal, setShowRoleScanObjectiveModal, setShowFeedbackModal]);
+  }, [effectiveIsUserInLab, currentUser, setPendingScanPayload, setShowScanObjectiveModal, setShowRoleScanObjectiveModal, setShowFeedbackModal, showNotification]);
 
   const onScanSuccess = useCallback((decodedText) => {
     handleDecodedScan(decodedText);
+  }, [handleDecodedScan]);
+
+  useEffect(() => {
+    if (!import.meta.env.DEV) return undefined;
+    const devScan = new URLSearchParams(window.location.search).get('devScan');
+    if (devScan) {
+      handleDecodedScan(devScan);
+    }
+    return undefined;
   }, [handleDecodedScan]);
 
   const handleCameraStarted = useCallback(() => {
@@ -73,7 +97,7 @@ export default function ScanTab() {
     if (!import.meta.env.DEV) return;
 
     try {
-      const gate = isUserInLab ? 'GATE_OUT' : 'GATE_IN';
+      const gate = effectiveIsUserInLab ? 'GATE_OUT' : 'GATE_IN';
       const apiBaseUrl = (import.meta.env.VITE_API_URL || 'http://localhost:4000/api').replace(/\/$/, '');
       const response = await fetch(`${apiBaseUrl}/gate/dev/permanent-qr/${gate}`, {
         headers: { authorization: `Bearer ${getUserToken()}` }
@@ -85,7 +109,7 @@ export default function ScanTab() {
     } catch (error) {
       showNotification(error.message || 'Scan de test indisponible.', 'error');
     }
-  }, [handleDecodedScan, isUserInLab, showNotification]);
+  }, [effectiveIsUserInLab, handleDecodedScan, showNotification]);
 
   return (
     <div className="flex flex-col items-center justify-center min-h-full p-6 space-y-8 pb-32">

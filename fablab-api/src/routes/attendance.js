@@ -1,6 +1,6 @@
 import express from 'express';
 import { z } from 'zod';
-import { query } from '../db/pool.js';
+import { query, withTransaction } from '../db/pool.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { emitRealtimeChange } from '../realtime/bus.js';
 
@@ -29,6 +29,8 @@ const checkOutSchema = z.object({
   rating: z.number().int().min(1).max(5),
   feedbackComment: z.string().optional()
 });
+
+const LAB_TIME_ZONE = 'Africa/Casablanca';
 
 async function assertPermanentQr(gate, qr, res) {
   const column = gate === 'GATE_IN' ? 'permanent_gate_in_qr_id' : 'permanent_gate_out_qr_id';
@@ -66,8 +68,67 @@ function mapAttendance(row) {
     timestamp: row.timestamp_in,
     timestampOut: row.timestamp_out,
     rating: row.rating,
-    feedbackComment: row.feedback_comment
+    feedbackComment: row.feedback_comment,
+    autoClosed: row.auto_closed || false
   };
+}
+
+function isSameLabDay(row) {
+  return row?.is_today === true;
+}
+
+async function findLatestOpenAttendance(client, userId) {
+  const result = await client.query(
+    `
+      select
+        a.*,
+        ((a.timestamp_in at time zone $2)::date = (now() at time zone $2)::date) as is_today
+      from attendance a
+      where a.user_id = $1 and a.timestamp_out is null
+      order by a.timestamp_in desc
+      limit 1
+    `,
+    [userId, LAB_TIME_ZONE]
+  );
+  return result.rows[0] || null;
+}
+
+async function autoCloseAttendance(client, attendanceId) {
+  const result = await client.query(
+    `
+      update attendance
+      set
+        timestamp_out = (
+          ((timestamp_in at time zone $2)::date + time '18:30') at time zone $2
+        ),
+        rating = null,
+        feedback_comment = null,
+        auto_closed = true
+      where id = $1 and timestamp_out is null
+      returning *
+    `,
+    [attendanceId, LAB_TIME_ZONE]
+  );
+  return result.rows[0] || null;
+}
+
+async function joinAttendance(client, attendanceId) {
+  const result = await client.query(
+    `
+      select a.*, u.prenom, u.nom, u.role, u.cin, u.tel, u.email
+      from attendance a
+      left join users u on u.id = a.user_id
+      where a.id = $1
+    `,
+    [attendanceId]
+  );
+  return result.rows[0] || null;
+}
+
+function emitAttendanceCheckOut(row) {
+  if (!row) return;
+  const attendance = mapAttendance(row);
+  emitRealtimeChange({ entity: 'attendance', action: 'check-out', id: attendance.id, recipientId: attendance.userId });
 }
 
 function uuidOrNull(value) {
@@ -81,18 +142,19 @@ attendanceRouter.use(requireAuth);
 
 attendanceRouter.get('/open', async (req, res, next) => {
   try {
-    const result = await query(
-      `
-        select a.*, u.prenom, u.nom, u.role, u.cin, u.tel, u.email
-        from attendance a
-        left join users u on u.id = a.user_id
-        where a.user_id = $1 and a.timestamp_out is null
-        order by a.timestamp_in desc
-        limit 1
-      `,
-      [req.user.id]
-    );
-    res.json({ attendance: result.rows[0] ? mapAttendance(result.rows[0]) : null });
+    const { attendance, autoClosed } = await withTransaction(async (client) => {
+      const open = await findLatestOpenAttendance(client, req.user.id);
+      if (!open) return { attendance: null, autoClosed: null };
+      if (!isSameLabDay(open)) {
+        const closed = await autoCloseAttendance(client, open.id);
+        return { attendance: null, autoClosed: closed ? await joinAttendance(client, closed.id) : null };
+      }
+
+      return { attendance: await joinAttendance(client, open.id), autoClosed: null };
+    });
+
+    emitAttendanceCheckOut(autoClosed);
+    res.json({ attendance: attendance ? mapAttendance(attendance) : null });
   } catch (error) {
     next(error);
   }
@@ -109,41 +171,41 @@ attendanceRouter.post('/check-in', async (req, res, next) => {
     const data = parsed.data;
     if (!(await assertPermanentQr('GATE_IN', data.qr, res))) return;
 
-    const result = await query(
-      `
-        insert into attendance (
-          user_id, objective, comment, project_id, project_title,
-          supervisor_id, supervisor_name, event_id, event_title
-        )
-        values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-        returning *
-      `,
-      [
-        req.user.id,
-        data.objective || null,
-        data.comment || null,
-        uuidOrNull(data.projectId),
-        data.projectTitle || null,
-        data.supervisorId || null,
-        data.supervisorName || null,
-        uuidOrNull(data.eventId),
-        data.eventTitle || null
-      ]
-    );
+    const { attendance, autoClosed } = await withTransaction(async (client) => {
+      const open = await findLatestOpenAttendance(client, req.user.id);
+      const closed = open && !isSameLabDay(open) ? await autoCloseAttendance(client, open.id) : null;
+      const result = await client.query(
+        `
+          insert into attendance (
+            user_id, objective, comment, project_id, project_title,
+            supervisor_id, supervisor_name, event_id, event_title
+          )
+          values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          returning *
+        `,
+        [
+          req.user.id,
+          data.objective || null,
+          data.comment || null,
+          uuidOrNull(data.projectId),
+          data.projectTitle || null,
+          data.supervisorId || null,
+          data.supervisorName || null,
+          uuidOrNull(data.eventId),
+          data.eventTitle || null
+        ]
+      );
 
-    const joined = await query(
-      `
-        select a.*, u.prenom, u.nom, u.role, u.cin, u.tel, u.email
-        from attendance a
-        left join users u on u.id = a.user_id
-        where a.id = $1
-      `,
-      [result.rows[0].id]
-    );
+      return {
+        attendance: await joinAttendance(client, result.rows[0].id),
+        autoClosed: closed ? await joinAttendance(client, closed.id) : null
+      };
+    });
 
-    const attendance = mapAttendance(joined.rows[0]);
-    emitRealtimeChange({ entity: 'attendance', action: 'check-in', id: attendance.id, recipientId: attendance.userId });
-    res.status(201).json({ attendance });
+    emitAttendanceCheckOut(autoClosed);
+    const mappedAttendance = mapAttendance(attendance);
+    emitRealtimeChange({ entity: 'attendance', action: 'check-in', id: mappedAttendance.id, recipientId: mappedAttendance.userId });
+    res.status(201).json({ attendance: mappedAttendance });
   } catch (error) {
     next(error);
   }
@@ -159,18 +221,23 @@ attendanceRouter.post('/check-out', async (req, res, next) => {
 
     if (!(await assertPermanentQr('GATE_OUT', parsed.data.qr, res))) return;
 
-    const open = await query(
-      `
-        select id
-        from attendance
-        where user_id = $1 and timestamp_out is null
-        order by timestamp_in desc
-        limit 1
-      `,
-      [req.user.id]
-    );
+    const { openToday, staleClosed } = await withTransaction(async (client) => {
+      const open = await findLatestOpenAttendance(client, req.user.id);
+      if (!open) return { openToday: null, staleClosed: null };
+      if (!isSameLabDay(open)) {
+        const closed = await autoCloseAttendance(client, open.id);
+        return { openToday: null, staleClosed: closed ? await joinAttendance(client, closed.id) : null };
+      }
+      return { openToday: open, staleClosed: null };
+    });
 
-    if (!open.rows[0]) {
+    if (staleClosed) {
+      emitAttendanceCheckOut(staleClosed);
+      res.status(404).json({ error: 'No open attendance entry' });
+      return;
+    }
+
+    if (!openToday) {
       res.status(404).json({ error: 'No open attendance entry' });
       return;
     }
@@ -182,7 +249,7 @@ attendanceRouter.post('/check-out', async (req, res, next) => {
         where id = $3
         returning *
       `,
-      [parsed.data.rating, parsed.data.feedbackComment || null, open.rows[0].id]
+      [parsed.data.rating, parsed.data.feedbackComment || null, openToday.id]
     );
 
     const joined = await query(
