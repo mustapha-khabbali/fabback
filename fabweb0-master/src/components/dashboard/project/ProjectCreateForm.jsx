@@ -1,11 +1,22 @@
 import { useState } from 'react';
-import { useApp } from '../../../context/AppContext';
+import { useApp, TABS } from '../../../context/AppContext';
 import RichTextEditor from '../../common/RichTextEditor';
 import { getPrimaryUserId } from '../../../utils/userIdentity';
 import { api } from '../../../services/api';
 
 export default function ProjectCreateForm({ onBack }) {
-  const { showNotification, userProjects, saveProjects, currentUser, recordPresenceActivity } = useApp();
+  const {
+    showNotification,
+    userProjects,
+    saveProjects,
+    currentUser,
+    recordPresenceActivity,
+    projectCreateReturnToScan,
+    setProjectCreateReturnToScan,
+    setScanObjectivePreset,
+    setShowScanObjectiveModal,
+    setActiveTab
+  } = useApp();
   const [title, setTitle] = useState('');
   const [desc, setDesc] = useState('');
 
@@ -34,6 +45,13 @@ export default function ProjectCreateForm({ onBack }) {
       });
       setTitle(''); 
       setDesc('');
+      if (projectCreateReturnToScan) {
+        setProjectCreateReturnToScan(false);
+        setScanObjectivePreset('project');
+        setShowScanObjectiveModal(true);
+        setActiveTab(TABS.SCAN);
+        return;
+      }
       onBack();
     } catch (error) {
       showNotification(error.message || "Création du projet impossible.", 'error');

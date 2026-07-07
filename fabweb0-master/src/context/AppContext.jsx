@@ -105,6 +105,8 @@ export function AppProvider({ children }) {
   const [selectedNotificationRequest, setSelectedNotificationRequest] = useState(null);
   const [reviewingProject, setReviewingProject] = useState(null);
   const [projectCreateRequestKey, setProjectCreateRequestKey] = useState(0);
+  const [projectCreateReturnToScan, setProjectCreateReturnToScan] = useState(false);
+  const [scanObjectivePreset, setScanObjectivePreset] = useState('');
 
   const sendContactRequest = (targetUserId) => {
     const requesterId = getPrimaryUserId(currentUser);
@@ -524,7 +526,14 @@ export function AppProvider({ children }) {
     currentProjectId,
     setCurrentProjectId,
     projectCreateRequestKey,
-    requestProjectCreate: () => setProjectCreateRequestKey((key) => key + 1),
+    projectCreateReturnToScan,
+    setProjectCreateReturnToScan,
+    scanObjectivePreset,
+    setScanObjectivePreset,
+    requestProjectCreate: ({ returnToScan = false } = {}) => {
+      setProjectCreateReturnToScan(returnToScan);
+      setProjectCreateRequestKey((key) => key + 1);
+    },
 
     // Articles
     userArticles,

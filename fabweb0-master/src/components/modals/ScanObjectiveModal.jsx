@@ -89,7 +89,9 @@ export default function ScanObjectiveModal() {
     pendingScanPayload,
     setPendingScanPayload,
     setActiveTab,
-    requestProjectCreate
+    requestProjectCreate,
+    scanObjectivePreset,
+    setScanObjectivePreset
   } = useApp();
 
   const config = useMemo(loadGateInConfig, [showScanObjectiveModal]);
@@ -108,7 +110,7 @@ export default function ScanObjectiveModal() {
   const [newRole, setNewRole] = useState('formateur');
   const [newType, setNewType] = useState('');
   const currentUserId = getPrimaryUserId(currentUser);
-  const forcedOptionId = pendingScanPayload?.gate === 'EVENT' ? 'event' : '';
+  const forcedOptionId = pendingScanPayload?.gate === 'EVENT' ? 'event' : scanObjectivePreset;
 
   const allAvailableProjects = useMemo(() => {
     const localProjectIds = new Set((userProjects || []).map((project) => project.id));
@@ -159,6 +161,7 @@ export default function ScanObjectiveModal() {
     setNewNom('');
     setNewRole('formateur');
     setNewType('');
+    setScanObjectivePreset?.('');
   };
 
   const close = () => {
@@ -168,10 +171,20 @@ export default function ScanObjectiveModal() {
   };
 
   const goToProjectCreate = () => {
-    reset();
-    setPendingScanPayload(null);
+    setSelectedOptionId('');
+    setSelectedProjectId('');
+    setSelectedSupervisorId('');
+    setSelectedEventId('');
+    setCustomText('');
+    setShowNewSupervisor(false);
+    setPresetPick(null);
+    setNewPrenom('');
+    setNewNom('');
+    setNewRole('formateur');
+    setNewType('');
+    setScanObjectivePreset?.('project');
     setShowScanObjectiveModal(false);
-    requestProjectCreate?.();
+    requestProjectCreate?.({ returnToScan: true });
     setActiveTab(TABS.MY_PROJECT);
   };
 
