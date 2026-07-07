@@ -86,7 +86,8 @@ async function findLatestOpenAttendance(client, userId) {
     `
       select
         a.*,
-        ((a.timestamp_in at time zone $2)::date = (now() at time zone $2)::date) as is_today
+        ((a.timestamp_in at time zone $2)::date = (now() at time zone $2)::date) as is_today,
+        (now() >= (((a.timestamp_in at time zone $2)::date + time '18:30') at time zone $2)) as is_expired
       from attendance a
       where a.user_id = $1 and a.timestamp_out is null
       order by a.timestamp_in desc
@@ -95,6 +96,10 @@ async function findLatestOpenAttendance(client, userId) {
     [userId, LAB_TIME_ZONE]
   );
   return result.rows[0] || null;
+}
+
+function isOpenAttendanceActive(row) {
+  return isSameLabDay(row) && row?.is_expired !== true;
 }
 
 async function autoCloseAttendance(client, attendanceId) {
@@ -115,6 +120,33 @@ async function autoCloseAttendance(client, attendanceId) {
     [attendanceId, LAB_TIME_ZONE]
   );
   return result.rows[0] || null;
+}
+
+async function autoCloseExpiredOpenAttendances(client) {
+  const result = await client.query(
+    `
+      update attendance
+      set
+        timestamp_out = greatest(
+          timestamp_in,
+          ((timestamp_in at time zone $1)::date + time '18:30') at time zone $1
+        ),
+        rating = null,
+        feedback_comment = null,
+        auto_closed = true
+      where timestamp_out is null
+        and now() >= (((timestamp_in at time zone $1)::date + time '18:30') at time zone $1)
+      returning id
+    `,
+    [LAB_TIME_ZONE]
+  );
+
+  const joinedRows = [];
+  for (const row of result.rows) {
+    const joined = await joinAttendance(client, row.id);
+    if (joined) joinedRows.push(joined);
+  }
+  return joinedRows;
 }
 
 async function joinAttendance(client, attendanceId) {
@@ -150,7 +182,7 @@ attendanceRouter.get('/open', async (req, res, next) => {
     const { attendance, autoClosed } = await withTransaction(async (client) => {
       const open = await findLatestOpenAttendance(client, req.user.id);
       if (!open) return { attendance: null, autoClosed: null };
-      if (!isSameLabDay(open)) {
+      if (!isOpenAttendanceActive(open)) {
         const closed = await autoCloseAttendance(client, open.id);
         return { attendance: null, autoClosed: closed ? await joinAttendance(client, closed.id) : null };
       }
@@ -178,7 +210,7 @@ attendanceRouter.post('/check-in', async (req, res, next) => {
 
     const { attendance, autoClosed } = await withTransaction(async (client) => {
       const open = await findLatestOpenAttendance(client, req.user.id);
-      const closed = open && !isSameLabDay(open) ? await autoCloseAttendance(client, open.id) : null;
+      const closed = open && !isOpenAttendanceActive(open) ? await autoCloseAttendance(client, open.id) : null;
       const result = await client.query(
         `
           insert into attendance (
@@ -229,7 +261,7 @@ attendanceRouter.post('/check-out', async (req, res, next) => {
     const { openToday, staleClosed } = await withTransaction(async (client) => {
       const open = await findLatestOpenAttendance(client, req.user.id);
       if (!open) return { openToday: null, staleClosed: null };
-      if (!isSameLabDay(open)) {
+      if (!isOpenAttendanceActive(open)) {
         const closed = await autoCloseAttendance(client, open.id);
         return { openToday: null, staleClosed: closed ? await joinAttendance(client, closed.id) : null };
       }
@@ -308,39 +340,47 @@ attendanceRouter.get('/user/:userId', async (req, res, next) => {
 
 attendanceRouter.get('/', requireRole('administrateur'), async (req, res, next) => {
   try {
-    const params = [];
-    const where = [];
     const { date_from: dateFrom, date_to: dateTo, role, event_id: eventId } = req.query;
 
-    if (dateFrom) {
-      params.push(dateFrom);
-      where.push(`a.timestamp_in >= $${params.length}`);
-    }
-    if (dateTo) {
-      params.push(`${dateTo} 23:59:59`);
-      where.push(`a.timestamp_in <= $${params.length}`);
-    }
-    if (role) {
-      params.push(String(role).toLowerCase());
-      where.push(`u.role = $${params.length}`);
-    }
-    if (eventId) {
-      params.push(eventId);
-      where.push(`a.event_id = $${params.length}`);
-    }
+    const { rows, autoClosedRows } = await withTransaction(async (client) => {
+      const closedRows = await autoCloseExpiredOpenAttendances(client);
+      const params = [];
+      const where = [];
 
-    const result = await query(
-      `
-        select a.*, u.prenom, u.nom, u.role, u.cin, u.tel, u.email
-        from attendance a
-        left join users u on u.id = a.user_id
-        ${where.length ? `where ${where.join(' and ')}` : ''}
-        order by a.timestamp_in desc
-      `,
-      params
-    );
+      if (dateFrom) {
+        params.push(dateFrom);
+        where.push(`a.timestamp_in >= $${params.length}`);
+      }
+      if (dateTo) {
+        params.push(`${dateTo} 23:59:59`);
+        where.push(`a.timestamp_in <= $${params.length}`);
+      }
+      if (role) {
+        params.push(String(role).toLowerCase());
+        where.push(`u.role = $${params.length}`);
+      }
+      if (eventId) {
+        params.push(eventId);
+        where.push(`a.event_id = $${params.length}`);
+      }
 
-    res.json({ attendance: result.rows.map(mapAttendance) });
+      const result = await client.query(
+        `
+          select a.*, u.prenom, u.nom, u.role, u.cin, u.tel, u.email
+          from attendance a
+          left join users u on u.id = a.user_id
+          ${where.length ? `where ${where.join(' and ')}` : ''}
+          order by a.timestamp_in desc
+        `,
+        params
+      );
+
+      return { rows: result.rows, autoClosedRows: closedRows };
+    });
+
+    autoClosedRows.forEach(emitAttendanceCheckOut);
+
+    res.json({ attendance: rows.map(mapAttendance) });
   } catch (error) {
     next(error);
   }
