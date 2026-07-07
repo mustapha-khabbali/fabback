@@ -26,6 +26,7 @@ export default function EventSection() {
   const [editing, setEditing] = useState(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [qrDataUrl, setQrDataUrl] = useState(null);
+  const [qrPayload, setQrPayload] = useState(null);
 
   const loadEventsData = useCallback((cancelledRef = { current: false }) => {
     Promise.all([api.getUsers(), api.getEvents()])
@@ -102,21 +103,29 @@ export default function EventSection() {
   };
 
   const toggleQr = async () => {
-    if (qrDataUrl) { setQrDataUrl(null); return; }
+    if (qrDataUrl) { setQrDataUrl(null); setQrPayload(null); return; }
     try {
       const qr = await api.getPermanentGateQr('EVENT');
-      const url = await QRCode.toDataURL(eventQrPayload(qr.id), { width: 512, color: { dark: '#4318FF', light: '#ffffff' }, errorCorrectionLevel: 'H' });
+      const payload = eventQrPayload(qr.id);
+      const url = await QRCode.toDataURL(payload, { width: 512, color: { dark: '#4318FF', light: '#ffffff' }, errorCorrectionLevel: 'H' });
+      setQrPayload(payload);
       setQrDataUrl(url);
     } catch (error) {
       alert(error.message);
     }
   };
 
-  const downloadQr = () => {
-    if (!qrDataUrl) return;
+  const downloadQr = async () => {
+    if (!qrPayload) return;
+    const url = await QRCode.toDataURL(qrPayload, {
+      width: 4096,
+      margin: 4,
+      color: { dark: '#4318FF', light: '#ffffff' },
+      errorCorrectionLevel: 'H'
+    });
     const link = document.createElement('a');
     link.download = `fablab_event_qr.png`;
-    link.href = qrDataUrl;
+    link.href = url;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
