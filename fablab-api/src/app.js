@@ -82,6 +82,19 @@ export function createApp() {
   });
 
   app.use((error, _req, res, _next) => {
+    if (error.code === '23505') {
+      const fieldMatch = error.detail?.match(/\(([^)]+)\)=/);
+      const field = fieldMatch?.[1] || 'field';
+      const labels = {
+        email: 'email',
+        google_uid: 'compte Google'
+      };
+      res.status(409).json({
+        error: `Un compte utilise déjà cet ${labels[field] || field}.`
+      });
+      return;
+    }
+
     const status = error.status || 500;
     if (config.nodeEnv !== 'production') {
       console.error(error);
