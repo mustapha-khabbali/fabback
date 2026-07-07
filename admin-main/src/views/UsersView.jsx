@@ -362,7 +362,8 @@ export default function UsersView({ profileTarget, onProfileTargetHandled }) {
   // If a user profile is clicked, show the full detailed screen
   if (selectedUser) {
     const isStagiaire = selectedUser.role === 'Stagiaire';
-    const isSaraSystemAccount = selectedUser.id === 'user-sara';
+    const isProtectedProfile = selectedUser.id === 'user-sara'
+      || ['Responsable Entrepreneuriat', 'Responsable Incubateur'].includes(String(selectedUser.bio || '').trim());
 
     return (
       <section className="animate-in fade-in duration-300">
@@ -539,7 +540,7 @@ export default function UsersView({ profileTarget, onProfileTargetHandled }) {
                       </svg>
                     </button>
 
-                    {!isSaraSystemAccount && (
+                    {!isProtectedProfile && (
                       <>
                         {/* Désactiver / Réactiver */}
                         <button

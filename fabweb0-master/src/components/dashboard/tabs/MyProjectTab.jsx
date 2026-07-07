@@ -21,6 +21,7 @@ const VIEWS = {
 export default function MyProjectTab() {
   const { currentProjectId, projectCreateRequestKey } = useApp();
   const [view, setView] = useState(() => currentProjectId ? VIEWS.DETAIL : VIEWS.HOME);
+  const lastHandledCreateRequestRef = useRef(projectCreateRequestKey);
 
   useEffect(() => {
     if (currentProjectId) {
@@ -31,7 +32,8 @@ export default function MyProjectTab() {
   }, [currentProjectId]);
 
   useEffect(() => {
-    if (projectCreateRequestKey > 0) {
+    if (projectCreateRequestKey !== lastHandledCreateRequestRef.current) {
+      lastHandledCreateRequestRef.current = projectCreateRequestKey;
       setView(VIEWS.CREATE);
     }
   }, [projectCreateRequestKey]);

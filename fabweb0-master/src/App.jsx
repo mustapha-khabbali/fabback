@@ -1,4 +1,4 @@
-import { Routes, Route, useLocation, Navigate } from 'react-router-dom';
+import { Routes, Route, useLocation, Navigate, useNavigate } from 'react-router-dom';
 import { Suspense, lazy, useEffect } from 'react';
 import { useApp } from './context/AppContext';
 import useBlockZoom from './hooks/useBlockZoom';
@@ -28,8 +28,11 @@ function ProtectedRoute({ children }) {
 
 function AppContent() {
   const location = useLocation();
-  const { notification, theme } = useApp();
+  const navigate = useNavigate();
+  const { notification, theme, currentUser } = useApp();
   useBlockZoom();
+  const hasAuthenticatedUser = currentUser && Object.keys(currentUser).length > 0;
+  const isOnboardingPath = ['/', '/role-selection', '/stagiaire', '/role-registration', '/charte'].includes(location.pathname);
 
   // Login screen fills full screen, other screens are centered on gradient
   const isFullScreen = location.pathname.startsWith('/login');
@@ -39,6 +42,12 @@ function AppContent() {
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', isFullScreen ? theme : 'light');
   }, [isFullScreen, theme]);
+
+  useEffect(() => {
+    if (hasAuthenticatedUser && isOnboardingPath) {
+      navigate('/login', { replace: true });
+    }
+  }, [hasAuthenticatedUser, isOnboardingPath, navigate]);
 
   return (
     <>

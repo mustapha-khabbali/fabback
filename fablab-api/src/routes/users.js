@@ -272,10 +272,19 @@ usersRouter.patch('/:id', async (req, res, next) => {
   }
 });
 
+const protectedProfileBios = new Set(['Responsable Entrepreneuriat', 'Responsable Incubateur']);
+const protectedProfileIds = new Set(['user-sara']);
+
+async function isProtectedProfile(userId) {
+  if (protectedProfileIds.has(userId)) return true;
+  const result = await query('select bio from users where id = $1', [userId]);
+  return protectedProfileBios.has(String(result.rows[0]?.bio || '').trim());
+}
+
 usersRouter.patch('/:id/deactivate', requireRole('administrateur'), async (req, res, next) => {
   try {
-    if (req.params.id === 'user-sara') {
-      res.status(403).json({ error: 'Sara system account cannot be deactivated.' });
+    if (await isProtectedProfile(req.params.id)) {
+      res.status(403).json({ error: 'This protected profile cannot be deactivated.' });
       return;
     }
     const parsed = emptyBodySchema.safeParse(req.body);
@@ -335,8 +344,8 @@ usersRouter.patch('/:id/behavior-rating', requireRole('administrateur'), async (
 
 usersRouter.delete('/:id', requireRole('administrateur'), async (req, res, next) => {
   try {
-    if (req.params.id === 'user-sara') {
-      res.status(403).json({ error: 'Sara system account cannot be deleted.' });
+    if (await isProtectedProfile(req.params.id)) {
+      res.status(403).json({ error: 'This protected profile cannot be deleted.' });
       return;
     }
     await query('delete from project_contributors where user_id = $1', [req.params.id]);

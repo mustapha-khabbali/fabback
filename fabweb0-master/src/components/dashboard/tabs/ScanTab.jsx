@@ -4,7 +4,7 @@ import { useQrScanner } from '../../../hooks/useQrScanner';
 import { api, getUserToken } from '../../../services/api';
 
 export default function ScanTab() {
-  const { activeTab, isUserInLab, currentUser, setShowScanObjectiveModal, setShowRoleScanObjectiveModal, setShowFeedbackModal, setPendingScanPayload, showNotification } = useApp();
+  const { activeTab, isUserInLab, currentUser, setShowScanObjectiveModal, setShowRoleScanObjectiveModal, setShowFeedbackModal, setPendingScanPayload, setScanObjectivePreset, showNotification } = useApp();
   const [cameraStarted, setCameraStarted] = useState(false);
   const [cameraError, setCameraError] = useState('');
 
@@ -32,6 +32,8 @@ export default function ScanTab() {
       showNotification('QR code non reconnu.', 'error');
       return;
     }
+
+    setScanObjectivePreset('');
 
     if (effectiveIsUserInLab && (isGateInScan || isEventScan)) {
       showNotification('Vous êtes déjà dans le FabLab — scannez le QR Gate-OUT pour sortir.', 'error');
@@ -62,7 +64,7 @@ export default function ScanTab() {
       setPendingScanPayload({ gate: 'GATE_OUT', id: payload.id });
       setShowFeedbackModal(true);
     }
-  }, [effectiveIsUserInLab, currentUser, setPendingScanPayload, setShowScanObjectiveModal, setShowRoleScanObjectiveModal, setShowFeedbackModal, showNotification]);
+  }, [effectiveIsUserInLab, currentUser, setPendingScanPayload, setScanObjectivePreset, setShowScanObjectiveModal, setShowRoleScanObjectiveModal, setShowFeedbackModal, showNotification]);
 
   const onScanSuccess = useCallback((decodedText) => {
     handleDecodedScan(decodedText);
