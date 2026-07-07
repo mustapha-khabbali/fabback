@@ -69,7 +69,7 @@ function GateCard({ type }) {
   const handleDownload = async () => {
     if (!payload?.data) return;
     const url = await QRCode.toDataURL(payload.data, {
-      width: 4096,
+      width: 2000,
       margin: 4,
       color: {
         dark: isIn ? '#01B574' : (isEvent ? '#4318FF' : '#E31A1A'),

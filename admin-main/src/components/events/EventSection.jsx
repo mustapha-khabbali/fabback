@@ -118,7 +118,7 @@ export default function EventSection() {
   const downloadQr = async () => {
     if (!qrPayload) return;
     const url = await QRCode.toDataURL(qrPayload, {
-      width: 4096,
+      width: 2000,
       margin: 4,
       color: { dark: '#4318FF', light: '#ffffff' },
       errorCorrectionLevel: 'H'
