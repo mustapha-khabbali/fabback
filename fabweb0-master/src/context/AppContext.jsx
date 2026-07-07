@@ -152,6 +152,7 @@ export function AppProvider({ children }) {
 
   // Lab presence state
   const [isUserInLab, setIsUserInLab] = useState(false);
+  const [attendanceRefreshKey, setAttendanceRefreshKey] = useState(0);
   const [presenceActivityEvents, setPresenceActivityEvents] = useState(() => {
     try { return JSON.parse(localStorage.getItem(PRESENCE_ACTIVITY_STORAGE_KEY) || '[]'); } catch { return []; }
   });
@@ -371,6 +372,16 @@ export function AppProvider({ children }) {
     startRealtime();
     const unsubscribe = subscribeRealtime((change) => {
       const currentUserId = getPrimaryUserId(currentUserRef.current);
+      if (change.entity === 'sync') {
+        refreshNotifications();
+        refreshProjects();
+        refreshUsers();
+        refreshOpenAttendance();
+        refreshGateCache();
+        refreshCurrentUser();
+        setAttendanceRefreshKey((key) => key + 1);
+        return;
+      }
       if (change.entity === 'notifications') {
         mergeRealtimeNotification(change);
         refreshNotifications();
@@ -395,6 +406,7 @@ export function AppProvider({ children }) {
       }
       if (change.entity === 'attendance' && (!change.recipientId || String(change.recipientId) === String(currentUserId))) {
         refreshOpenAttendance();
+        setAttendanceRefreshKey((key) => key + 1);
       }
       if (change.entity === 'gate-config' || change.entity === 'events') {
         refreshGateCache();
@@ -474,6 +486,7 @@ export function AppProvider({ children }) {
     // Lab state
     isUserInLab,
     setIsUserInLab,
+    attendanceRefreshKey,
     presenceActivityEvents,
     recordPresenceActivity,
 

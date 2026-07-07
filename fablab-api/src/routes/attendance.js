@@ -271,20 +271,32 @@ attendanceRouter.post('/check-out', async (req, res, next) => {
   }
 });
 
+async function loadAttendanceForUser(userId) {
+  const result = await query(
+    `
+      select a.*, u.prenom, u.nom, u.role, u.cin, u.tel, u.email
+      from attendance a
+      left join users u on u.id = a.user_id
+      where a.user_id = $1
+      order by a.timestamp_in desc
+    `,
+    [userId]
+  );
+
+  return result.rows.map(mapAttendance);
+}
+
+attendanceRouter.get('/mine', async (req, res, next) => {
+  try {
+    res.json({ attendance: await loadAttendanceForUser(req.user.id) });
+  } catch (error) {
+    next(error);
+  }
+});
+
 attendanceRouter.get('/user/:userId', async (req, res, next) => {
   try {
-    const result = await query(
-      `
-        select a.*, u.prenom, u.nom, u.role, u.cin, u.tel, u.email
-        from attendance a
-        left join users u on u.id = a.user_id
-        where a.user_id = $1
-        order by a.timestamp_in desc
-      `,
-      [req.params.userId]
-    );
-
-    res.json({ attendance: result.rows.map(mapAttendance) });
+    res.json({ attendance: await loadAttendanceForUser(req.params.userId) });
   } catch (error) {
     next(error);
   }

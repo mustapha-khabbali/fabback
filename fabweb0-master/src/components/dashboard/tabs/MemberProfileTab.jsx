@@ -27,7 +27,7 @@ function formatProgramDate(program) {
 }
 
 export default function MemberProfileTab() {
-  const { currentUser, setSelectedUser, selectedUser, setActiveTab, allProjects, userProjects, showNotification, previousTab, currentProjectId, setCurrentProjectId, navigationHistory, setNavigationHistory, sendContactRequest, presenceActivityEvents, usersList, contactPrivacyMode, allowedContactUsers, isUserInLab } = useApp();
+  const { currentUser, setSelectedUser, selectedUser, setActiveTab, allProjects, userProjects, showNotification, previousTab, currentProjectId, setCurrentProjectId, navigationHistory, setNavigationHistory, sendContactRequest, presenceActivityEvents, usersList, contactPrivacyMode, allowedContactUsers, isUserInLab, attendanceRefreshKey } = useApp();
 
   const [viewingProjects, setViewingProjects] = useState(false);
   const [viewingProjectDetailId, setViewingProjectDetailId] = useState(null);
@@ -94,7 +94,7 @@ export default function MemberProfileTab() {
     return () => {
       cancelled = true;
     };
-  }, [displayUserId, isOwnProfile, isUserInLab]);
+  }, [displayUserId, isOwnProfile, isUserInLab, attendanceRefreshKey]);
 
   // Handle deep-link to project from notification
   useEffect(() => {

@@ -326,7 +326,7 @@ export default function UsersView({ profileTarget, onProfileTargetHandled }) {
   }, [loadUsersData]);
 
   useEffect(() => subscribeRealtime((change) => {
-    if (change.entity === 'users') {
+    if (change.entity === 'sync' || change.entity === 'users') {
       loadUsersData({ current: false }, change.id);
     }
   }), [loadUsersData]);

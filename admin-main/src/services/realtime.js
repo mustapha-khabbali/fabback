@@ -5,6 +5,7 @@ let source = null;
 let reconnectTimer = null;
 let reconnectDelay = 1000;
 let stopped = true;
+let visibilityListenerAttached = false;
 
 function notify(change) {
   listeners.forEach((listener) => {
@@ -31,6 +32,33 @@ function scheduleReconnect() {
   }, delay);
 }
 
+function clearReconnectTimer() {
+  if (reconnectTimer) {
+    window.clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+}
+
+function reconnectNow() {
+  if (stopped) return;
+  clearReconnectTimer();
+  reconnectDelay = 1000;
+  openRealtime();
+}
+
+function handleVisibilityChange() {
+  if (document.visibilityState !== 'visible') return;
+  if (!source || source.readyState === EventSource.CLOSED) {
+    reconnectNow();
+  }
+}
+
+function ensureVisibilityListener() {
+  if (visibilityListenerAttached || typeof document === 'undefined') return;
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+  visibilityListenerAttached = true;
+}
+
 function openRealtime() {
   if (stopped || typeof EventSource === 'undefined') return;
   const token = getAdminToken();
@@ -41,6 +69,7 @@ function openRealtime() {
   source.addEventListener('open', () => {
     reconnectDelay = 1000;
     console.info('[realtime] connected');
+    notify({ entity: 'sync', action: 'reconnect', ts: new Date().toISOString() });
   });
   source.addEventListener('change', (event) => {
     notify(JSON.parse(event.data));
@@ -56,15 +85,13 @@ function openRealtime() {
 
 export function startRealtime() {
   stopped = false;
+  ensureVisibilityListener();
   openRealtime();
 }
 
 export function stopRealtime() {
   stopped = true;
-  if (reconnectTimer) {
-    window.clearTimeout(reconnectTimer);
-    reconnectTimer = null;
-  }
+  clearReconnectTimer();
   if (source) {
     source.close();
     source = null;

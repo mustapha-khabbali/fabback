@@ -48,7 +48,7 @@ export default function EventSection() {
   }, [loadEventsData]);
 
   useEffect(() => subscribeRealtime((change) => {
-    if (change.entity === 'events') {
+    if (change.entity === 'sync' || change.entity === 'events') {
       loadEventsData();
     }
   }), [loadEventsData]);

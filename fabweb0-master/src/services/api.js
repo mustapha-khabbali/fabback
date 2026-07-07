@@ -117,6 +117,11 @@ export const api = {
     return body.attendance;
   },
 
+  async getMyAttendance() {
+    const body = await request('/attendance/mine');
+    return body.attendance || [];
+  },
+
   async getUserAttendance(userId) {
     const body = await request(`/attendance/user/${encodeURIComponent(userId)}`);
     return body.attendance || [];

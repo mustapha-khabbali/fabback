@@ -42,7 +42,8 @@ export default function MyProfileTab() {
     setSelectedUser,
     setCurrentProjectId,
     presenceActivityEvents,
-    isUserInLab
+    isUserInLab,
+    attendanceRefreshKey
   } = useApp();
   const [attendanceRows, setAttendanceRows] = useState([]);
   // Refs to avoid stale closures in handleBack
@@ -65,7 +66,7 @@ export default function MyProfileTab() {
     }
 
     let cancelled = false;
-    api.getUserAttendance(currentUserId)
+    api.getMyAttendance()
       .then((rows) => {
         if (!cancelled) setAttendanceRows(rows);
       })
@@ -76,7 +77,7 @@ export default function MyProfileTab() {
     return () => {
       cancelled = true;
     };
-  }, [currentUserId, isUserInLab]);
+  }, [currentUserId, isUserInLab, attendanceRefreshKey]);
 
   const handleBack = () => {
     const history = navHistoryRef.current;

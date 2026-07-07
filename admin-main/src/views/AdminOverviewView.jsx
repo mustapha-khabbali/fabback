@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../services/api';
 import { subscribeRealtime } from '../services/realtime';
 
@@ -221,29 +221,40 @@ export default function AdminOverviewView({ onNavigate }) {
   const [openPresenceMenu, setOpenPresenceMenu] = useState(null);
   const [presenceMenuPosition, setPresenceMenuPosition] = useState({ top: 0, left: 0, width: 0 });
   const [attendanceRows, setAttendanceRows] = useState([]);
+  const [attendanceStale, setAttendanceStale] = useState(false);
+  const attendanceStaleRef = useRef(false);
 
   // Toast state for validation errors
   const [toast, setToast] = useState({ show: false, message: '' });
-  const [toastTimeoutId, setToastTimeoutId] = useState(null);
+  const toastTimeoutRef = useRef(null);
 
-  const showToast = (message) => {
-    if (toastTimeoutId) clearTimeout(toastTimeoutId);
+  const showToast = useCallback((message) => {
+    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
     setToast({ show: true, message });
-    const id = setTimeout(() => {
+    toastTimeoutRef.current = setTimeout(() => {
       setToast({ show: false, message: '' });
     }, 4000);
-    setToastTimeoutId(id);
-  };
+  }, []);
 
   const loadAttendance = useCallback((cancelledRef = { current: false }) => {
     api.getAttendance()
       .then((rows) => {
-        if (!cancelledRef.current) setAttendanceRows(rows);
+        if (!cancelledRef.current) {
+          attendanceStaleRef.current = false;
+          setAttendanceStale(false);
+          setAttendanceRows(rows);
+        }
       })
       .catch(() => {
-        if (!cancelledRef.current) setAttendanceRows([]);
+        if (!cancelledRef.current) {
+          if (!attendanceStaleRef.current) {
+            showToast("Connexion API interrompue — affichage des dernières données.");
+          }
+          attendanceStaleRef.current = true;
+          setAttendanceStale(true);
+        }
       });
-  }, []);
+  }, [showToast]);
 
   useEffect(() => {
     const cancelledRef = { current: false };
@@ -258,7 +269,7 @@ export default function AdminOverviewView({ onNavigate }) {
   }, [loadAttendance, periodMode]);
 
   useEffect(() => subscribeRealtime((change) => {
-    if (periodMode === 'now' && change.entity === 'attendance') {
+    if (change.entity === 'sync' || (periodMode === 'now' && change.entity === 'attendance')) {
       loadAttendance();
     }
   }), [loadAttendance, periodMode]);
@@ -542,6 +553,11 @@ export default function AdminOverviewView({ onNavigate }) {
           <h1 className="text-[32px] font-bold text-white tracking-tight">Dashboard</h1>
         </div>
         <div className="flex items-center space-x-3 shrink-0">
+          {attendanceStale && (
+            <span className="text-[10px] font-bold uppercase tracking-[1.5px] text-amber-300/80">
+              Données en cache
+            </span>
+          )}
           {/* Button 1: Period Selection */}
           <button
             onClick={() => setShowPeriodModal(true)}
