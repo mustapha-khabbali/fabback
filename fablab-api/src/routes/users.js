@@ -9,8 +9,15 @@ export const usersRouter = express.Router();
 
 const roleSchema = z.enum(['stagiaire', 'formateur', 'administrateur', 'visiteur']);
 const optionalText = z.string().trim().optional().nullable();
-const phoneSchema = z.string().trim().regex(/^0[67]\d{8}$/).optional().nullable();
-const emailSchema = z.string().trim().email().transform((value) => value.toLowerCase()).optional().nullable();
+const optionalEmptyText = z.preprocess((value) => value === '' ? null : value, optionalText);
+const phoneSchema = z.preprocess(
+  (value) => value === '' ? null : value,
+  z.string().trim().regex(/^0[67]\d{8}$/).optional().nullable()
+);
+const emailSchema = z.preprocess(
+  (value) => value === '' ? null : value,
+  z.string().trim().email().transform((value) => value.toLowerCase()).optional().nullable()
+);
 const programSchema = z.object({
   name: z.string().trim().min(1),
   type: z.string().trim().min(1),
@@ -19,14 +26,15 @@ const programSchema = z.object({
   dateMode: z.enum(['single', 'range']).optional().nullable(),
   date: z.string().trim().optional().nullable(),
   dateFrom: z.string().trim().optional().nullable(),
-  dateTo: z.string().trim().optional().nullable()
+  dateTo: z.string().trim().optional().nullable(),
+  image: z.string().optional().nullable()
 }).strip();
 
 export const userProfileSchema = z.object({
   role: roleSchema,
   prenom: z.string().trim().min(1),
   nom: z.string().trim().min(1),
-  cin: optionalText,
+  cin: optionalEmptyText,
   cef: optionalText,
   pole: optionalText,
   niveau: optionalText,
@@ -266,6 +274,10 @@ usersRouter.patch('/:id', async (req, res, next) => {
 
 usersRouter.patch('/:id/deactivate', requireRole('administrateur'), async (req, res, next) => {
   try {
+    if (req.params.id === 'user-sara') {
+      res.status(403).json({ error: 'Sara system account cannot be deactivated.' });
+      return;
+    }
     const parsed = emptyBodySchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({ error: 'Invalid request body', details: parsed.error.flatten() });
@@ -323,6 +335,10 @@ usersRouter.patch('/:id/behavior-rating', requireRole('administrateur'), async (
 
 usersRouter.delete('/:id', requireRole('administrateur'), async (req, res, next) => {
   try {
+    if (req.params.id === 'user-sara') {
+      res.status(403).json({ error: 'Sara system account cannot be deleted.' });
+      return;
+    }
     await query('delete from project_contributors where user_id = $1', [req.params.id]);
     await query('delete from project_supervisors where user_id = $1', [req.params.id]);
     const result = await query('delete from users where id = $1 returning id', [req.params.id]);

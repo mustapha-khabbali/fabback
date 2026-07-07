@@ -125,32 +125,36 @@ export default function SupervisorModal({ project, onClose, onSave }) {
       return;
     }
 
-    const newSupervisor = await api.createUser({
-      prenom: newPrenom.trim(),
-      nom: newNom.trim(),
-      role: newRole,
-      email: '',
-      tel: '',
-      cin: '',
-      cef: 'N/A',
-      pole: 'Direction',
-      bio: newType.trim(),
-      points: 0,
-      avatar: null
-    });
+    try {
+      const newSupervisor = await api.createUser({
+        prenom: newPrenom.trim(),
+        nom: newNom.trim(),
+        role: newRole,
+        email: '',
+        tel: '',
+        cin: '',
+        cef: 'N/A',
+        pole: 'Direction',
+        bio: newType.trim(),
+        points: 0,
+        avatar: null
+      });
 
-    addCustomUser(newSupervisor);
-    setLocalCustomUsers((prev) => [...prev, newSupervisor]);
+      addCustomUser(newSupervisor);
+      setLocalCustomUsers((prev) => [...prev, newSupervisor]);
 
-    const nextIds = [...selectedIds, newSupervisor.id];
-    setSelectedIds(nextIds);
-    saveIds(nextIds);
+      const nextIds = [...selectedIds, newSupervisor.id];
+      setSelectedIds(nextIds);
+      saveIds(nextIds);
 
-    setNewPrenom('');
-    setNewNom('');
-    setNewRole('formateur');
-    setNewType('');
-    showNotification(`Encadrant ${newSupervisor.prenom} ${newSupervisor.nom} créé et ajouté.`);
+      setNewPrenom('');
+      setNewNom('');
+      setNewRole('formateur');
+      setNewType('');
+      showNotification(`Encadrant ${newSupervisor.prenom} ${newSupervisor.nom} créé et ajouté.`);
+    } catch (error) {
+      showNotification(error.message || "Création de l'encadrant impossible.", 'error');
+    }
   };
 
   return (

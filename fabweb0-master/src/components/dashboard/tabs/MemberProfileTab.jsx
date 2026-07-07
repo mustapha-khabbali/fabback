@@ -355,18 +355,13 @@ export default function MemberProfileTab() {
             <div className="bg-t-surface glass-card p-5 rounded-[32px] shadow-sm border border-t-border space-y-4">
               <div className="flex flex-wrap gap-2">
                 {displayUser?.programs?.length > 0 ? (
-                  Object.entries(
-                    displayUser.programs.reduce((acc, p) => {
-                      acc[p.type] = (acc[p.type] || 0) + 1;
-                      return acc;
-                    }, {})
-                  ).map(([type, count], idx) => (
+                  displayUser.programs.map((program, idx) => (
                     <button
                       key={idx}
-                      onClick={() => setSelectedProgramType(type)}
-                      className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase border transition-all active:scale-95 ${getProgramColor(count)} shadow-sm`}
+                      onClick={() => setSelectedProgramType(program)}
+                      className={`inline-flex max-w-full px-4 py-2 rounded-xl text-[10px] font-black uppercase border transition-all active:scale-95 ${getProgramColor(idx + 1)} shadow-sm`}
                     >
-                      {type} ({count})
+                      <span className="truncate">{program.name}</span>
                     </button>
                   ))
                 ) : (
@@ -506,29 +501,26 @@ export default function MemberProfileTab() {
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
               </div>
               <div className="space-y-1">
-                <h3 className="text-2xl font-black text-t-primary leading-tight uppercase tracking-tighter">{selectedProgramType}</h3>
-                <p className="text-[10px] font-bold text-t-tertiary uppercase tracking-widest">Liste des participations</p>
+                <h3 className="text-2xl font-black text-t-primary leading-tight uppercase tracking-tighter">{selectedProgramType.name}</h3>
+                <p className="text-[10px] font-bold text-t-tertiary uppercase tracking-widest">{selectedProgramType.type}</p>
               </div>
             </div>
             <div className="flex-1 overflow-y-auto px-8 pb-4 space-y-3 custom-scrollbar">
-              {displayUser?.programs
-                ?.filter(p => p.type === selectedProgramType)
-                .map((p, idx) => (
-                  <div key={idx} className="p-4 bg-[#F0F7FF] rounded-2xl border border-blue-50 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-black text-t-primary">{p.name}</p>
-                      <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${p.result === 'Win' ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-100 text-blue-600'}`}>
-                        {p.result}
-                      </span>
-                    </div>
-                    {(p.description || formatProgramDate(p)) && (
-                      <div className="space-y-1">
-                        {p.description && <p className="text-[11px] text-t-secondary font-medium leading-relaxed">{p.description}</p>}
-                        {formatProgramDate(p) && <p className="text-[10px] text-t-tertiary font-bold uppercase tracking-widest">{formatProgramDate(p)}</p>}
-                      </div>
-                    )}
+              <div className="p-4 bg-[#F0F7FF] rounded-2xl border border-blue-50 space-y-3">
+                {selectedProgramType.image && <img src={selectedProgramType.image} alt="" className="w-full h-36 object-cover rounded-2xl border border-blue-100" />}
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-black text-t-primary truncate">{selectedProgramType.name}</p>
+                  <span className={`shrink-0 text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${selectedProgramType.result === 'Win' ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-100 text-blue-600'}`}>
+                    {selectedProgramType.result}
+                  </span>
+                </div>
+                {(selectedProgramType.description || formatProgramDate(selectedProgramType)) && (
+                  <div className="space-y-1">
+                    {selectedProgramType.description && <p className="text-[11px] text-t-secondary font-medium leading-relaxed">{selectedProgramType.description}</p>}
+                    {formatProgramDate(selectedProgramType) && <p className="text-[10px] text-t-tertiary font-bold uppercase tracking-widest">{formatProgramDate(selectedProgramType)}</p>}
                   </div>
-                ))}
+                )}
+              </div>
             </div>
             <div className="p-8 pt-0 shrink-0">
               <button

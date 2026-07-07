@@ -42,7 +42,7 @@ function GateCard({ type }) {
     if (isIn) {
       await api.saveGateConfig(activeConfig(DEFAULT_GATE_IN_CONFIG));
     }
-    const qr = isEvent ? { gate: 'EVENT', id: 'event' } : await api.getPermanentGateQr(isIn ? 'GATE_IN' : 'GATE_OUT');
+    const qr = await api.getPermanentGateQr(isIn ? 'GATE_IN' : (isEvent ? 'EVENT' : 'GATE_OUT'));
     const data = JSON.stringify({
       action: isIn ? 'check_in' : (isEvent ? 'event' : 'check_out'),
       lab: 'CMC_BENI_MELLAL',

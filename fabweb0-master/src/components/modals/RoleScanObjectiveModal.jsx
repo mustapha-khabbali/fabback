@@ -65,6 +65,7 @@ export default function RoleScanObjectiveModal() {
   const [selectedProjectId, setSelectedProjectId] = useState('');
   const [selectedEventId, setSelectedEventId] = useState('');
   const currentUserId = getPrimaryUserId(currentUser);
+  const forcedOptionId = pendingScanPayload?.gate === 'EVENT' ? 'event' : '';
 
   const supervisedProjects = useMemo(() => {
     return uniqueById([...(userProjects || []), ...(allProjects || [])]).filter((project) =>
@@ -74,7 +75,8 @@ export default function RoleScanObjectiveModal() {
 
   if (!showRoleScanObjectiveModal) return null;
 
-  const selectedOption = options.find((option) => option.id === selectedOptionId);
+  const effectiveSelectedOptionId = selectedOptionId || forcedOptionId;
+  const selectedOption = options.find((option) => option.id === effectiveSelectedOptionId);
 
   const reset = () => {
     setSelectedOptionId('');
@@ -167,7 +169,7 @@ export default function RoleScanObjectiveModal() {
           <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" /></svg>
         </button>
 
-        {selectedOptionId && (
+        {effectiveSelectedOptionId && (
           <button onClick={reset} className="absolute top-4 left-4 p-2 text-t-tertiary hover:text-t-primary transition-colors">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7" /></svg>
           </button>
@@ -183,7 +185,7 @@ export default function RoleScanObjectiveModal() {
         </div>
 
         <div className="flex-1 overflow-y-auto custom-scrollbar px-1 space-y-4">
-          {!selectedOptionId ? (
+          {!effectiveSelectedOptionId ? (
             <div className="space-y-2">
               {options.map((option) => (
                 <button

@@ -8,7 +8,7 @@ export const attendanceRouter = express.Router();
 
 const checkInSchema = z.object({
   qr: z.object({
-    gate: z.literal('GATE_IN'),
+    gate: z.enum(['GATE_IN', 'EVENT']),
     id: z.string().trim().min(1)
   }).optional(),
   objective: z.string().optional(),
@@ -33,7 +33,11 @@ const checkOutSchema = z.object({
 const LAB_TIME_ZONE = 'Africa/Casablanca';
 
 async function assertPermanentQr(gate, qr, res) {
-  const column = gate === 'GATE_IN' ? 'permanent_gate_in_qr_id' : 'permanent_gate_out_qr_id';
+  const column = gate === 'GATE_IN'
+    ? 'permanent_gate_in_qr_id'
+    : gate === 'EVENT'
+      ? 'permanent_event_qr_id'
+      : 'permanent_gate_out_qr_id';
   const result = await query(`select ${column} as permanent_qr_id from gate_config where id = 1`);
   const permanentQrId = result.rows[0]?.permanent_qr_id;
 
@@ -170,7 +174,7 @@ attendanceRouter.post('/check-in', async (req, res, next) => {
     }
 
     const data = parsed.data;
-    if (!(await assertPermanentQr('GATE_IN', data.qr, res))) return;
+    if (!(await assertPermanentQr(data.qr?.gate || 'GATE_IN', data.qr, res))) return;
 
     const { attendance, autoClosed } = await withTransaction(async (client) => {
       const open = await findLatestOpenAttendance(client, req.user.id);

@@ -104,6 +104,7 @@ export function AppProvider({ children }) {
   const [previousTab, setPreviousTab] = useState(TABS.SEARCH);
   const [selectedNotificationRequest, setSelectedNotificationRequest] = useState(null);
   const [reviewingProject, setReviewingProject] = useState(null);
+  const [projectCreateRequestKey, setProjectCreateRequestKey] = useState(0);
 
   const sendContactRequest = (targetUserId) => {
     const requesterId = getPrimaryUserId(currentUser);
@@ -522,6 +523,8 @@ export function AppProvider({ children }) {
     saveRecycleBin,
     currentProjectId,
     setCurrentProjectId,
+    projectCreateRequestKey,
+    requestProjectCreate: () => setProjectCreateRequestKey((key) => key + 1),
 
     // Articles
     userArticles,

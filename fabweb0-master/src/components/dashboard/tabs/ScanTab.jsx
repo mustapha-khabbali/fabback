@@ -26,13 +26,14 @@ export default function ScanTab() {
     const scanAction = payload?.gate || payload?.action || decodedText;
     const isGateInScan = scanAction === 'GATE_IN' || scanAction === 'check_in' || scanAction === 'fablab';
     const isGateOutScan = scanAction === 'GATE_OUT' || scanAction === 'check_out';
+    const isEventScan = scanAction === 'EVENT' || scanAction === 'event';
 
-    if (!payload?.id || (!isGateInScan && !isGateOutScan)) {
+    if (!payload?.id || (!isGateInScan && !isGateOutScan && !isEventScan)) {
       showNotification('QR code non reconnu.', 'error');
       return;
     }
 
-    if (effectiveIsUserInLab && isGateInScan) {
+    if (effectiveIsUserInLab && (isGateInScan || isEventScan)) {
       showNotification('Vous êtes déjà dans le FabLab — scannez le QR Gate-OUT pour sortir.', 'error');
       return;
     }
@@ -42,7 +43,7 @@ export default function ScanTab() {
       return;
     }
 
-    if (isGateInScan) {
+    if (isGateInScan || isEventScan) {
       try {
         const gate = await api.getGateConfig();
         localStorage.setItem('gate_in_config', JSON.stringify(gate.config || {}));
@@ -51,7 +52,7 @@ export default function ScanTab() {
         showNotification(error.message || 'Configuration Gate indisponible.', 'error');
         return;
       }
-      setPendingScanPayload({ gate: 'GATE_IN', id: payload.id });
+      setPendingScanPayload({ gate: isEventScan ? 'EVENT' : 'GATE_IN', id: payload.id });
       if (currentUser?.role === 'stagiaire') {
         setShowScanObjectiveModal(true);
       } else {

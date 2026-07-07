@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useApp } from '../../context/AppContext';
+import { useApp, TABS } from '../../context/AppContext';
 import { getPrimaryUserId, isCurrentUserId } from '../../utils/userIdentity';
 import { api } from '../../services/api';
 
@@ -87,7 +87,9 @@ export default function ScanObjectiveModal() {
     addCustomUser,
     showNotification,
     pendingScanPayload,
-    setPendingScanPayload
+    setPendingScanPayload,
+    setActiveTab,
+    requestProjectCreate
   } = useApp();
 
   const config = useMemo(loadGateInConfig, [showScanObjectiveModal]);
@@ -106,6 +108,7 @@ export default function ScanObjectiveModal() {
   const [newRole, setNewRole] = useState('formateur');
   const [newType, setNewType] = useState('');
   const currentUserId = getPrimaryUserId(currentUser);
+  const forcedOptionId = pendingScanPayload?.gate === 'EVENT' ? 'event' : '';
 
   const allAvailableProjects = useMemo(() => {
     const localProjectIds = new Set((userProjects || []).map((project) => project.id));
@@ -128,7 +131,8 @@ export default function ScanObjectiveModal() {
 
   if (!showScanObjectiveModal) return null;
 
-  const selectedOption = options.find((option) => option.id === selectedOptionId);
+  const effectiveSelectedOptionId = selectedOptionId || forcedOptionId;
+  const selectedOption = options.find((option) => option.id === effectiveSelectedOptionId);
   const selectedProject = allAvailableProjects.find((project) => project.id === selectedProjectId);
   const projectSupervisorIds = selectedProject
     ? uniqueById((selectedProject.supervisorIds || [])
@@ -161,6 +165,14 @@ export default function ScanObjectiveModal() {
     reset();
     setPendingScanPayload(null);
     setShowScanObjectiveModal(false);
+  };
+
+  const goToProjectCreate = () => {
+    reset();
+    setPendingScanPayload(null);
+    setShowScanObjectiveModal(false);
+    requestProjectCreate?.();
+    setActiveTab(TABS.MY_PROJECT);
   };
 
   const attachSupervisorToProject = (supervisorId) => {
@@ -331,7 +343,7 @@ export default function ScanObjectiveModal() {
           <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" /></svg>
         </button>
 
-        {selectedOptionId && (
+        {effectiveSelectedOptionId && (
           <button onClick={reset} className="absolute top-4 left-4 p-2 text-t-tertiary hover:text-t-primary transition-colors z-10">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7" /></svg>
           </button>
@@ -347,7 +359,7 @@ export default function ScanObjectiveModal() {
         </div>
 
         <div className="flex-1 overflow-y-auto custom-scrollbar px-1 space-y-4">
-          {!selectedOptionId ? (
+          {!effectiveSelectedOptionId ? (
             <div className="space-y-2">
               {options.map((option) => (
                 <button
@@ -361,19 +373,32 @@ export default function ScanObjectiveModal() {
             </div>
           ) : selectedOption?.requiresProject ? (
             <>
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold text-t-tertiary uppercase px-1">Projet</label>
-                <select
-                  value={selectedProjectId}
-                  onChange={(e) => { setSelectedProjectId(e.target.value); setSelectedSupervisorId(''); setShowNewSupervisor(false); setPresetPick(null); }}
-                  className="w-full p-4 bg-t-surface-alt border border-t-border-strong rounded-2xl outline-none focus:bg-t-surface glass-card focus:border-midnight-blue text-sm font-bold transition-all"
-                >
-                  <option value="">Choisir un projet</option>
-                  {allAvailableProjects.map((project) => (
-                    <option key={project.id} value={project.id}>{project.title}</option>
-                  ))}
-                </select>
-              </div>
+              {allAvailableProjects.length === 0 ? (
+                <div className="space-y-4 py-4 text-center">
+                  <p className="text-sm font-bold text-t-secondary">Vous n'avez aucun projet</p>
+                  <button
+                    type="button"
+                    onClick={goToProjectCreate}
+                    className="w-full py-3 bg-[#3B5FE6] text-white font-bold rounded-xl text-xs uppercase tracking-wider"
+                  >
+                    Créer un projet
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-t-tertiary uppercase px-1">Projet</label>
+                  <select
+                    value={selectedProjectId}
+                    onChange={(e) => { setSelectedProjectId(e.target.value); setSelectedSupervisorId(''); setShowNewSupervisor(false); setPresetPick(null); }}
+                    className="w-full p-4 bg-t-surface-alt border border-t-border-strong rounded-2xl outline-none focus:bg-t-surface glass-card focus:border-midnight-blue text-sm font-bold transition-all"
+                  >
+                    <option value="">Choisir un projet</option>
+                    {allAvailableProjects.map((project) => (
+                      <option key={project.id} value={project.id}>{project.title}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               {selectedProject && (
                 <div className="space-y-2">
@@ -485,7 +510,7 @@ export default function ScanObjectiveModal() {
           )}
         </div>
 
-        <button onClick={finalize} className="w-full py-4 bg-emerald-500 text-white font-bold text-lg rounded-2xl shadow-xl hover:brightness-110 active:scale-95 transition-all shrink-0">
+        <button onClick={finalize} disabled={selectedOption?.requiresProject && allAvailableProjects.length === 0} className="w-full py-4 bg-emerald-500 text-white font-bold text-lg rounded-2xl shadow-xl hover:brightness-110 active:scale-95 transition-all shrink-0 disabled:opacity-40 disabled:active:scale-100">
           Valider l'entrée
         </button>
       </div>

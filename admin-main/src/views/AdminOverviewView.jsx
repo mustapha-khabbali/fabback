@@ -112,9 +112,14 @@ function isProjectPresence(item) {
   return item?.presenceType === 'Projet en cours' || item?.presenceType === 'Project';
 }
 
-function presenceTypeLabel(item, showProjectName = false) {
+function isOtherPresence(item) {
+  return item?.presenceType === 'Other';
+}
+
+function presenceTypeLabel(item, showDetail = false) {
   if (item?.presenceType === 'Event') return item.eventTitle || 'Event';
-  if (isProjectPresence(item) && showProjectName) return item.projectTitle || item.projectName || item.detail || item.presenceType;
+  if (isProjectPresence(item) && showDetail) return item.projectTitle || item.projectName || item.detail || item.presenceType;
+  if (isOtherPresence(item) && showDetail) return item.detail || item.comment || item.presenceType;
   return item?.presenceType || '—';
 }
 
@@ -470,8 +475,18 @@ export default function AdminOverviewView({ onNavigate }) {
   const getDynamicData = () => {
     if (periodMode === 'now') {
       const liveRows = readCurrentPresenceRows(attendanceRows);
+      const today = toLabISODate(new Date());
+      const ratedTodayRows = attendanceRows
+        .map(normalizeDashboardJournalRow)
+        .filter((row) => {
+          const timestampOut = safeDate(row.timestampOut);
+          return timestampOut && toLabISODate(timestampOut) === today && row.rating > 0;
+        });
+      const avgRating = ratedTodayRows.length
+        ? (ratedTodayRows.reduce((sum, row) => sum + row.rating, 0) / ratedTodayRows.length).toFixed(1)
+        : 0;
       return {
-        metrics: { present: liveRows.length, total: attendanceRows.length, exits: attendanceRows.filter(row => row.timestampOut).length, avgRating: 0 },
+        metrics: { present: liveRows.length, total: attendanceRows.length, exits: attendanceRows.filter(row => row.timestampOut).length, avgRating },
         presents: liveRows
       };
     }
@@ -1013,8 +1028,8 @@ export default function AdminOverviewView({ onNavigate }) {
                       </tr>
                     ) : filteredPresents.map((s) => {
                       const rowKey = s.id || s.name;
-                      const hasProjectName = isProjectPresence(s) && (s.projectTitle || s.projectName || s.detail);
-                      const projectRevealed = !!revealedProjects[rowKey];
+                      const hasRevealText = (isProjectPresence(s) && (s.projectTitle || s.projectName || s.detail)) || (isOtherPresence(s) && s.detail);
+                      const detailRevealed = !!revealedProjects[rowKey];
                       const isCompleted = periodMode === 'custom' && !!s.timeOut;
 
                       return (
@@ -1045,13 +1060,13 @@ export default function AdminOverviewView({ onNavigate }) {
                           <button
                             type="button"
                             onClick={() => {
-                              if (!hasProjectName) return;
+                              if (!hasRevealText) return;
                               setRevealedProjects((current) => ({ ...current, [rowKey]: !current[rowKey] }));
                             }}
-                            title={hasProjectName ? (s.projectTitle || s.projectName || s.detail) : undefined}
-                            className={`block max-w-full truncate text-[11px] font-bold text-accent-blue bg-accent-blue/10 px-2.5 py-1 rounded-lg whitespace-nowrap transition-colors ${hasProjectName ? 'cursor-pointer hover:bg-accent-blue/20' : 'cursor-default'}`}
+                            title={hasRevealText ? (s.projectTitle || s.projectName || s.detail) : undefined}
+                            className={`block max-w-full truncate text-[11px] font-bold text-accent-blue bg-accent-blue/10 px-2.5 py-1 rounded-lg whitespace-nowrap transition-colors ${hasRevealText ? 'cursor-pointer hover:bg-accent-blue/20' : 'cursor-default'}`}
                           >
-                            {presenceTypeLabel(s, projectRevealed)}
+                            {presenceTypeLabel(s, detailRevealed)}
                           </button>
                         </td>
                         <td className="px-2 py-3.5">

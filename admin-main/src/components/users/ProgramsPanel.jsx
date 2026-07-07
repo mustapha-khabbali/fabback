@@ -19,8 +19,27 @@ const EMPTY_FORM = {
   dateFrom: '',
   dateTo: '',
   type: '',
-  result: ''
+  result: '',
+  image: null
 };
+
+function compressImageFile(file, maxSize = 512, quality = 0.82) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => {
+      const scale = Math.min(1, maxSize / Math.max(image.width, image.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(image.width * scale));
+      canvas.height = Math.max(1, Math.round(image.height * scale));
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(image.src);
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    image.onerror = () => reject(new Error('Image programme invalide.'));
+    image.src = URL.createObjectURL(file);
+  });
+}
 
 function countByType(programs) {
   return programs.reduce((acc, program) => {
@@ -48,7 +67,8 @@ function normalizeProgram(form) {
     dateMode: form.dateMode,
     date: form.dateMode === 'single' ? form.date || null : null,
     dateFrom: form.dateMode === 'range' ? form.dateFrom || null : null,
-    dateTo: form.dateMode === 'range' ? form.dateTo || null : null
+    dateTo: form.dateMode === 'range' ? form.dateTo || null : null,
+    image: form.image || null
   };
 }
 
@@ -87,6 +107,18 @@ export default function ProgramsPanel({ user, onUpdatePrograms }) {
     if (!form.name.trim() || !form.type || !form.result) return false;
     if (form.dateMode === 'single') return Boolean(form.date);
     return Boolean(form.dateFrom && form.dateTo && form.dateFrom <= form.dateTo);
+  };
+
+  const handleImagePick = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    try {
+      const image = await compressImageFile(file);
+      setForm((prev) => ({ ...prev, image }));
+    } catch (error) {
+      alert(error.message);
+    }
   };
 
   const handleAddToBatch = () => {
@@ -204,6 +236,15 @@ export default function ProgramsPanel({ user, onUpdatePrograms }) {
               />
             </div>
 
+            <div className="flex flex-col">
+              <span className="text-[10px] font-bold text-white/40 uppercase tracking-[2px] mb-2 ml-1">Image</span>
+              <input id="admin-program-image" type="file" accept="image/*" onChange={handleImagePick} className="hidden" />
+              <label htmlFor="admin-program-image" className="w-full text-center py-3 rounded-lg border border-dashed border-white/15 bg-white/[0.04] text-white/70 hover:text-white hover:bg-white/[0.06] text-[12px] font-bold transition-colors cursor-pointer">
+                {form.image ? 'Changer image' : 'Ajouter image'}
+              </label>
+              {form.image && <img src={form.image} alt="" className="mt-3 w-full h-32 object-cover rounded-xl border border-white/10" />}
+            </div>
+
             <div className="space-y-3">
               <span className="block text-[10px] font-bold text-white/40 uppercase tracking-[2px] ml-1">Date</span>
               <div className="grid grid-cols-2 gap-2 p-1 bg-white/[0.03] border border-white/10 rounded-xl">
@@ -316,6 +357,7 @@ export default function ProgramsPanel({ user, onUpdatePrograms }) {
 
         <div className="grid grid-cols-1 lg:grid-cols-[1.3fr_0.7fr] gap-5">
           <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-6 space-y-3">
+            {selectedProgram.image && <img src={selectedProgram.image} alt="" className="w-full h-48 object-cover rounded-xl border border-white/10 mb-4" />}
             <p className="text-[10px] font-bold text-white/35 uppercase tracking-[2px]">Description</p>
             <p className="text-[14px] text-white/75 leading-relaxed">{selectedProgram.description || 'Aucune description.'}</p>
           </div>
@@ -400,9 +442,9 @@ export default function ProgramsPanel({ user, onUpdatePrograms }) {
                 key={`${program.name}-${program.type}-${originalIndex}`}
                 onClick={() => openDetails(program, originalIndex)}
                 disabled={isSaving}
-                className={`group inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border text-[12px] font-black transition-all cursor-pointer disabled:opacity-40 ${style}`}
+                className={`group inline-flex max-w-full items-center gap-2 px-4 py-2.5 rounded-xl border text-[12px] font-black transition-all cursor-pointer disabled:opacity-40 ${style}`}
               >
-                <span>{program.name}</span>
+                <span className="truncate">{program.name}</span>
                 {deleteMode && (
                   <span className="w-5 h-5 rounded-md bg-black/15 flex items-center justify-center">
                     <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3">

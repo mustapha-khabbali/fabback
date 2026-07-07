@@ -19,7 +19,7 @@ const VIEWS = {
 };
 
 export default function MyProjectTab() {
-  const { currentProjectId } = useApp();
+  const { currentProjectId, projectCreateRequestKey } = useApp();
   const [view, setView] = useState(() => currentProjectId ? VIEWS.DETAIL : VIEWS.HOME);
 
   useEffect(() => {
@@ -29,6 +29,12 @@ export default function MyProjectTab() {
       setView(VIEWS.HOME);
     }
   }, [currentProjectId]);
+
+  useEffect(() => {
+    if (projectCreateRequestKey > 0) {
+      setView(VIEWS.CREATE);
+    }
+  }, [projectCreateRequestKey]);
 
   const renderView = () => {
     switch (view) {

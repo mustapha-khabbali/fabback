@@ -13,6 +13,25 @@ import { useFirebase } from '../../../context/FirebaseContext';
 
 const SHOW_PROFILE_LEVEL_BADGE = false;
 const PROGRAM_TYPES = ['Hackathon', 'Event', 'Bootcamp', 'Workshop', 'Formation', 'Autre'];
+const EMPTY_PROGRAM_FORM = { name: '', description: '', dateMode: 'single', date: '', dateFrom: '', dateTo: '', type: '', result: '', image: null };
+
+function compressImageFile(file, maxSize = 512, quality = 0.82) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => {
+      const scale = Math.min(1, maxSize / Math.max(image.width, image.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(image.width * scale));
+      canvas.height = Math.max(1, Math.round(image.height * scale));
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(image.src);
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    image.onerror = () => reject(new Error("Image programme invalide."));
+    image.src = URL.createObjectURL(file);
+  });
+}
 
 function formatProgramDate(program) {
   if (program.dateMode === 'range') {
@@ -131,7 +150,7 @@ export default function MyProfileTab() {
     programs: currentUser?.programs || [],
   });
   const [selectedProgramType, setSelectedProgramType] = useState(null);
-  const [newProgForm, setNewProgForm] = useState({ name: '', description: '', dateMode: 'single', date: '', dateFrom: '', dateTo: '', type: '', result: '' });
+  const [newProgForm, setNewProgForm] = useState(EMPTY_PROGRAM_FORM);
 
   // Programs feature state
   const [showProgramsView, setShowProgramsView] = useState(false);
@@ -188,6 +207,18 @@ export default function MyProfileTab() {
     if (count === 3) return 'bg-rose-50 text-rose-600 border-rose-200 shadow-rose-100/50';
     if (count === 4) return 'bg-indigo-50 text-indigo-600 border-indigo-200 shadow-indigo-100/50';
     return 'bg-emerald-50 text-emerald-600 border-emerald-200 shadow-emerald-100/50'; // 5+
+  };
+
+  const handleProgramImagePick = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    try {
+      const image = await compressImageFile(file);
+      setNewProgForm(prev => ({ ...prev, image }));
+    } catch (error) {
+      showNotification(error.message || "Image programme invalide.", 'error');
+    }
   };
 
   const updateEdit = (field, value) => setEditForm(prev => ({ ...prev, [field]: value }));
@@ -526,9 +557,9 @@ export default function MyProfileTab() {
                   <div className="space-y-3 max-h-40 overflow-y-auto custom-scrollbar">
                     {editForm.programs.map((prog, idx) => (
                       <div key={idx} className="flex items-center justify-between p-3 bg-blue-50/50 rounded-2xl border border-blue-100 mb-2">
-                        <div className="flex flex-col">
-                          <span className="text-[11px] font-black text-t-primary uppercase">{prog.type}</span>
-                          <span className="text-[10px] text-t-secondary">{prog.name}</span>
+                        <div className="flex min-w-0 flex-col">
+                          <span className="text-[11px] font-black text-t-primary uppercase truncate">{prog.name}</span>
+                          <span className="text-[10px] text-t-secondary truncate">{prog.type}</span>
                         </div>
                         <button 
                           onClick={() => {
@@ -559,6 +590,15 @@ export default function MyProfileTab() {
                         placeholder="Description"
                         className="w-full h-24 text-sm font-bold text-t-primary bg-t-surface glass-card rounded-xl outline-none px-4 py-3 border-2 border-transparent focus:border-[#3B5FE6] resize-none"
                       />
+                      <div className="space-y-2">
+                        <input id="program-image" type="file" accept="image/*" onChange={handleProgramImagePick} className="hidden" />
+                        <label htmlFor="program-image" className="block w-full text-center py-3 bg-t-surface glass-card text-[#3B5FE6] border-2 border-dashed border-[#3B5FE6]/20 rounded-xl text-[10px] font-black uppercase tracking-widest active:scale-95 transition-all">
+                          {newProgForm.image ? 'Changer image' : 'Ajouter image'}
+                        </label>
+                        {newProgForm.image && (
+                          <img src={newProgForm.image} alt="" className="w-full h-28 object-cover rounded-2xl border border-blue-100" />
+                        )}
+                      </div>
                     </div>
                     <div className="space-y-2">
                       <p className="text-[10px] font-black text-t-tertiary uppercase px-1">Date</p>
@@ -654,7 +694,7 @@ export default function MyProfileTab() {
                         }
 
                         updateEdit('programs', [...editForm.programs, { ...newProgForm }]);
-                        setNewProgForm({ name: '', description: '', dateMode: 'single', date: '', dateFrom: '', dateTo: '', type: '', result: '' });
+                        setNewProgForm(EMPTY_PROGRAM_FORM);
                         showNotification("Programme ajouté à la liste !");
                       }}
                       className="w-full py-4 bg-midnight-blue text-white text-[11px] font-black rounded-2xl shadow-xl active:scale-95 transition-all uppercase tracking-widest"
@@ -666,18 +706,13 @@ export default function MyProfileTab() {
               ) : (
                 <div className="flex flex-wrap gap-2">
                   {currentUser?.programs?.length > 0 ? (
-                    Object.entries(
-                      currentUser.programs.reduce((acc, p) => {
-                        acc[p.type] = (acc[p.type] || 0) + 1;
-                        return acc;
-                      }, {})
-                    ).map(([type, count], idx) => (
+                    currentUser.programs.map((program, idx) => (
                       <button 
                         key={idx} 
-                        onClick={() => setSelectedProgramType(type)}
-                        className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase border transition-all active:scale-95 ${getProgramColor(count)} shadow-sm`}
+                        onClick={() => setSelectedProgramType(program)}
+                        className={`inline-flex max-w-full px-4 py-2 rounded-xl text-[10px] font-black uppercase border transition-all active:scale-95 ${getProgramColor(idx + 1)} shadow-sm`}
                       >
-                        {type} ({count})
+                        <span className="truncate">{program.name}</span>
                       </button>
                     ))
                   ) : (
@@ -706,31 +741,28 @@ export default function MyProfileTab() {
                 </div>
 
                 <div className="space-y-1">
-                  <h3 className="text-2xl font-black text-t-primary leading-tight uppercase tracking-tighter">{selectedProgramType}</h3>
-                  <p className="text-[10px] font-bold text-t-tertiary uppercase tracking-widest">Liste des participations</p>
+                  <h3 className="text-2xl font-black text-t-primary leading-tight uppercase tracking-tighter">{selectedProgramType.name}</h3>
+                  <p className="text-[10px] font-bold text-t-tertiary uppercase tracking-widest">{selectedProgramType.type}</p>
                 </div>
               </div>
 
               {/* Scrollable List */}
               <div className="flex-1 overflow-y-auto px-8 pb-4 space-y-3 custom-scrollbar">
-                {currentUser.programs
-                  .filter(p => p.type === selectedProgramType)
-                  .map((p, idx) => (
-                    <div key={idx} className="p-4 bg-[#F0F7FF] rounded-2xl border border-blue-50 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm font-black text-t-primary">{p.name}</p>
-                        <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${p.result === 'Win' ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-100 text-blue-600'}`}>
-                          {p.result}
-                        </span>
-                      </div>
-                      {(p.description || formatProgramDate(p)) && (
-                        <div className="space-y-1">
-                          {p.description && <p className="text-[11px] text-t-secondary font-medium leading-relaxed">{p.description}</p>}
-                          {formatProgramDate(p) && <p className="text-[10px] text-t-tertiary font-bold uppercase tracking-widest">{formatProgramDate(p)}</p>}
-                        </div>
-                      )}
+                <div className="p-4 bg-[#F0F7FF] rounded-2xl border border-blue-50 space-y-3">
+                  {selectedProgramType.image && <img src={selectedProgramType.image} alt="" className="w-full h-36 object-cover rounded-2xl border border-blue-100" />}
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-black text-t-primary truncate">{selectedProgramType.name}</p>
+                    <span className={`shrink-0 text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${selectedProgramType.result === 'Win' ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-100 text-blue-600'}`}>
+                      {selectedProgramType.result}
+                    </span>
+                  </div>
+                  {(selectedProgramType.description || formatProgramDate(selectedProgramType)) && (
+                    <div className="space-y-1">
+                      {selectedProgramType.description && <p className="text-[11px] text-t-secondary font-medium leading-relaxed">{selectedProgramType.description}</p>}
+                      {formatProgramDate(selectedProgramType) && <p className="text-[10px] text-t-tertiary font-bold uppercase tracking-widest">{formatProgramDate(selectedProgramType)}</p>}
                     </div>
-                  ))}
+                  )}
+                </div>
               </div>
 
               <div className="p-8 pt-0 shrink-0">

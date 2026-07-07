@@ -14,8 +14,9 @@ function isActive(evt) {
   return new Date(end) >= today;
 }
 
-// One constant QR for all events — the app resolves the active events on scan.
-const EVENT_QR_PAYLOAD = JSON.stringify({ action: 'event', lab: 'CMC_BENI_MELLAL', gate: 'EVENT' });
+function eventQrPayload(id) {
+  return JSON.stringify({ action: 'event', lab: 'CMC_BENI_MELLAL', gate: 'EVENT', id });
+}
 
 export default function EventSection() {
   const [users, setUsers] = useState([]);
@@ -102,8 +103,13 @@ export default function EventSection() {
 
   const toggleQr = async () => {
     if (qrDataUrl) { setQrDataUrl(null); return; }
-    const url = await QRCode.toDataURL(EVENT_QR_PAYLOAD, { width: 512, color: { dark: '#4318FF', light: '#ffffff' }, errorCorrectionLevel: 'H' });
-    setQrDataUrl(url);
+    try {
+      const qr = await api.getPermanentGateQr('EVENT');
+      const url = await QRCode.toDataURL(eventQrPayload(qr.id), { width: 512, color: { dark: '#4318FF', light: '#ffffff' }, errorCorrectionLevel: 'H' });
+      setQrDataUrl(url);
+    } catch (error) {
+      alert(error.message);
+    }
   };
 
   const downloadQr = () => {

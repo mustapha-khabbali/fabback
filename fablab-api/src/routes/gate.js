@@ -20,16 +20,19 @@ const gateConfigSchema = z.object({
   config: z.record(z.array(gateOptionSchema))
 });
 
-const gateParamSchema = z.enum(['GATE_IN', 'GATE_OUT']);
+const gateParamSchema = z.enum(['GATE_IN', 'GATE_OUT', 'EVENT']);
 
 function qrColumn(gate) {
-  return gate === 'GATE_IN' ? 'permanent_gate_in_qr_id' : 'permanent_gate_out_qr_id';
+  if (gate === 'GATE_IN') return 'permanent_gate_in_qr_id';
+  if (gate === 'EVENT') return 'permanent_event_qr_id';
+  return 'permanent_gate_out_qr_id';
 }
 
 function mapPermanentQr(row) {
   return {
     GATE_IN: row?.permanent_gate_in_qr_id || null,
-    GATE_OUT: row?.permanent_gate_out_qr_id || null
+    GATE_OUT: row?.permanent_gate_out_qr_id || null,
+    EVENT: row?.permanent_event_qr_id || null
   };
 }
 
@@ -44,7 +47,7 @@ async function getOrCreatePermanentQr(gate) {
       set
         ${column} = coalesce(gate_config.${column}, excluded.${column}),
         updated_at = case when gate_config.${column} is null then now() else gate_config.updated_at end
-      returning permanent_gate_in_qr_id, permanent_gate_out_qr_id, updated_at
+      returning permanent_gate_in_qr_id, permanent_gate_out_qr_id, permanent_event_qr_id, updated_at
     `,
     [newId]
   );
@@ -78,7 +81,7 @@ gateRouter.use(requireAuth);
 
 gateRouter.get('/config', async (_req, res, next) => {
   try {
-    const configResult = await query('select config, permanent_gate_in_qr_id, permanent_gate_out_qr_id from gate_config where id = 1');
+    const configResult = await query('select config, permanent_gate_in_qr_id, permanent_gate_out_qr_id, permanent_event_qr_id from gate_config where id = 1');
     const eventsResult = await query(
       `
         select *
@@ -123,7 +126,7 @@ gateRouter.get('/dev/permanent-qr/:gate', async (req, res, next) => {
     }
 
     const gate = String(req.params.gate || '').toUpperCase();
-    if (!['GATE_IN', 'GATE_OUT'].includes(gate)) {
+    if (!['GATE_IN', 'GATE_OUT', 'EVENT'].includes(gate)) {
       res.status(400).json({ error: 'Invalid gate' });
       return;
     }

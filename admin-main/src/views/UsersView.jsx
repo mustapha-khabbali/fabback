@@ -316,6 +316,8 @@ export default function UsersView({ profileTarget, onProfileTargetHandled }) {
 
     return matchesSearch && matchesRole;
   });
+  const isFiltered = searchTerm.trim() || selectedRole !== 'All';
+  const usersCountLabel = isFiltered ? `${filteredUsers.length} / ${users.length}` : `${users.length} utilisateurs`;
 
   useEffect(() => {
     const cancelledRef = { current: false };
@@ -360,6 +362,7 @@ export default function UsersView({ profileTarget, onProfileTargetHandled }) {
   // If a user profile is clicked, show the full detailed screen
   if (selectedUser) {
     const isStagiaire = selectedUser.role === 'Stagiaire';
+    const isSaraSystemAccount = selectedUser.id === 'user-sara';
 
     return (
       <section className="animate-in fade-in duration-300">
@@ -536,27 +539,31 @@ export default function UsersView({ profileTarget, onProfileTargetHandled }) {
                       </svg>
                     </button>
 
-                    {/* Désactiver / Réactiver */}
-                    <button
-                      onClick={() => setShowDeactivateModal(true)}
-                      className="w-full bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-white text-[12px] font-bold py-3 px-4 rounded-xl flex items-center justify-between transition-colors cursor-pointer"
-                    >
-                      <span>{selectedUser.isDeactivated ? 'Réactiver le profil' : 'Désactiver le profil'}</span>
-                      <svg className="w-4 h-4 text-white/40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M18.36 18.36A9 9 0 015.64 5.64m12.72 12.72A9 9 0 005.64 5.64m12.72 12.72L5.64 5.64" />
-                      </svg>
-                    </button>
+                    {!isSaraSystemAccount && (
+                      <>
+                        {/* Désactiver / Réactiver */}
+                        <button
+                          onClick={() => setShowDeactivateModal(true)}
+                          className="w-full bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-white text-[12px] font-bold py-3 px-4 rounded-xl flex items-center justify-between transition-colors cursor-pointer"
+                        >
+                          <span>{selectedUser.isDeactivated ? 'Réactiver le profil' : 'Désactiver le profil'}</span>
+                          <svg className="w-4 h-4 text-white/40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M18.36 18.36A9 9 0 015.64 5.64m12.72 12.72A9 9 0 005.64 5.64m12.72 12.72L5.64 5.64" />
+                          </svg>
+                        </button>
 
-                    {/* Supprimer */}
-                    <button
-                      onClick={() => setShowRemoveModal(true)}
-                      className="w-full bg-white/[0.04] hover:bg-red-500/10 hover:border-red-500/20 border border-white/10 text-accent-red text-[12px] font-bold py-3 px-4 rounded-xl flex items-center justify-between transition-colors cursor-pointer"
-                    >
-                      <span>Supprimer le profil</span>
-                      <svg className="w-4 h-4 text-accent-red" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    </button>
+                        {/* Supprimer */}
+                        <button
+                          onClick={() => setShowRemoveModal(true)}
+                          className="w-full bg-white/[0.04] hover:bg-red-500/10 hover:border-red-500/20 border border-white/10 text-accent-red text-[12px] font-bold py-3 px-4 rounded-xl flex items-center justify-between transition-colors cursor-pointer"
+                        >
+                          <span>Supprimer le profil</span>
+                          <svg className="w-4 h-4 text-accent-red" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </>
+                    )}
                   </>
                 )}
               </div>
@@ -956,7 +963,10 @@ export default function UsersView({ profileTarget, onProfileTargetHandled }) {
       <div className="mb-7 mt-2 flex items-center justify-between">
         <div>
           <p className="text-[12px] font-medium text-white/50 mb-1">Pages / Users</p>
-          <h1 className="text-[32px] font-bold text-white tracking-tight">Utilisateurs</h1>
+          <div className="flex items-baseline gap-3">
+            <h1 className="text-[32px] font-bold text-white tracking-tight">Utilisateurs</h1>
+            <span className="text-[12px] font-bold text-white/40 uppercase tracking-[2px]">{usersCountLabel}</span>
+          </div>
         </div>
         <button
           onClick={() => setShowAddUser(true)}
