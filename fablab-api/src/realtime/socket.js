@@ -76,6 +76,10 @@ export function attachRealtimeSocket(server) {
 
       if (!shouldDeliver(change, user)) return;
 
+      if (change.entity === 'notifications') {
+        console.log(`[ws] notif ${change.id} → user=${user.id}`);
+      }
+
       if (change.entity === 'users' && change.action === 'deactivate') {
         const current = await query('select is_deactivated from users where id = $1', [user.id]);
         if (current.rows[0]?.is_deactivated) {

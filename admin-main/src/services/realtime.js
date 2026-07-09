@@ -54,7 +54,12 @@ function handleVisibilityChange() {
   if (typeof WebSocket === 'undefined') return;
   if (!socket || socket.readyState === WebSocket.CLOSED || socket.readyState === WebSocket.CLOSING) {
     reconnectNow();
+    return;
   }
+  // After phone sleep / tab backgrounding the socket can be half-open: the
+  // client still reports OPEN but server pushes never arrived. Refetch to
+  // catch up on anything missed while the tab was hidden.
+  notify({ entity: 'sync', action: 'visibility', ts: new Date().toISOString() });
 }
 
 function ensureVisibilityListener() {
