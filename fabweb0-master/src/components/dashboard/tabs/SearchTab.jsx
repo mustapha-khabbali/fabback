@@ -14,11 +14,13 @@ export default function SearchTab() {
   const [isFilterOpen, setIsFilterOpen] = useState(false);
 
   const filteredUsers = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return [];
+
     return usersList.filter(user => {
       const matchesSearch =
-        `${user.prenom} ${user.nom}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        user.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        user.cin?.toLowerCase().includes(searchQuery.toLowerCase());
+        (user.prenom || '').toLowerCase().startsWith(query) ||
+        (user.nom || '').toLowerCase().startsWith(query);
 
       const matchesRole = searchFilter === 'ALL' || user.role.toUpperCase() === searchFilter.toUpperCase();
 
@@ -66,7 +68,7 @@ export default function SearchTab() {
           <div className="relative flex-1 flex items-center bg-t-surface glass-card rounded-[24px] shadow-xl shadow-blue-900/5 border border-t-border-subtle overflow-hidden transition-all focus-within:ring-2 focus-within:ring-[#3B5FE6]/20">
             <input
               type="text"
-              placeholder="Nom, Email, CIN..."
+              placeholder="Nom ou prénom..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="flex-1 min-w-0 py-4 pl-3 pr-0 text-[13px] font-bold text-t-primary outline-none placeholder:text-t-muted"
@@ -130,10 +132,6 @@ export default function SearchTab() {
                 </div>
                 {/* Email hidden for privacy */}
                 <div className="flex items-center space-x-3 mt-2">
-                  <div className="flex items-center space-x-1">
-                    <div className="w-1 h-1 bg-green-400 rounded-full"></div>
-                    <span className="text-[9px] font-bold text-t-muted uppercase tracking-tighter">{user.points || 0} pts</span>
-                  </div>
                   {user.filiere && (
                     <div className="flex items-center space-x-1">
                       <div className="w-1 h-1 bg-blue-400 rounded-full"></div>

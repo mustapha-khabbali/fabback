@@ -7,7 +7,7 @@ import { config } from '../config.js';
 
 export const streamRouter = express.Router();
 
-async function authenticateStreamToken(token) {
+export async function authenticateStreamToken(token) {
   if (!token) {
     const error = new Error('Missing token');
     error.status = 401;
@@ -26,7 +26,7 @@ async function authenticateStreamToken(token) {
   return user;
 }
 
-function shouldDeliver(change, user) {
+export function shouldDeliver(change, user) {
   if (change.entity === 'notifications') {
     return change.recipientId && String(change.recipientId) === String(user.id);
   }

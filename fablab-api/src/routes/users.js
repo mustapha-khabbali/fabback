@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { query } from '../db/pool.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { toPublicUser } from '../models/user.js';
+import { attachInteractionsToUsers } from '../models/interactions.js';
 import { emitRealtimeChange } from '../realtime/bus.js';
 
 export const usersRouter = express.Router();
@@ -174,7 +175,8 @@ usersRouter.get('/', async (req, res, next) => {
       params
     );
 
-    res.json({ users: result.rows.map(toPublicUser) });
+    const users = await attachInteractionsToUsers(result.rows.map(toPublicUser));
+    res.json({ users });
   } catch (error) {
     next(error);
   }
@@ -224,7 +226,8 @@ usersRouter.get('/:id', async (req, res, next) => {
       res.status(404).json({ error: 'User not found' });
       return;
     }
-    res.json({ user: toPublicUser(user) });
+    const [publicUser] = await attachInteractionsToUsers([toPublicUser(user)]);
+    res.json({ user: publicUser });
   } catch (error) {
     next(error);
   }

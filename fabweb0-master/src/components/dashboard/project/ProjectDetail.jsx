@@ -670,7 +670,6 @@ export default function ProjectDetail({ onBack }) {
                   senderName: `${currentUser.prenom} ${currentUser.nom}`,
                   projectTitle: project.title,
                   projectId: project.id,
-                  description: "Mon prototype est terminé et prêt pour la validation finale.",
                   time: 'Maintenant',
                   status: 'pending',
                   // level: 4

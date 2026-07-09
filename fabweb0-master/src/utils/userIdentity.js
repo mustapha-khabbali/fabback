@@ -7,6 +7,10 @@ function makeUserId() {
 
 export function ensureUserIdentity(user) {
   if (!user || typeof user !== 'object') return user;
+  // Never fabricate an identity for an empty user ({}). Doing so creates a
+  // "phantom" logged-in user with no role, which bypasses the login screen
+  // and hides role-gated tabs (e.g. Mon Projet). An empty user must stay empty.
+  if (Object.keys(user).length === 0) return user;
   return {
     ...user,
     id: user.id || user.uid || makeUserId()

@@ -11,6 +11,7 @@ import { eventsRouter } from './routes/events.js';
 import { gateRouter } from './routes/gate.js';
 import { projectsRouter } from './routes/projects.js';
 import { notificationsRouter } from './routes/notifications.js';
+import { interactionsRouter } from './routes/interactions.js';
 import { reviewsRouter } from './routes/reviews.js';
 import { streamRouter } from './routes/stream.js';
 
@@ -75,6 +76,7 @@ export function createApp() {
   app.use('/api/attendance', attendanceRouter);
   app.use('/api/projects', projectsRouter);
   app.use('/api/notifications', notificationsRouter);
+  app.use('/api/interactions', interactionsRouter);
   app.use('/api/reviews', reviewsRouter);
 
   app.use((req, res) => {

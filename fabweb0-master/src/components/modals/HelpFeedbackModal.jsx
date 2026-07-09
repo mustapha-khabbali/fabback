@@ -13,7 +13,15 @@ export default function HelpFeedbackModal() {
     if (rating === 0) { showNotification("Veuillez donner une note de 1 à 5 étoiles.", 'error'); return; }
     
     try {
-      await api.updateNotification(selectedNotificationRequest.id, { status: 'read', handled: true, approved: true });
+      if (selectedNotificationRequest.interactionOfferId) {
+        await api.rateInteractionOffer(selectedNotificationRequest.interactionOfferId, {
+          notificationId: selectedNotificationRequest.id,
+          rating,
+          comment: note.trim()
+        });
+      } else {
+        await api.updateNotification(selectedNotificationRequest.id, { status: 'read', handled: true, approved: true });
+      }
       showNotification("Merci pour votre évaluation !");
       
       // Remove the notification
@@ -34,6 +42,8 @@ export default function HelpFeedbackModal() {
     setNote('');
   };
 
+  const isReview = selectedNotificationRequest.interactionType === 'review';
+
   return (
     <div 
       className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-midnight-blue/40 backdrop-blur-sm transition-opacity duration-300"
@@ -45,9 +55,9 @@ export default function HelpFeedbackModal() {
             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" /></svg>
         </button>
         <div className="text-center space-y-2 pt-2">
-          <h3 className="text-2xl font-bold text-t-primary">Évaluer l'aide</h3>
+          <h3 className="text-2xl font-bold text-t-primary">{isReview ? 'Évaluer la review' : "Évaluer l'aide"}</h3>
           <p className="text-sm text-t-secondary font-medium leading-relaxed">
-            Comment évaluez-vous l'aide apportée par <b>{selectedNotificationRequest.senderName}</b> ?
+            Comment évaluez-vous {isReview ? 'la review' : "l'aide"} de <b>{selectedNotificationRequest.senderName}</b> ?
           </p>
         </div>
 
@@ -62,7 +72,7 @@ export default function HelpFeedbackModal() {
           ))}
         </div>
 
-        <textarea value={note} onChange={e => setNote(e.target.value)} placeholder="Un commentaire sur son aide ?" rows="2"
+        <textarea value={note} onChange={e => setNote(e.target.value)} placeholder={isReview ? 'Un commentaire sur sa review ?' : 'Un commentaire sur son aide ?'} rows="2"
           className="w-full p-4 bg-t-surface-alt border border-t-border rounded-2xl outline-none focus:border-midnight-blue text-sm font-medium custom-scrollbar" />
 
         <button onClick={handleSubmit}

@@ -9,18 +9,24 @@ const EMPTY_INTERACTIONS = {
   reviewedByOthers: []
 };
 
-function ClickableLink({ text }) {
+function ClickableLink({ text, onClick }) {
+  const isClickable = typeof onClick === 'function';
+
   return (
     <span 
-      className="font-bold text-accent-blue hover:text-white cursor-pointer hover:underline transition-colors"
-      onClick={(e) => { e.stopPropagation(); /* Navigation logic here later */ }}
+      className={`font-bold text-accent-blue transition-colors ${isClickable ? 'hover:text-white cursor-pointer hover:underline' : ''}`}
+      onClick={(e) => {
+        if (!isClickable) return;
+        e.stopPropagation();
+        onClick();
+      }}
     >
       {text}
     </span>
   );
 }
 
-export default function InteractionsPanel({ user, usersList }) {
+export default function InteractionsPanel({ user, usersList, onOpenUser }) {
   const interactions = user?.interactions || EMPTY_INTERACTIONS;
 
   const [activeCategory, setActiveCategory] = useState('all');
@@ -94,6 +100,13 @@ export default function InteractionsPanel({ user, usersList }) {
     setExpandedReviewId(expandedReviewId === id ? null : id);
   };
 
+  const renderUserLink = (userId, name) => (
+    <ClickableLink
+      text={name}
+      onClick={userId ? () => onOpenUser?.(userId) : undefined}
+    />
+  );
+
   // Ultra-Compact Empty State rendering
   const renderEmptyState = (message, iconColor) => (
     <div className="flex items-center justify-center p-3.5 bg-white/[0.02] border border-white/5 rounded-xl w-full gap-3">
@@ -135,7 +148,7 @@ export default function InteractionsPanel({ user, usersList }) {
         <div>
           <h4 className="text-[11px] font-bold text-white/30 uppercase tracking-[2px]">Activité Récente</h4>
           <p className="text-[13px] text-white/50 mt-1">
-            Interactions de <ClickableLink text={`${user?.prenom} ${user?.nom}`} />
+            Interactions de {renderUserLink(user?.id, `${user?.prenom} ${user?.nom}`)}
           </p>
         </div>
 
@@ -186,22 +199,22 @@ export default function InteractionsPanel({ user, usersList }) {
                     case 'REVIEW_GIVEN':
                       iconBg = 'bg-accent-blue/20'; iconColor = 'text-accent-blue';
                       SvgIcon = <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />;
-                      content = <span>A évalué le projet <ClickableLink text={item.projectTitle} /> de <ClickableLink text={peerName} /></span>;
+                      content = <span>A évalué le projet <ClickableLink text={item.projectTitle} /> de {renderUserLink(item.userId, peerName)}</span>;
                       break;
                     case 'REVIEW_RECEIVED':
                       iconBg = 'bg-accent-purple/20'; iconColor = 'text-accent-purple';
                       SvgIcon = <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />;
-                      content = <span><ClickableLink text={peerName} /> a évalué le projet <ClickableLink text={item.projectTitle} /></span>;
+                      content = <span>{renderUserLink(item.userId, peerName)} a évalué le projet <ClickableLink text={item.projectTitle} /></span>;
                       break;
                     case 'HELP_GIVEN':
                       iconBg = 'bg-accent-green/20'; iconColor = 'text-accent-green';
                       SvgIcon = <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />;
-                      content = <span>A aidé <ClickableLink text={peerName} /> sur la machine <span className="font-bold text-white/80">{item.machine}</span></span>;
+                      content = <span>A aidé {renderUserLink(item.userId, peerName)} sur la machine <span className="font-bold text-white/80">{item.machine}</span></span>;
                       break;
                     case 'HELP_RECEIVED':
                       iconBg = 'bg-accent-amber/20'; iconColor = 'text-accent-amber';
                       SvgIcon = <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />;
-                      content = <span><ClickableLink text={peerName} /> a apporté son aide sur la machine <span className="font-bold text-white/80">{item.machine}</span></span>;
+                      content = <span>{renderUserLink(item.userId, peerName)} a apporté son aide sur la machine <span className="font-bold text-white/80">{item.machine}</span></span>;
                       break;
                   }
 
@@ -275,7 +288,7 @@ export default function InteractionsPanel({ user, usersList }) {
                           <div className="space-y-2 flex-grow min-w-0">
                             <div className="flex items-start justify-between gap-2">
                               <div>
-                                <h6 className="text-[13px] font-semibold text-white truncate"><ClickableLink text={peerName} /></h6>
+                                <h6 className="text-[13px] font-semibold text-white truncate">{renderUserLink(item.userId, peerName)}</h6>
                                 <p className="text-[11px] text-white/40 truncate mt-0.5"><ClickableLink text={item.projectTitle} /></p>
                               </div>
                               <div className="flex flex-col items-end gap-1.5 shrink-0">
@@ -363,7 +376,7 @@ export default function InteractionsPanel({ user, usersList }) {
                           <div className="space-y-2 flex-grow min-w-0">
                             <div className="flex items-start justify-between gap-2">
                               <div>
-                                <h6 className="text-[13px] font-semibold text-white truncate"><ClickableLink text={peerName} /></h6>
+                                <h6 className="text-[13px] font-semibold text-white truncate">{renderUserLink(item.userId, peerName)}</h6>
                                 <p className="text-[11px] text-white/40 truncate mt-0.5"><ClickableLink text={item.projectTitle} /></p>
                               </div>
                               <div className="flex flex-col items-end gap-1.5 shrink-0">
@@ -448,7 +461,7 @@ export default function InteractionsPanel({ user, usersList }) {
                           </div>
                           <div className="space-y-1.5 flex-grow min-w-0">
                             <div className="flex items-start justify-between gap-2">
-                              <h6 className="text-[13px] font-semibold text-white truncate"><ClickableLink text={peerName} /></h6>
+                              <h6 className="text-[13px] font-semibold text-white truncate">{renderUserLink(item.userId, peerName)}</h6>
                               <span className="text-[10px] text-white/30 shrink-0">{item.date} {item.time}</span>
                             </div>
                             <p className="text-[12px] text-white/70">
@@ -495,7 +508,7 @@ export default function InteractionsPanel({ user, usersList }) {
                           </div>
                           <div className="space-y-1.5 flex-grow min-w-0">
                             <div className="flex items-start justify-between gap-2">
-                              <h6 className="text-[13px] font-semibold text-white truncate"><ClickableLink text={peerName} /></h6>
+                              <h6 className="text-[13px] font-semibold text-white truncate">{renderUserLink(item.userId, peerName)}</h6>
                               <span className="text-[10px] text-white/30 shrink-0">{item.date} {item.time}</span>
                             </div>
                             <p className="text-[12px] text-white/70">

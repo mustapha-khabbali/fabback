@@ -24,6 +24,9 @@ const MOROCCAN_HOLIDAYS_2026 = [
   { id: 'h12', name: '1er Moharram (Est.)', date: '2026-06-16' },
 ];
 
+const DEFAULT_TIME_FROM = '08:30';
+const DEFAULT_TIME_TO = '18:30';
+
 const PRESENCE_TYPES_BY_ROLE = {
   all: [
     { value: 'all', label: 'Tous', matches: [] },
@@ -158,8 +161,8 @@ function normalizeAttendanceRow(entry, index) {
 function buildRange(dateMode, singleDate, dateFrom, dateTo, timeFrom, timeTo) {
   const startDate = dateMode === 'single' ? singleDate : dateFrom;
   const endDate = dateMode === 'single' ? singleDate : dateTo;
-  const startTime = dateMode === 'single' ? (timeFrom || '00:00') : '00:00';
-  const endTime = dateMode === 'single' ? (timeTo || '23:59') : '23:59';
+  const startTime = dateMode === 'single' ? (timeFrom || DEFAULT_TIME_FROM) : '00:00';
+  const endTime = dateMode === 'single' ? (timeTo || DEFAULT_TIME_TO) : '23:59';
   const start = safeDate(`${startDate}T${startTime}:00`);
   const end = safeDate(`${endDate}T${endTime}:59`);
   return { start, end };
@@ -197,8 +200,8 @@ export default function PVView() {
   const [singleDate, setSingleDate] = useState(today);
   const [dateFrom, setDateFrom] = useState(today);
   const [dateTo, setDateTo] = useState(today);
-  const [timeFrom, setTimeFrom] = useState('00:00');
-  const [timeTo, setTimeTo] = useState('23:59');
+  const [timeFrom, setTimeFrom] = useState(DEFAULT_TIME_FROM);
+  const [timeTo, setTimeTo] = useState(DEFAULT_TIME_TO);
   const [roleFilter, setRoleFilter] = useState('all');
   const [presenceType, setPresenceType] = useState('all');
   const [eventFilter, setEventFilter] = useState('all');
@@ -263,14 +266,9 @@ export default function PVView() {
     setter(value);
   };
 
-  const handleTimeChange = (value, setter, previousValue, defaultValue) => {
+  const handleTimeChange = (value, setter) => {
     if (!value) {
       setter('');
-      return;
-    }
-    if (value < '08:30' || value > '18:30') {
-      showToast("Please that time is out of range, which is from 8:30 to 18:30");
-      setter(previousValue || defaultValue);
       return;
     }
     setter(value);
@@ -279,11 +277,9 @@ export default function PVView() {
   const validatePvFilters = () => {
     if (dateMode === 'single') {
       if (!validateDate(singleDate)) return false;
-      if (timeFrom < '08:30' || timeTo > '18:30') {
-        showToast("Please that time is out of range, which is from 8:30 to 18:30");
-        return false;
-      }
-      if (timeFrom >= timeTo) {
+      const startTime = timeFrom || DEFAULT_TIME_FROM;
+      const endTime = timeTo || DEFAULT_TIME_TO;
+      if (startTime >= endTime) {
         showToast("Please choose an end time after the start time.");
         return false;
       }
@@ -515,7 +511,7 @@ export default function PVView() {
                   <input
                     type="time"
                     value={timeFrom}
-                    onChange={(e) => handleTimeChange(e.target.value, setTimeFrom, timeFrom, '08:30')}
+                    onChange={(e) => handleTimeChange(e.target.value, setTimeFrom)}
                     className={fieldClass}
                   />
                 </div>
@@ -524,7 +520,7 @@ export default function PVView() {
                   <input
                     type="time"
                     value={timeTo}
-                    onChange={(e) => handleTimeChange(e.target.value, setTimeTo, timeTo, '18:30')}
+                    onChange={(e) => handleTimeChange(e.target.value, setTimeTo)}
                     className={fieldClass}
                   />
                 </div>

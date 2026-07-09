@@ -1,42 +1,152 @@
+import { useEffect, useState } from 'react';
 import { useApp, TABS } from '../../../context/AppContext';
-import { findUserByIdentity, getPrimaryUserId } from '../../../utils/userIdentity';
+import { findUserByIdentity } from '../../../utils/userIdentity';
+import { isNotificationVisibleForUser } from '../../../utils/notificationVisibility';
 import { api } from '../../../services/api';
+
+const ACTIONABLE_TYPES = [
+  'contribution_request',
+  'help_request',
+  'help_feedback_request',
+  'review_request',
+  'CONTACT_REQUEST',
+  'interaction_offer',
+  'interaction_approved'
+];
+
+function interactionLabel(notif) {
+  return notif?.interactionType === 'review' ? 'review' : 'aide';
+}
+
+function isReviewTone(notif) {
+  return notif?.type === 'review_request' || notif?.interactionType === 'review';
+}
+
+const NOTIFICATION_TIME_ZONE = 'Africa/Casablanca';
+const RECENT_NOTIFICATION_MS = 5 * 60 * 1000;
+const LAB_DATE_KEY_FORMATTER = new Intl.DateTimeFormat('fr-FR', {
+  timeZone: NOTIFICATION_TIME_ZONE,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit'
+});
+const NOTIFICATION_HOUR_FORMATTER = new Intl.DateTimeFormat('fr-FR', {
+  timeZone: NOTIFICATION_TIME_ZONE,
+  hour: '2-digit',
+  minute: '2-digit'
+});
+const NOTIFICATION_DATE_FORMATTER = new Intl.DateTimeFormat('fr-FR', {
+  timeZone: NOTIFICATION_TIME_ZONE,
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric'
+});
+
+function getLabDateKey(date) {
+  const parts = LAB_DATE_KEY_FORMATTER.formatToParts(date).reduce((acc, part) => {
+    if (part.type !== 'literal') acc[part.type] = part.value;
+    return acc;
+  }, {});
+
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
+function getNotificationDate(notif) {
+  const value = notif?.createdAt || notif?.created_at || notif?.timestamp || notif?.date;
+  const date = value ? new Date(value) : null;
+  return date && !Number.isNaN(date.getTime()) ? date : null;
+}
+
+function formatNotificationTime(notif, now) {
+  const date = getNotificationDate(notif);
+  if (!date) return notif?.time || 'À l\'instant';
+
+  const ageMs = now.getTime() - date.getTime();
+  if (ageMs >= 0 && ageMs < RECENT_NOTIFICATION_MS) return 'À l\'instant';
+
+  const notificationDay = getLabDateKey(date);
+  const today = getLabDateKey(now);
+  if (notificationDay === today) return NOTIFICATION_HOUR_FORMATTER.format(date);
+
+  const yesterday = getLabDateKey(new Date(now.getTime() - 24 * 60 * 60 * 1000));
+  if (notificationDay === yesterday) return 'Hier';
+
+  return NOTIFICATION_DATE_FORMATTER.format(date);
+}
 
 export default function NotificationsTab() {
   const { currentUser, setSelectedUser, setActiveTab, showNotification, setPreviousTab, activeTab, selectedNotificationRequest, setSelectedNotificationRequest, setReviewingProject, setCurrentProjectId, setDirectProgramView, notifications, setNotifications, handleContactRequestResponse, setShowHelpFeedbackModal, usersList } = useApp();
-  const currentUserId = getPrimaryUserId(currentUser);
+  const [timeNow, setTimeNow] = useState(() => new Date());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setTimeNow(new Date()), 60 * 1000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   // A notification with a recipientId is only meant for that user (e.g. don't show
   // the sender their own invite). Notifications without one are shown to everyone (demo seeds).
-  const visibleNotifications = notifications.filter(n => !n.recipientId || String(n.recipientId) === String(currentUserId));
+  const visibleNotifications = notifications.filter(n => isNotificationVisibleForUser(n, currentUser));
   
-  const handleApprove = (id) => {
-    if (selectedNotificationRequest?.type === 'CONTACT_REQUEST') {
-      handleContactRequestResponse(id, selectedNotificationRequest.requesterId, true);
-      setSelectedNotificationRequest(null);
-    } else if (selectedNotificationRequest?.type === 'review_request') {
-      setReviewingProject(selectedNotificationRequest);
-      setActiveTab(TABS.PROJECT_REVIEW);
-      setSelectedNotificationRequest(null);
-    } else if (selectedNotificationRequest?.type === 'help_feedback_request') {
-      setShowHelpFeedbackModal(true);
-    } else {
-      showNotification("Demande approuvée !");
-      api.updateNotification(id, { status: 'read', handled: true, approved: true }).catch(() => {});
-      setNotifications(prev => prev.filter(n => n.id !== id));
-      setSelectedNotificationRequest(null);
+  const handleApprove = async (id) => {
+    try {
+      if (selectedNotificationRequest?.type === 'CONTACT_REQUEST') {
+        handleContactRequestResponse(id, selectedNotificationRequest.requesterId, true);
+        setSelectedNotificationRequest(null);
+      } else if (selectedNotificationRequest?.type === 'help_request' || selectedNotificationRequest?.type === 'review_request') {
+        if (!selectedNotificationRequest.interactionRequestId) throw new Error('Cette ancienne notification doit être renvoyée.');
+        await api.offerInteractionRequest(selectedNotificationRequest.interactionRequestId, { notificationId: id });
+        showNotification(`Votre offre de ${interactionLabel(selectedNotificationRequest)} a été envoyée.`);
+        setNotifications(prev => prev.filter(n => n.id !== id));
+        setSelectedNotificationRequest(null);
+      } else if (selectedNotificationRequest?.type === 'interaction_offer') {
+        if (!selectedNotificationRequest.interactionOfferId) throw new Error('Offre introuvable.');
+        await api.approveInteractionOffer(selectedNotificationRequest.interactionOfferId, { notificationId: id });
+        showNotification(`${selectedNotificationRequest.senderName} est approuvé.`);
+        setNotifications(prev => prev.filter(n => n.id !== id));
+        setSelectedNotificationRequest(null);
+      } else if (selectedNotificationRequest?.type === 'interaction_approved') {
+        if (!selectedNotificationRequest.interactionOfferId) throw new Error('Interaction introuvable.');
+        if (selectedNotificationRequest.interactionType === 'review') {
+          setReviewingProject({ ...selectedNotificationRequest, notificationId: id });
+          setActiveTab(TABS.PROJECT_REVIEW);
+          setSelectedNotificationRequest(null);
+        } else {
+          await api.completeHelpInteraction(selectedNotificationRequest.interactionOfferId, { notificationId: id });
+          showNotification("Aide terminée. Une évaluation a été envoyée.");
+          setNotifications(prev => prev.filter(n => n.id !== id));
+          setSelectedNotificationRequest(null);
+        }
+      } else if (selectedNotificationRequest?.type === 'help_feedback_request') {
+        setShowHelpFeedbackModal(true);
+      } else {
+        showNotification("Demande approuvée !");
+        api.updateNotification(id, { status: 'read', handled: true, approved: true }).catch(() => {});
+        setNotifications(prev => prev.filter(n => n.id !== id));
+        setSelectedNotificationRequest(null);
+      }
+    } catch (error) {
+      showNotification(error.message || "Action impossible.", "error");
     }
   };
 
-  const handleDeny = (id) => {
-    if (selectedNotificationRequest?.type === 'CONTACT_REQUEST') {
-      handleContactRequestResponse(id, selectedNotificationRequest.requesterId, false);
-    } else {
-      showNotification("Demande refusée.", "error");
-      api.updateNotification(id, { status: 'read', handled: true, approved: false }).catch(() => {});
-      setNotifications(prev => prev.filter(n => n.id !== id));
+  const handleDeny = async (id) => {
+    try {
+      if (selectedNotificationRequest?.type === 'CONTACT_REQUEST') {
+        handleContactRequestResponse(id, selectedNotificationRequest.requesterId, false);
+      } else if (selectedNotificationRequest?.type === 'interaction_offer') {
+        if (!selectedNotificationRequest.interactionOfferId) throw new Error('Offre introuvable.');
+        await api.rejectInteractionOffer(selectedNotificationRequest.interactionOfferId, { notificationId: id });
+        showNotification("Offre refusée.", "error");
+        setNotifications(prev => prev.filter(n => n.id !== id));
+      } else {
+        showNotification("Demande refusée.", "error");
+        api.updateNotification(id, { status: 'read', handled: true, approved: false }).catch(() => {});
+        setNotifications(prev => prev.filter(n => n.id !== id));
+      }
+      setSelectedNotificationRequest(null);
+    } catch (error) {
+      showNotification(error.message || "Action impossible.", "error");
     }
-    setSelectedNotificationRequest(null);
   };
 
   const viewSenderProfile = (userId) => {
@@ -68,10 +178,42 @@ export default function NotificationsTab() {
       return;
     }
 
-    if (['contribution_request', 'help_request', 'help_feedback_request', 'review_request', 'CONTACT_REQUEST'].includes(notif.type)) {
+    if (ACTIONABLE_TYPES.includes(notif.type)) {
       setSelectedNotificationRequest(notif);
     }
   };
+
+  const getNotificationTitle = (notif) => {
+    if (notif.type === 'CONTACT_REQUEST' || notif.type === 'project_invite') return notif.title;
+    if (notif.type === 'contribution_request') return `Demande de : ${notif.senderName}`;
+    if (notif.type === 'help_request') return `${notif.senderName} asked for help`;
+    if (notif.type === 'help_feedback_request') return `Évaluer ${interactionLabel(notif)} de ${notif.senderName}`;
+    if (notif.type === 'review_request') return `Ask for Review : ${notif.projectTitle}`;
+    if (notif.type === 'interaction_offer') return `${notif.senderName} propose une ${interactionLabel(notif)}`;
+    if (notif.type === 'interaction_approved') return `${interactionLabel(notif)} approuvée`;
+    if (notif.type === 'program_launch') return notif.title;
+    return notif.title;
+  };
+
+  const getDetailTitle = (notif) => {
+    if (notif.type === 'help_request') return "Demande d'aide";
+    if (notif.type === 'help_feedback_request') return notif.interactionType === 'review' ? 'Évaluer la review' : "Laisser un avis";
+    if (notif.type === 'review_request') return 'Review de Projet';
+    if (notif.type === 'interaction_offer') return `Offre de ${interactionLabel(notif)}`;
+    if (notif.type === 'interaction_approved') return `${interactionLabel(notif)} approuvée`;
+    if (notif.type === 'CONTACT_REQUEST') return 'Accès aux contacts';
+    return 'Contribution';
+  };
+
+  const getApproveLabel = (notif) => {
+    if (notif?.type === 'interaction_approved') return notif.interactionType === 'review' ? 'Commencer' : 'Terminer';
+    if (notif?.type === 'help_feedback_request') return 'Évaluer';
+    return 'Approuver';
+  };
+
+  const getDetailMessage = (notif) => notif?.message || notif?.description || '';
+
+  const showDenyButton = (notif) => !['interaction_approved', 'help_feedback_request'].includes(notif?.type);
 
   return (
     <div className="flex flex-col h-full relative overflow-hidden">
@@ -84,13 +226,13 @@ export default function NotificationsTab() {
             <div 
               key={notif.id}
               onClick={() => handleNotificationClick(notif)}
-              className={`bg-t-surface p-5 rounded-[32px] shadow-sm flex items-start space-x-4 border border-t-border active:scale-[0.98] transition-all cursor-pointer group ${['contribution_request', 'help_request', 'help_feedback_request', 'review_request', 'program_launch', 'CONTACT_REQUEST', 'project_invite'].includes(notif.type) ? 'hover:border-[#3B5FE6]/30' : ''}`}
+              className={`bg-t-surface p-5 rounded-[32px] shadow-sm flex items-start space-x-4 border border-t-border active:scale-[0.98] transition-all cursor-pointer group ${[...ACTIONABLE_TYPES, 'program_launch', 'project_invite'].includes(notif.type) ? 'hover:border-[#3B5FE6]/30' : ''}`}
             >
               <div className={`p-3 rounded-2xl shrink-0 ${
                 notif.type === 'contribution_request' ? 'bg-blue-100 text-[#3B5FE6]' :
                 notif.type === 'help_request' ? 'bg-rose-100 text-rose-500' :
                 notif.type === 'help_feedback_request' ? 'bg-amber-100 text-amber-500' :
-                notif.type === 'review_request' ? 'bg-emerald-100 text-emerald-600' :
+                isReviewTone(notif) ? 'bg-emerald-100 text-emerald-600' :
                 notif.type === 'program_launch' ? 'bg-rose-100 text-rose-500' :
                 notif.type === 'CONTACT_REQUEST' ? 'bg-blue-100 text-[#3B5FE6]' :
                 notif.type === 'project_invite' ? 'bg-blue-100 text-[#3B5FE6]' :
@@ -110,7 +252,7 @@ export default function NotificationsTab() {
                   <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
                 ) : notif.type === 'help_feedback_request' ? (
                   <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>
-                ) : notif.type === 'review_request' ? (
+                ) : isReviewTone(notif) ? (
                   <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                 ) : notif.type === 'program_launch' ? (
                   <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
@@ -120,15 +262,15 @@ export default function NotificationsTab() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="font-bold text-t-primary text-[15px] leading-tight">
-                  {notif.type === 'CONTACT_REQUEST' ? notif.title : notif.type === 'project_invite' ? notif.title : notif.type === 'contribution_request' ? `Demande de : ${notif.senderName}` : notif.type === 'help_request' ? `${notif.senderName} asked for help` : notif.type === 'help_feedback_request' ? `Évaluer l'aide de ${notif.senderName}` : notif.type === 'review_request' ? `Ask for Review : ${notif.projectTitle}` : notif.type === 'program_launch' ? notif.title : notif.title}
+                  {getNotificationTitle(notif)}
                 </p>
                 <p className="text-xs text-t-secondary mt-1 line-clamp-2 font-medium">
                   {notif.message}
                 </p>
                 <div className="flex items-center justify-between mt-3">
-                  <p className="text-[10px] font-black text-t-muted uppercase tracking-widest">{notif.time || 'À l\'instant'}</p>
-                  {['contribution_request', 'help_request', 'help_feedback_request', 'review_request', 'program_launch', 'CONTACT_REQUEST', 'project_invite'].includes(notif.type) && (
-                    <span className={`text-[9px] font-black px-2 py-1 rounded-lg uppercase ${notif.type === 'help_request' ? 'bg-rose-50 text-rose-500' : notif.type === 'help_feedback_request' ? 'bg-amber-50 text-amber-500' : notif.type === 'review_request' ? 'bg-emerald-50 text-emerald-600' : notif.type === 'program_launch' ? 'bg-rose-50 text-rose-500' : 'bg-blue-50 text-[#3B5FE6]'}`}>
+                  <p className="text-[10px] font-black text-t-muted uppercase tracking-widest">{formatNotificationTime(notif, timeNow)}</p>
+                  {[...ACTIONABLE_TYPES, 'program_launch', 'project_invite'].includes(notif.type) && (
+                    <span className={`text-[9px] font-black px-2 py-1 rounded-lg uppercase ${notif.type === 'help_request' ? 'bg-rose-50 text-rose-500' : notif.type === 'help_feedback_request' ? 'bg-amber-50 text-amber-500' : isReviewTone(notif) ? 'bg-emerald-50 text-emerald-600' : notif.type === 'program_launch' ? 'bg-rose-50 text-rose-500' : 'bg-blue-50 text-[#3B5FE6]'}`}>
                       {notif.handled ? (notif.approved ? 'Approuvé' : 'Refusé') : 'Action requise'}
                     </span>
                   )}
@@ -170,12 +312,9 @@ export default function NotificationsTab() {
             <div className="space-y-4">
               <div className="flex items-center justify-between px-2">
                 <h3 className="text-[10px] font-black text-t-tertiary uppercase tracking-[0.2em]">
-                  {selectedNotificationRequest.type === 'help_request' ? "Demande d'aide" : 
-                   selectedNotificationRequest.type === 'help_feedback_request' ? "Laisser un avis" : 
-                   selectedNotificationRequest.type === 'review_request' ? "Review de Projet" : 
-                   selectedNotificationRequest.type === 'CONTACT_REQUEST' ? "Accès aux contacts" : "Contribution"}
+                  {getDetailTitle(selectedNotificationRequest)}
                 </h3>
-                <span className="text-[10px] font-black text-[#3B5FE6]">{selectedNotificationRequest.time || 'À l\'instant'}</span>
+                <span className="text-[10px] font-black text-[#3B5FE6]">{formatNotificationTime(selectedNotificationRequest, timeNow)}</span>
               </div>
               
               <div className="bg-t-surface rounded-[32px] p-6 shadow-sm border border-t-border space-y-4 transition-colors duration-300">
@@ -193,23 +332,25 @@ export default function NotificationsTab() {
                     className={`p-4 rounded-2xl border transition-all ${
                     selectedNotificationRequest.type === 'help_request' ? 'bg-rose-50 border-rose-100' : 
                     selectedNotificationRequest.type === 'help_feedback_request' ? 'bg-amber-50 border-amber-100' : 
-                    selectedNotificationRequest.type === 'review_request' ? 'bg-emerald-50 border-emerald-100 cursor-pointer hover:bg-emerald-100' : 'bg-blue-50 border-blue-100'
+                    isReviewTone(selectedNotificationRequest) ? 'bg-emerald-50 border-emerald-100 cursor-pointer hover:bg-emerald-100' : 'bg-blue-50 border-blue-100'
                   }`}>
                     <p className={`text-[10px] font-bold uppercase tracking-widest mb-1 ${
                       selectedNotificationRequest.type === 'help_request' ? 'text-rose-500' : 
                       selectedNotificationRequest.type === 'help_feedback_request' ? 'text-amber-500' : 
-                      selectedNotificationRequest.type === 'review_request' ? 'text-emerald-600' : 'text-[#3B5FE6]'
+                      isReviewTone(selectedNotificationRequest) ? 'text-emerald-600' : 'text-[#3B5FE6]'
                     }`}>Projet cible</p>
                     <p className="text-sm font-black text-t-primary underline">{selectedNotificationRequest.projectTitle}</p>
                   </div>
                 )}
                 
-                <div className="space-y-2">
-                  <h4 className="text-[10px] font-bold text-t-tertiary uppercase">Message</h4>
-                  <div className="text-sm font-medium text-t-primary leading-relaxed bg-t-surface-alt p-5 rounded-[24px]">
-                    {selectedNotificationRequest.message}
+                {selectedNotificationRequest.type !== 'review_request' && getDetailMessage(selectedNotificationRequest) && (
+                  <div className="space-y-2">
+                    <h4 className="text-[10px] font-bold text-t-tertiary uppercase">Message</h4>
+                    <div className="text-sm font-medium text-t-primary leading-relaxed bg-t-surface-alt p-5 rounded-[24px]">
+                      {getDetailMessage(selectedNotificationRequest)}
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             </div>
 
@@ -241,18 +382,20 @@ export default function NotificationsTab() {
             {/* Actions */}
             <div className="pt-4 pb-32">
               {!selectedNotificationRequest.handled ? (
-                <div className="grid grid-cols-2 gap-4">
-                  <button 
-                    onClick={() => handleDeny(selectedNotificationRequest.id)}
-                    className="py-5 bg-t-surface-alt backdrop-blur-md text-t-tertiary font-black rounded-3xl active:scale-95 transition-all uppercase tracking-widest text-xs border border-t-border shadow-sm"
-                  >
-                    {selectedNotificationRequest.type === 'CONTACT_REQUEST' ? 'Ignorer' : 'Refuser'}
-                  </button>
+                <div className={`grid gap-4 ${showDenyButton(selectedNotificationRequest) ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                  {showDenyButton(selectedNotificationRequest) && (
+                    <button 
+                      onClick={() => handleDeny(selectedNotificationRequest.id)}
+                      className="py-5 bg-t-surface-alt backdrop-blur-md text-t-tertiary font-black rounded-3xl active:scale-95 transition-all uppercase tracking-widest text-xs border border-t-border shadow-sm"
+                    >
+                      {selectedNotificationRequest.type === 'CONTACT_REQUEST' ? 'Ignorer' : 'Refuser'}
+                    </button>
+                  )}
                   <button 
                     onClick={() => handleApprove(selectedNotificationRequest.id)}
                     className="py-5 bg-[#3B5FE6] text-white font-black rounded-3xl shadow-xl shadow-blue-500/20 active:scale-95 transition-all uppercase tracking-widest text-xs"
                   >
-                    Approuver
+                    {getApproveLabel(selectedNotificationRequest)}
                   </button>
                 </div>
               ) : (

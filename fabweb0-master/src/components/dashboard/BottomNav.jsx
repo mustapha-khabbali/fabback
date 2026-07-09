@@ -1,4 +1,5 @@
 import { useApp, TABS } from '../../context/AppContext';
+import { isUnreadNotificationForUser } from '../../utils/notificationVisibility';
 
 const FabLabIcon = ({ className }) => (
   <div className={`h-6 w-6 flex items-center justify-center scale-110 ${className}`}>
@@ -16,7 +17,7 @@ export default function BottomNav() {
   const { activeTab, setActiveTab, currentUser, setSelectedUser, selectedUser, notifications, setNavigationHistory } = useApp();
   const isStagiaire = currentUser?.role === 'stagiaire';
 
-  const unreadCount = notifications ? notifications.filter(n => n.status === 'unread' || n.status === 'pending').length : 0;
+  const unreadCount = notifications ? notifications.filter(n => isUnreadNotificationForUser(n, currentUser)).length : 0;
 
   const tabs = [
     { id: TABS.FABLAB, label: 'Fab-Lab', icon: 'fablab' },

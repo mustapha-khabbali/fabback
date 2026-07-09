@@ -1,7 +1,7 @@
 import { API_BASE_URL, getAdminToken } from './api';
 
 const listeners = new Set();
-let source = null;
+let socket = null;
 let reconnectTimer = null;
 let reconnectDelay = 1000;
 let stopped = true;
@@ -17,8 +17,11 @@ function notify(change) {
   });
 }
 
-function streamUrl(token) {
-  return `${API_BASE_URL}/events/stream?token=${encodeURIComponent(token)}`;
+function socketUrl(token) {
+  const url = new URL(`${API_BASE_URL}/events/ws`);
+  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+  url.searchParams.set('token', token);
+  return url.toString();
 }
 
 function scheduleReconnect() {
@@ -48,7 +51,8 @@ function reconnectNow() {
 
 function handleVisibilityChange() {
   if (document.visibilityState !== 'visible') return;
-  if (!source || source.readyState === EventSource.CLOSED) {
+  if (typeof WebSocket === 'undefined') return;
+  if (!socket || socket.readyState === WebSocket.CLOSED || socket.readyState === WebSocket.CLOSING) {
     reconnectNow();
   }
 }
@@ -60,26 +64,37 @@ function ensureVisibilityListener() {
 }
 
 function openRealtime() {
-  if (stopped || typeof EventSource === 'undefined') return;
+  if (stopped || typeof WebSocket === 'undefined') return;
   const token = getAdminToken();
   if (!token) return;
 
-  if (source) source.close();
-  source = new EventSource(streamUrl(token));
-  source.addEventListener('open', () => {
+  if (socket) socket.close();
+  const nextSocket = new WebSocket(socketUrl(token));
+  socket = nextSocket;
+
+  nextSocket.addEventListener('open', () => {
     reconnectDelay = 1000;
     console.info('[realtime] connected');
     notify({ entity: 'sync', action: 'reconnect', ts: new Date().toISOString() });
   });
-  source.addEventListener('change', (event) => {
-    notify(JSON.parse(event.data));
+
+  nextSocket.addEventListener('message', (event) => {
+    try {
+      notify(JSON.parse(event.data));
+    } catch {
+      // Ignore malformed realtime messages.
+    }
   });
-  source.addEventListener('error', () => {
-    if (source) {
-      source.close();
-      source = null;
+
+  nextSocket.addEventListener('close', () => {
+    if (socket === nextSocket) {
+      socket = null;
     }
     scheduleReconnect();
+  });
+
+  nextSocket.addEventListener('error', () => {
+    nextSocket.close();
   });
 }
 
@@ -92,9 +107,9 @@ export function startRealtime() {
 export function stopRealtime() {
   stopped = true;
   clearReconnectTimer();
-  if (source) {
-    source.close();
-    source = null;
+  if (socket) {
+    socket.close();
+    socket = null;
   }
 }
 

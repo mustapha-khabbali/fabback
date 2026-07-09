@@ -2,15 +2,18 @@ import express from 'express';
 import { z } from 'zod';
 import { query, withTransaction } from '../db/pool.js';
 import { requireAuth } from '../middleware/auth.js';
-import { emitRealtimeChange } from '../realtime/bus.js';
+import { createNotification, emitNotification, mapNotification } from '../services/notificationDelivery.js';
 
 export const notificationsRouter = express.Router();
 
 const notificationSchema = z.object({
-  type: z.enum(['contribution_request', 'help_request', 'help_feedback_request', 'review_request', 'CONTACT_REQUEST', 'project_invite', 'system']),
+  type: z.enum(['contribution_request', 'help_request', 'help_feedback_request', 'review_request', 'CONTACT_REQUEST', 'project_invite', 'system', 'interaction_offer', 'interaction_approved']),
   recipientId: z.string().optional().nullable(),
   targetId: z.string().optional().nullable(),
   helpedUserId: z.string().optional().nullable(),
+  interactionRequestId: z.string().optional().nullable(),
+  interactionOfferId: z.string().optional().nullable(),
+  interactionType: z.enum(['help', 'review']).optional().nullable(),
   projectId: z.string().optional().nullable(),
   projectTitle: z.string().optional().nullable(),
   requesterId: z.string().optional().nullable(),
@@ -27,25 +30,23 @@ const notificationSchema = z.object({
   payload: z.record(z.any()).optional()
 });
 
-function mapNotification(row) {
-  const payload = row.payload || {};
-  return {
-    ...payload,
-    id: row.id,
-    recipientId: row.recipient_id,
-    senderId: row.sender_id,
-    type: row.type,
-    status: row.status,
-    handled: row.handled,
-    approved: row.approved,
-    createdAt: row.created_at,
-    time: payload.time || 'À l\'instant'
-  };
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function uuidOrNull(value) {
+  return UUID_RE.test(String(value || '')) ? value : null;
 }
 
 async function supervisorRecipients(client) {
   const result = await client.query(
     "select id from users where role in ('formateur', 'administrateur') and is_deactivated = false"
+  );
+  return result.rows.map((row) => row.id);
+}
+
+async function stagiaireRecipients(client, excludeUserId) {
+  const result = await client.query(
+    "select id from users where role = 'stagiaire' and is_deactivated = false and id <> $1",
+    [excludeUserId]
   );
   return result.rows.map((row) => row.id);
 }
@@ -68,10 +69,10 @@ async function projectAdminRecipients(client, projectId) {
   return [project.rows[0].owner_id, ...admins.rows.map((row) => row.user_id)];
 }
 
-async function resolveRecipients(client, data) {
+async function resolveRecipients(client, data, senderId) {
   if (data.type === 'CONTACT_REQUEST') return [data.targetId || data.recipientId].filter(Boolean);
   if (data.type === 'project_invite') return [data.recipientId].filter(Boolean);
-  if (data.type === 'help_request' || data.type === 'review_request') return supervisorRecipients(client);
+  if (data.type === 'help_request' || data.type === 'review_request') return stagiaireRecipients(client, senderId);
   if (data.type === 'help_feedback_request') return [data.helpedUserId || data.recipientId].filter(Boolean);
   if (data.type === 'contribution_request') return projectAdminRecipients(client, data.projectId);
   if (data.recipientId) return [data.recipientId];
@@ -106,33 +107,53 @@ notificationsRouter.post('/', async (req, res, next) => {
     }
 
     const notifications = await withTransaction(async (client) => {
-      const recipients = [...new Set((await resolveRecipients(client, parsed.data)).filter(Boolean))];
+      const recipients = [...new Set((await resolveRecipients(client, parsed.data, req.user.id)).filter(Boolean))];
       const created = [];
       const { payload = {}, ...topLevel } = parsed.data;
+      let interactionRequest = null;
+
+      if (parsed.data.type === 'help_request' || parsed.data.type === 'review_request') {
+        const interactionType = parsed.data.type === 'help_request' ? 'help' : 'review';
+        const result = await client.query(
+          `
+            insert into interaction_requests (
+              type, requester_id, project_id, project_title, machine_name, description
+            )
+            values ($1, $2, $3, $4, $5, $6)
+            returning *
+          `,
+          [
+            interactionType,
+            req.user.id,
+            uuidOrNull(parsed.data.projectId),
+            parsed.data.projectTitle || null,
+            interactionType === 'help' ? parsed.data.machineName || null : null,
+            interactionType === 'help' ? parsed.data.description || parsed.data.message || null : null
+          ]
+        );
+        interactionRequest = result.rows[0];
+      }
+
       const finalPayload = {
         ...topLevel,
         ...payload,
         senderId: req.user.id,
-        senderName: payload.senderName || `${req.user.prenom} ${req.user.nom}`.trim()
+        senderName: payload.senderName || `${req.user.prenom} ${req.user.nom}`.trim(),
+        ...(interactionRequest ? {
+          interactionRequestId: interactionRequest.id,
+          interactionType: interactionRequest.type
+        } : {})
       };
 
       for (const recipientId of recipients) {
-        const result = await client.query(
-          `
-            insert into notifications (recipient_id, sender_id, type, payload, status)
-            values ($1, $2, $3, $4::jsonb, $5)
-            returning *
-          `,
-          [recipientId, req.user.id, parsed.data.type, JSON.stringify(finalPayload), finalPayload.status || 'unread']
-        );
-        created.push(mapNotification(result.rows[0]));
+        created.push(await createNotification(client, recipientId, req.user.id, parsed.data.type, finalPayload, finalPayload.status || 'unread'));
       }
 
       return created;
     });
 
     notifications.forEach((notification) => {
-      emitRealtimeChange({ entity: 'notifications', action: 'create', id: notification.id, recipientId: notification.recipientId, notification });
+      emitNotification(notification);
     });
     res.status(201).json({ notifications });
   } catch (error) {
@@ -172,7 +193,7 @@ notificationsRouter.patch('/:id', async (req, res, next) => {
     );
 
     const notification = mapNotification(result.rows[0]);
-    emitRealtimeChange({ entity: 'notifications', action: 'update', id: notification.id, recipientId: notification.recipientId, notification });
+    emitNotification(notification, 'update');
     res.json({ notification });
   } catch (error) {
     next(error);

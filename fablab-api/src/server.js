@@ -1,12 +1,14 @@
 import { createApp } from './app.js';
 import { config } from './config.js';
 import { pool } from './db/pool.js';
+import { attachRealtimeSocket } from './realtime/socket.js';
 
 const app = createApp();
 
 const server = app.listen(config.port, () => {
   console.log(`fablab-api listening on http://localhost:${config.port}`);
 });
+attachRealtimeSocket(server);
 
 async function shutdown(signal) {
   console.log(`${signal} received, shutting down`);

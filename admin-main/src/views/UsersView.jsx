@@ -21,7 +21,7 @@ const ALL_COLUMNS = [
   { id: 'cin', label: 'CIN' }
 ];
 
-export default function UsersView({ profileTarget, onProfileTargetHandled }) {
+export default function UsersView({ profileTarget, onProfileOpened, onProfileClosed, onProfileTargetHandled }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRole, setSelectedRole] = useState('All');
   const [visibleColumns, setVisibleColumns] = useState({
@@ -36,8 +36,10 @@ export default function UsersView({ profileTarget, onProfileTargetHandled }) {
   const [showAddUser, setShowAddUser] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const dropdownRef = useRef(null);
+  const handledProfileTargetRef = useRef('');
 
   const [users, setUsers] = useState(MOCK_USERS);
+  const [hasLoadedUsers, setHasLoadedUsers] = useState(false);
   const [allProjects, setAllProjects] = useState([]);
   const [allRecycleBin, setAllRecycleBin] = useState([]);
   const [isEditing, setIsEditing] = useState(false);
@@ -82,6 +84,7 @@ export default function UsersView({ profileTarget, onProfileTargetHandled }) {
         setAllProjects(loadedProjects);
         setAllRecycleBin(loadedRecycleBin);
         setUsers(hydratedUsers);
+        setHasLoadedUsers(true);
 
         const currentSelected = selectedUserRef.current;
         const targetId = focusUserId || currentSelected?.id;
@@ -306,11 +309,22 @@ export default function UsersView({ profileTarget, onProfileTargetHandled }) {
     }));
   };
 
+  const openInteractionUserProfile = useCallback((userId) => {
+    const targetUser = users.find((candidate) => String(candidate.id) === String(userId));
+    if (!targetUser) return;
+
+    setSelectedUser(targetUser);
+    setActiveProfileTab('info');
+    if (String(selectedUserRef.current?.id) !== String(targetUser.id)) {
+      onProfileOpened?.(targetUser);
+    }
+  }, [onProfileOpened, users]);
+
+  const normalizedSearchTerm = searchTerm.trim().toLowerCase();
   const filteredUsers = users.filter((user) => {
-    const matchesSearch =
-      (user.nom?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
-      (user.prenom?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
-      (user.id?.toLowerCase() || '').includes(searchTerm.toLowerCase());
+    const matchesSearch = !normalizedSearchTerm ||
+      (user.nom || '').toLowerCase().startsWith(normalizedSearchTerm) ||
+      (user.prenom || '').toLowerCase().startsWith(normalizedSearchTerm);
 
     const matchesRole = selectedRole === 'All' || user.role === selectedRole;
 
@@ -328,19 +342,28 @@ export default function UsersView({ profileTarget, onProfileTargetHandled }) {
   }, [loadUsersData]);
 
   useEffect(() => subscribeRealtime((change) => {
-    if (change.entity === 'sync' || change.entity === 'users') {
+    if (change.entity === 'sync' || change.entity === 'users' || change.entity === 'interactions') {
       loadUsersData({ current: false }, change.id);
     }
   }), [loadUsersData]);
 
   useEffect(() => {
-    if (!profileTarget) return;
+    if (!profileTarget) {
+      handledProfileTargetRef.current = '';
+      setSelectedUser(null);
+      return;
+    }
+
+    if (!hasLoadedUsers) return;
 
     const normalize = (value) => String(value || '').trim().toLowerCase();
     const targetId = normalize(profileTarget.userId || profileTarget.id);
     const targetCin = normalize(profileTarget.cin);
     const targetEmail = normalize(profileTarget.email);
     const targetName = normalize(profileTarget.name || `${profileTarget.prenom || ''} ${profileTarget.nom || ''}`);
+    const targetKey = [targetId, targetCin, targetEmail, targetName].filter(Boolean).join('|');
+
+    if (handledProfileTargetRef.current === targetKey && selectedUser) return;
 
     const user = users.find((candidate) => {
       const candidateName = normalize(`${candidate.prenom || ''} ${candidate.nom || ''}`);
@@ -353,11 +376,16 @@ export default function UsersView({ profileTarget, onProfileTargetHandled }) {
     });
 
     if (user) {
+      handledProfileTargetRef.current = targetKey;
       setSelectedUser(user);
       setActiveProfileTab('info');
+      onProfileTargetHandled?.(user);
+      return;
     }
-    onProfileTargetHandled?.();
-  }, [profileTarget, users, onProfileTargetHandled]);
+
+    handledProfileTargetRef.current = targetKey;
+    onProfileTargetHandled?.(null);
+  }, [hasLoadedUsers, profileTarget, selectedUser, users, onProfileTargetHandled]);
 
   // If a user profile is clicked, show the full detailed screen
   if (selectedUser) {
@@ -371,7 +399,10 @@ export default function UsersView({ profileTarget, onProfileTargetHandled }) {
         <div className="mb-7 mt-2 flex items-center justify-between">
           <div className="flex items-center space-x-4">
             <button
-              onClick={() => setSelectedUser(null)}
+              onClick={() => {
+                setSelectedUser(null);
+                onProfileClosed?.();
+              }}
               className="p-3 bg-white/5 hover:bg-white/10 text-white rounded-xl active:scale-95 transition-all cursor-pointer border border-white/5"
             >
               <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
@@ -861,6 +892,7 @@ export default function UsersView({ profileTarget, onProfileTargetHandled }) {
               <InteractionsPanel
                 user={selectedUser}
                 usersList={users}
+                onOpenUser={openInteractionUserProfile}
               />
             )}
 
@@ -997,7 +1029,7 @@ export default function UsersView({ profileTarget, onProfileTargetHandled }) {
             </span>
             <input
               type="text"
-              placeholder="Rechercher par nom, prénom ou ID..."
+              placeholder="Rechercher par nom ou prénom..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full bg-[#1b254b]/50 border border-white/10 text-white placeholder-white/30 text-[13px] font-medium rounded-xl pl-11 pr-4 py-3 outline-none focus:border-accent-blue/50 transition-colors"
@@ -1083,7 +1115,11 @@ export default function UsersView({ profileTarget, onProfileTargetHandled }) {
                 filteredUsers.map((user) => (
                   <tr
                     key={user.id}
-                    onClick={() => { setSelectedUser(user); setActiveProfileTab('info'); }}
+                    onClick={() => {
+                      setSelectedUser(user);
+                      setActiveProfileTab('info');
+                      onProfileOpened?.(user);
+                    }}
                     className={`trow border-b border-white/[0.03] hover:bg-white/[0.02] cursor-pointer transition-colors ${
                       user.isDeactivated ? 'opacity-40' : ''
                     }`}

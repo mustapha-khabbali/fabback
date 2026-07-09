@@ -40,7 +40,15 @@ export default function RecycleBin({ onBack }) {
       saveRecycleBin(recycleBin.filter(i => i.id !== item.id));
       showNotification("Membre d'équipe restauré");
     } else {
-      saveProjects([item, ...userProjects]);
+      // Rebuild a clean project from the bin payload. The bin entry's own id and
+      // metadata must be stripped so the project is re-created fresh on the server
+      // (the original row was hard-deleted when it was moved to the bin).
+      const projectData = { ...item };
+      delete projectData.id;
+      delete projectData.originalId;
+      delete projectData.type;
+      delete projectData.deletedAt;
+      saveProjects([projectData, ...userProjects]);
       saveRecycleBin(recycleBin.filter(i => i.id !== item.id));
       showNotification("Projet restauré");
     }

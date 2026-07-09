@@ -48,7 +48,9 @@ const projectSchema = z.object({
 });
 
 const recycleSchema = z.object({
-  id: z.string().uuid().optional(),
+  // Not necessarily a uuid: bin entries for journals/members carry client-side ids,
+  // and the id is no longer used as the DB primary key anyway.
+  id: z.string().optional(),
   ownerId: z.string().optional().nullable(),
   type: z.enum(['project', 'journal', 'member']),
   payload: z.record(z.any()).optional(),
@@ -56,7 +58,7 @@ const recycleSchema = z.object({
   projectId: z.string().optional(),
   projectName: z.string().optional(),
   memberData: z.record(z.any()).optional()
-});
+}).passthrough(); // keep the full original object (title, contributors, journals, …)
 
 function toDateInput(value) {
   if (!value) return '';
@@ -244,7 +246,6 @@ projectsRouter.use(requireAuth);
 projectsRouter.get('/', async (req, res, next) => {
   try {
     const projects = await withTransaction((client) => loadProjects(client, req.user));
-    emitRealtimeChange({ entity: 'projects', action: 'sync', id: 'projects' });
     res.json({ projects });
   } catch (error) {
     next(error);
@@ -269,13 +270,23 @@ projectsRouter.put('/sync', async (req, res, next) => {
     }
 
     const projects = await withTransaction(async (client) => {
+      const keptOwnedIds = [];
       for (const project of parsed.data.projects) {
         if (!canWriteProject(req.user, project)) continue;
-        await replaceProject(client, project, project.userId || project.ownerId || req.user.id);
+        const savedId = await replaceProject(client, project, project.userId || project.ownerId || req.user.id);
+        if (savedId) keptOwnedIds.push(savedId);
       }
+      // Real deletion: drop the user's OWN projects that are no longer in the list
+      // they submitted. Without this, deleting a project only hid it on the client
+      // and it reappeared on the next refresh (while also sitting in the bin).
+      await client.query(
+        'delete from projects where owner_id = $1 and not (id = any($2::uuid[]))',
+        [req.user.id, keptOwnedIds]
+      );
       return loadProjects(client, req.user);
     });
 
+    emitRealtimeChange({ entity: 'projects', action: 'sync', id: 'projects' });
     res.json({ projects });
   } catch (error) {
     next(error);
@@ -315,11 +326,11 @@ projectsRouter.get('/recycle-bin', async (req, res, next) => {
     );
     res.json({
       recycleBin: result.rows.map((row) => ({
-        id: row.id,
+        ...(row.payload || {}),
         ownerId: row.owner_id,
         type: row.type,
         deletedAt: row.deleted_at,
-        ...(row.payload || {})
+        id: row.id
       }))
     });
   } catch (error) {
@@ -342,18 +353,16 @@ projectsRouter.put('/recycle-bin', async (req, res, next) => {
         await client.query('delete from recycle_bin where owner_id = $1', [req.user.id]);
       }
       for (const item of parsed.data.recycleBin) {
-        const { id, ownerId, type, deletedAt, ...payload } = item;
-        if (id) {
-          await client.query(
-            'insert into recycle_bin (id, owner_id, type, payload, deleted_at) values ($1,$2,$3,$4::jsonb,$5)',
-            [id, ownerId || req.user.id, type, JSON.stringify(payload.payload || payload), deletedAt || new Date().toISOString()]
-          );
-        } else {
-          await client.query(
-            'insert into recycle_bin (owner_id, type, payload, deleted_at) values ($1,$2,$3::jsonb,$4)',
-            [ownerId || req.user.id, type, JSON.stringify(payload.payload || payload), deletedAt || new Date().toISOString()]
-          );
-        }
+        // Always let the DB generate a fresh, unique id for each bin entry. Re-using
+        // the original object id caused primary-key collisions, which made "delete
+        // one from the bin" fail and wipe every entry sharing that id. The original
+        // id is preserved inside the payload as `originalId`.
+        const { id: originalId, ownerId, type, deletedAt, ...rest } = item;
+        const payload = { ...rest, originalId };
+        await client.query(
+          'insert into recycle_bin (owner_id, type, payload, deleted_at) values ($1,$2,$3::jsonb,$4)',
+          [ownerId || req.user.id, type, JSON.stringify(payload), deletedAt || new Date().toISOString()]
+        );
       }
       const result = await client.query(
         `
@@ -365,11 +374,11 @@ projectsRouter.put('/recycle-bin', async (req, res, next) => {
         [req.user.role, req.user.id]
       );
       return result.rows.map((row) => ({
-        id: row.id,
+        ...(row.payload || {}),
         ownerId: row.owner_id,
         type: row.type,
         deletedAt: row.deleted_at,
-        ...(row.payload || {})
+        id: row.id
       }));
     });
 

@@ -19,17 +19,20 @@ const VIEWS = {
 };
 
 export default function MyProjectTab() {
-  const { currentProjectId, projectCreateRequestKey } = useApp();
+  const { currentProjectId, setCurrentProjectId, projectCreateRequestKey, userProjects } = useApp();
+  const hasSelectedProject = Boolean(
+    currentProjectId && (userProjects || []).some((project) => String(project.id) === String(currentProjectId))
+  );
   const [view, setView] = useState(() => currentProjectId ? VIEWS.DETAIL : VIEWS.HOME);
   const lastHandledCreateRequestRef = useRef(projectCreateRequestKey);
 
   useEffect(() => {
-    if (currentProjectId) {
+    if (currentProjectId && hasSelectedProject) {
       setView(VIEWS.DETAIL);
-    } else {
+    } else if (!currentProjectId) {
       setView(VIEWS.HOME);
     }
-  }, [currentProjectId]);
+  }, [currentProjectId, hasSelectedProject]);
 
   useEffect(() => {
     if (projectCreateRequestKey !== lastHandledCreateRequestRef.current) {
@@ -38,28 +41,42 @@ export default function MyProjectTab() {
     }
   }, [projectCreateRequestKey]);
 
+  const showHome = () => {
+    setCurrentProjectId(null);
+    setView(VIEWS.HOME);
+  };
+
+  const renderHome = () => (
+    <ProjectHome
+      onCreateProject={() => setView(VIEWS.CREATE)}
+      onShowDetail={() => setView(VIEWS.DETAIL)}
+      onShowRecycle={() => setView(VIEWS.RECYCLE)}
+      onShowArticles={() => setView(VIEWS.ARTICLE_HOME)}
+    />
+  );
+
   const renderView = () => {
     switch (view) {
       case VIEWS.HOME:
-        return <ProjectHome onCreateProject={() => setView(VIEWS.CREATE)} onShowDetail={() => setView(VIEWS.DETAIL)} onShowRecycle={() => setView(VIEWS.RECYCLE)} onShowArticles={() => setView(VIEWS.ARTICLE_HOME)} />;
+        return renderHome();
       case VIEWS.CREATE:
-        return <ProjectCreateForm onBack={() => setView(VIEWS.HOME)} />;
+        return <ProjectCreateForm onBack={showHome} />;
       case VIEWS.DETAIL:
-        return <ProjectDetail onBack={() => setView(VIEWS.HOME)} />;
+        return hasSelectedProject ? <ProjectDetail onBack={showHome} /> : renderHome();
       case VIEWS.RECYCLE:
-        return <RecycleBin onBack={() => setView(VIEWS.HOME)} />;
+        return <RecycleBin onBack={showHome} />;
       case VIEWS.ARTICLE_HOME:
-        return <ArticleHome onBack={() => setView(VIEWS.HOME)} onCreateArticle={() => setView(VIEWS.ARTICLE_CREATE)} onShowPending={() => setView(VIEWS.ARTICLE_PENDING)} />;
+        return <ArticleHome onBack={showHome} onCreateArticle={() => setView(VIEWS.ARTICLE_CREATE)} onShowPending={() => setView(VIEWS.ARTICLE_PENDING)} />;
       case VIEWS.ARTICLE_CREATE:
         return <ArticleCreateForm onBack={() => setView(VIEWS.ARTICLE_HOME)} />;
       case VIEWS.ARTICLE_PENDING:
         return <ArticlePending onBack={() => setView(VIEWS.ARTICLE_HOME)} />;
       default:
-        return <ProjectHome onCreateProject={() => setView(VIEWS.CREATE)} onShowDetail={() => setView(VIEWS.DETAIL)} onShowRecycle={() => setView(VIEWS.RECYCLE)} onShowArticles={() => setView(VIEWS.ARTICLE_HOME)} />;
+        return renderHome();
     }
   };
 
-  const isDetailView = view !== VIEWS.HOME;
+  const isDetailView = view !== VIEWS.HOME && !(view === VIEWS.DETAIL && !hasSelectedProject);
   const containerRef = useRef(null);
 
   useEffect(() => {

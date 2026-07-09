@@ -476,6 +476,12 @@ export default function AdminOverviewView({ onNavigate }) {
     if (periodMode === 'now') {
       const liveRows = readCurrentPresenceRows(attendanceRows);
       const today = toLabISODate(new Date());
+      const todayRows = attendanceRows
+        .map(normalizeDashboardJournalRow)
+        .filter((row) => {
+          const timestampIn = safeDate(row.timestampIn || `${row.date}T${row.timeIn}:00`);
+          return timestampIn && toLabISODate(timestampIn) === today;
+        });
       const ratedTodayRows = attendanceRows
         .map(normalizeDashboardJournalRow)
         .filter((row) => {
@@ -486,7 +492,7 @@ export default function AdminOverviewView({ onNavigate }) {
         ? (ratedTodayRows.reduce((sum, row) => sum + row.rating, 0) / ratedTodayRows.length).toFixed(1)
         : 0;
       return {
-        metrics: { present: liveRows.length, total: attendanceRows.length, exits: attendanceRows.filter(row => row.timestampOut).length, avgRating },
+        metrics: { present: liveRows.length, total: todayRows.length, exits: todayRows.filter(row => row.timestampOut).length, avgRating },
         presents: liveRows
       };
     }
@@ -1076,7 +1082,7 @@ export default function AdminOverviewView({ onNavigate }) {
                           <div className="flex items-center space-x-1 justify-end">
                             <div className={`w-1.5 h-1.5 rounded-full ${isCompleted ? 'bg-accent-red' : 'bg-accent-green live-dot'}`} />
                             <span className={`text-[9px] font-bold uppercase ${isCompleted ? 'text-accent-red' : 'text-accent-green'}`}>
-                              {isCompleted ? 'Terminé' : 'Actif'}
+                              {isCompleted ? `Terminé${s.timeOut ? ` (${s.timeOut})` : ''}` : 'Actif'}
                             </span>
                           </div>
                         </td>

@@ -40,13 +40,15 @@ export default function ProjectReviewTab() {
     try {
       await api.createReview({
         projectId: reviewingProject.projectId,
+        interactionOfferId: reviewingProject.interactionOfferId || null,
+        notificationId: reviewingProject.notificationId || reviewingProject.id || null,
         ...ratings,
         feedback
       });
-      if (reviewingProject.id) {
+      if (reviewingProject.id && !reviewingProject.interactionOfferId) {
         await api.updateNotification(reviewingProject.id, { status: 'read', handled: true, approved: true }).catch(() => {});
-        setNotifications(prev => prev.filter(n => n.id !== reviewingProject.id));
       }
+      if (reviewingProject.id) setNotifications(prev => prev.filter(n => n.id !== reviewingProject.id));
       showNotification("Review soumise avec succès !");
       setReviewingProject(null);
       setActiveTab(TABS.NOTIFICATIONS);

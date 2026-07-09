@@ -182,6 +182,46 @@ export const api = {
     return body.notification;
   },
 
+  async offerInteractionRequest(requestId, payload = {}) {
+    const body = await request(`/interactions/requests/${requestId}/offer`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+    return body.offer;
+  },
+
+  async approveInteractionOffer(offerId, payload = {}) {
+    const body = await request(`/interactions/offers/${offerId}/approve`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+    return body.offer;
+  },
+
+  async rejectInteractionOffer(offerId, payload = {}) {
+    const body = await request(`/interactions/offers/${offerId}/reject`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+    return body.offer;
+  },
+
+  async completeHelpInteraction(offerId, payload = {}) {
+    const body = await request(`/interactions/offers/${offerId}/complete-help`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+    return body.offer;
+  },
+
+  async rateInteractionOffer(offerId, payload = {}) {
+    const body = await request(`/interactions/offers/${offerId}/rate`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+    return body.offer;
+  },
+
   async createReview(review) {
     const body = await request('/reviews', {
       method: 'POST',

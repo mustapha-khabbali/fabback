@@ -47,7 +47,12 @@ export function AppProvider({ children }) {
   // User state
   const [currentUser, setCurrentUserState] = useState(() => {
     try {
-      return ensureUserIdentity(JSON.parse(localStorage.getItem('user_profile_data') || '{}')) || {};
+      const stored = JSON.parse(localStorage.getItem('user_profile_data') || '{}');
+      // A genuine session always carries a role (or at least an email). A stored
+      // object with only a generated id is a leftover "phantom" from a previous
+      // bug — treat it as logged-out so the real login screen is shown.
+      if (!stored || (!stored.role && !stored.email)) return {};
+      return ensureUserIdentity(stored) || {};
     } catch {
       return {};
     }
@@ -388,6 +393,11 @@ export function AppProvider({ children }) {
       if (change.entity === 'notifications') {
         mergeRealtimeNotification(change);
         refreshNotifications();
+      }
+      if (change.entity === 'interactions') {
+        refreshNotifications();
+        refreshUsers();
+        refreshCurrentUser();
       }
       if (change.entity === 'projects') {
         refreshProjects();
