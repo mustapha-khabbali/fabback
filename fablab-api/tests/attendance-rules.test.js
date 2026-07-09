@@ -13,6 +13,7 @@ import {
   USERS,
   QR
 } from './helpers.js';
+import { config } from '../src/config.js';
 
 let baseUrl;
 const stagiaire = () => tokenFor(USERS.stagiaire);
@@ -149,6 +150,37 @@ test("yesterday's open attendance does not block today's Gate-IN", async () => {
     body: checkInBody()
   });
   assert.equal(res.status, 201, 'stale open attendance must be auto-closed, not block check-in');
+});
+
+test('Gate-IN while the lab is closed is refused with 403 and a French message', async (t) => {
+  const saved = { open: config.labOpenTime, close: config.labCloseTime };
+  t.after(() => { config.labOpenTime = saved.open; config.labCloseTime = saved.close; });
+  config.labOpenTime = '00:00';
+  config.labCloseTime = '00:00'; // [00:00, 00:00) — never open
+
+  const res = await api(baseUrl, '/attendance/check-in', {
+    method: 'POST',
+    token: stagiaire(),
+    body: checkInBody()
+  });
+
+  assert.equal(res.status, 403);
+  assert.match(res.body.error, /fermé/i);
+});
+
+test('EVENT check-in stays allowed outside lab hours (evening events)', async (t) => {
+  const saved = { open: config.labOpenTime, close: config.labCloseTime };
+  t.after(() => { config.labOpenTime = saved.open; config.labCloseTime = saved.close; });
+  config.labOpenTime = '00:00';
+  config.labCloseTime = '00:00';
+
+  const res = await api(baseUrl, '/attendance/check-in', {
+    method: 'POST',
+    token: stagiaire(),
+    body: checkInBody({ qr: { gate: 'EVENT', id: QR.EVENT }, objective: 'Event', eventTitle: 'Soirée Hackathon' })
+  });
+
+  assert.equal(res.status, 201);
 });
 
 test('admin history includes auto-closed rows flagged as autoClosed', async () => {

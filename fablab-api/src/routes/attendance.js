@@ -209,6 +209,21 @@ attendanceRouter.post('/check-in', async (req, res, next) => {
     const data = parsed.data;
     if (!(await assertPermanentQr(data.qr?.gate || 'GATE_IN', data.qr, res))) return;
 
+    // Gate-IN outside opening hours is refused: without this, an evening scan
+    // creates a row that is born expired and auto-closes with zero duration.
+    // EVENT scans are exempt — events may legitimately run outside lab hours.
+    // Check-out is never hour-gated: leaving must always be possible.
+    if (data.qr?.gate !== 'EVENT') {
+      const hours = await query(
+        `select ((now() at time zone $1)::time >= $2::time and (now() at time zone $1)::time < $3::time) as is_open`,
+        [LAB_TIME_ZONE, config.labOpenTime, config.labCloseTime]
+      );
+      if (!hours.rows[0]?.is_open) {
+        res.status(403).json({ error: `Le FabLab est fermé (ouvert ${config.labOpenTime}–${config.labCloseTime}).` });
+        return;
+      }
+    }
+
     const { attendance, autoClosed, alreadyInside } = await withTransaction(async (client) => {
       const open = await findLatestOpenAttendance(client, req.user.id);
       // Server-side guard: the client UI already blocks Gate-IN while inside,

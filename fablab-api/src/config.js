@@ -20,8 +20,10 @@ export const config = {
   jwtSecret: process.env.JWT_SECRET,
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
   firebaseServiceAccount: process.env.FIREBASE_SERVICE_ACCOUNT,
-  // Lab closing time (HH:MM, lab timezone). Open attendances auto-close at
-  // this time; overridable so tests can control the clock.
+  // Lab opening hours (HH:MM, lab timezone). Gate-IN is refused outside
+  // [open, close); open attendances auto-close at closing time. Overridable
+  // so tests can control the clock.
+  labOpenTime: process.env.LAB_OPEN_TIME || '08:00',
   labCloseTime: process.env.LAB_CLOSE_TIME || '18:30',
   corsOrigins: (process.env.CORS_ORIGINS || defaultCorsOrigins.join(','))
     .split(',')
