@@ -23,7 +23,7 @@ export const config = {
   // Lab opening hours (HH:MM, lab timezone). Gate-IN is refused outside
   // [open, close); open attendances auto-close at closing time. Overridable
   // so tests can control the clock.
-  labOpenTime: process.env.LAB_OPEN_TIME || '08:00',
+  labOpenTime: process.env.LAB_OPEN_TIME || '08:30',
   labCloseTime: process.env.LAB_CLOSE_TIME || '18:30',
   corsOrigins: (process.env.CORS_ORIGINS || defaultCorsOrigins.join(','))
     .split(',')
