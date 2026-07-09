@@ -28,3 +28,10 @@
 .env.production
 **/.env*
 !**/.env*.example
+
+# Secrets — service account keys and env files must never be committed
+**/secrets/
+**/service-account*.json
+**/.env
+**/.env.*
+!**/.env*.example
