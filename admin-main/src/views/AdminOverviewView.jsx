@@ -215,6 +215,12 @@ export default function AdminOverviewView({ onNavigate }) {
   const [selectedDate, setSelectedDate] = useState('2026-07-01');
   const [workingHoursStart, setWorkingHoursStart] = useState('08:30');
   const [workingHoursEnd, setWorkingHoursEnd] = useState('18:30');
+  // Minute ticker so the Ouvert/Fermé badge flips at closing time without a reload
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const tick = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(tick);
+  }, []);
   const [periodMode, setPeriodMode] = useState('now');
   const [customDateMode, setCustomDateMode] = useState('single');
   const [dateFrom, setDateFrom] = useState('2026-07-01');
@@ -455,6 +461,16 @@ export default function AdminOverviewView({ onNavigate }) {
       labStatusText = `Indisponible temporairement: ${labels}`;
       labStatusColor = 'text-accent-amber bg-accent-amber/10 border border-accent-amber/20';
       isLabOpen = false; // Flag as closed/restricted during active slots
+    }
+  } else if (periodMode === 'now' || selectedDate === toLabISODate(now)) {
+    // Outside working hours today: the calendar says open, the clock says closed
+    const nowHHMM = new Intl.DateTimeFormat('fr-FR', {
+      timeZone: 'Africa/Casablanca', hour: '2-digit', minute: '2-digit', hour12: false
+    }).format(now);
+    if (nowHHMM < workingHoursStart || nowHHMM >= workingHoursEnd) {
+      labStatusText = `Fermé (Hors horaires ${workingHoursStart} - ${workingHoursEnd})`;
+      labStatusColor = 'text-accent-red bg-accent-red/10 border border-accent-red/20';
+      isLabOpen = false;
     }
   }
 
