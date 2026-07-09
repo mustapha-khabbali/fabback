@@ -4,7 +4,7 @@
 does **NOTHING** to the public websites. The live sites only change after `firebase deploy`.
 
 - Live user app  → https://fablab-bmk.web.app
-- Live admin app → https://fablab-cmc.web.app  (login: `sara.ladouy` / `fablab2026`)
+- Live admin app → https://fablab-cmc.web.app  (admin login: seeded from `ADMIN_SEED_*` in `fablab-api/.env` — credentials never live in this repo)
 - Both talk to the API on your Mac **through the Cloudflare tunnel** — keep that terminal open.
 
 ---

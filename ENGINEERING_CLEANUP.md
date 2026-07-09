@@ -15,8 +15,9 @@
 * ✅ **1.4** Index migration shipped — 2 indexes, not 7: partial open-attendance index + notifications composite. The rest of the plan's list already existed or was covered by primary keys.
 * ✅ **1.5** Request logs with ids, production error logging (was: prod errors silently swallowed), WS connect/reject/close logs.
 * ✅ **1.6** `RUNBOOK.md` written — school-IT contact line intentionally blank; filling it is part of the exit criteria.
-* ⏳ **0.1** Stale copy `/Users/mac/fablab` — awaiting deletion approval.
-* 🔒 **1.1 / 1.2** Blocked on school-server access (deploy + restore rehearsal).
+* ✅ **0.1** Stale copy `/Users/mac/fablab` deleted (423 MB, user-approved).
+* 🟡 **1.1 / 1.2** Server-side execution blocked on school access, but **fully prepared**: `DEPLOYMENT_DAY.md` checklist, nginx templates fixed (WebSocket upgrade blocks were missing from all 4 — realtime would have died in production), TLS bootstrap procedure, `deploy/scripts/preflight.sh` gate (check + tests + builds, verified passing), `.env.example` with secret-generation commands, backup cron + restore rehearsal steps. Remaining: a server, a DNS record, ports 80/443.
+* ✅ Committed admin password removed from `DEPLOY_CHEATSHEET.md`; the credential itself rotates automatically when the server is seeded with new `ADMIN_SEED_*` values (DEPLOYMENT_DAY step 2).
 
 **Known issue discovered by the tests:** after `LAB_CLOSE_TIME` (18:30), an open attendance is instantly "expired" — a Gate-OUT scan at 18:45 auto-closes the session, **discards the rating**, and reports "no open attendance". If the lab is ever open past 18:30, this is a data-loss path; decide whether the cutoff should be later or checkout-after-cutoff should keep the rating.
 
