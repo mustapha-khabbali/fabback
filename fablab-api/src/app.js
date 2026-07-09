@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
+import { randomUUID } from 'crypto';
 import { config } from './config.js';
 import { query } from './db/pool.js';
 import { authRouter } from './routes/auth.js';
@@ -30,6 +31,23 @@ export function createApp() {
     standardHeaders: 'draft-7',
     legacyHeaders: false,
     skipSuccessfulRequests: true
+  });
+
+  // Request logging: one line per request with a short id so errors can be
+  // correlated (ENGINEERING_CLEANUP.md Phase 1.5). Health checks are skipped
+  // to keep supervision pings out of the logs.
+  app.use((req, res, next) => {
+    req.id = randomUUID().slice(0, 8);
+    if (req.path === '/health' || req.path === '/api/health') {
+      next();
+      return;
+    }
+    const start = process.hrtime.bigint();
+    res.on('finish', () => {
+      const durationMs = Number(process.hrtime.bigint() - start) / 1e6;
+      console.log(`[req ${req.id}] ${req.method} ${req.originalUrl} ${res.statusCode} ${durationMs.toFixed(1)}ms`);
+    });
+    next();
   });
 
   app.use(helmet());
@@ -83,7 +101,7 @@ export function createApp() {
     res.status(404).json({ error: 'Not found', path: req.path });
   });
 
-  app.use((error, _req, res, _next) => {
+  app.use((error, req, res, _next) => {
     if (error.code === '23505') {
       const fieldMatch = error.detail?.match(/\(([^)]+)\)=/);
       const field = fieldMatch?.[1] || 'field';
@@ -98,8 +116,12 @@ export function createApp() {
     }
 
     const status = error.status || 500;
-    if (config.nodeEnv !== 'production') {
-      console.error(error);
+    // Server errors are always logged (production included) with the request
+    // id so they can be matched against the request log line.
+    if (status >= 500) {
+      console.error(`[req ${req.id || '-'}] ${req.method} ${req.originalUrl} failed:`, error);
+    } else if (config.nodeEnv !== 'production') {
+      console.error(`[req ${req.id || '-'}]`, error);
     }
     res.status(status).json({
       error: status === 500 ? 'Internal server error' : error.message

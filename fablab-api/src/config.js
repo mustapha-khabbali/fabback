@@ -20,6 +20,9 @@ export const config = {
   jwtSecret: process.env.JWT_SECRET,
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
   firebaseServiceAccount: process.env.FIREBASE_SERVICE_ACCOUNT,
+  // Lab closing time (HH:MM, lab timezone). Open attendances auto-close at
+  // this time; overridable so tests can control the clock.
+  labCloseTime: process.env.LAB_CLOSE_TIME || '18:30',
   corsOrigins: (process.env.CORS_ORIGINS || defaultCorsOrigins.join(','))
     .split(',')
     .map((origin) => origin.trim())

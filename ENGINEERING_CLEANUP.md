@@ -6,6 +6,22 @@
 
 ---
 
+## Execution Log — 2026-07-09
+
+* ✅ **0.2** Burned credential stripped from `dashboard.html` (legacy login disabled; grep-verified clean).
+* ✅ **0.3** Secrets audit: key never committed; `.gitignore` hardened; verified with `git check-ignore`.
+* ✅ **0.4** Firestore rules set to deny-all and **deployed live** to `fablab-bmk` (frontends verified auth-only).
+* ✅ **1.3** 18 tests green (`fablab-api && npm test`): attendance rules + auth boundary. Added server-side 409 guard against double check-in (frontend already blocked it in UI). `LAB_CLOSE_TIME` env introduced (default `18:30`, production behavior unchanged) so tests control the clock.
+* ✅ **1.4** Index migration shipped — 2 indexes, not 7: partial open-attendance index + notifications composite. The rest of the plan's list already existed or was covered by primary keys.
+* ✅ **1.5** Request logs with ids, production error logging (was: prod errors silently swallowed), WS connect/reject/close logs.
+* ✅ **1.6** `RUNBOOK.md` written — school-IT contact line intentionally blank; filling it is part of the exit criteria.
+* ⏳ **0.1** Stale copy `/Users/mac/fablab` — awaiting deletion approval.
+* 🔒 **1.1 / 1.2** Blocked on school-server access (deploy + restore rehearsal).
+
+**Known issue discovered by the tests:** after `LAB_CLOSE_TIME` (18:30), an open attendance is instantly "expired" — a Gate-OUT scan at 18:45 auto-closes the session, **discards the rating**, and reports "no open attendance". If the lab is ever open past 18:30, this is a data-loss path; decide whether the cutoff should be later or checkout-after-cutoff should keep the rating.
+
+---
+
 ## The One-Paragraph Truth
 
 The code is already good enough to be useful. It is not yet **dependable** enough to be trusted, and trust is the only currency an attendance system runs on. Adoption dies from one bad week: the tunnel drops on a busy morning, check-ins fail, staff goes back to the paper sheet, and the app becomes a soutenance slide. Therefore this plan optimizes for exactly one thing: **the system keeps working when nobody heroic is watching.** Elegant code is Phase 2.

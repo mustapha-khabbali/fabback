@@ -44,9 +44,12 @@ export function attachRealtimeSocket(server) {
     try {
       user = await authenticateStreamToken(url.searchParams.get('token'));
     } catch (error) {
+      console.warn(`[ws] connection rejected: ${error.message || 'Unauthorized'}`);
       closeUnauthorized(ws, error.message || 'Unauthorized', error.status === 403 ? 1008 : 1008);
       return;
     }
+
+    console.log(`[ws] connected user=${user.id}`);
 
     ws.isAlive = true;
     ws.on('pong', () => {
@@ -84,13 +87,15 @@ export function attachRealtimeSocket(server) {
       sendChange(ws, change);
     };
     const onChange = (change) => {
-      handleChange(change).catch(() => {
+      handleChange(change).catch((error) => {
+        console.error(`[ws] delivery failed user=${user.id}:`, error.message || error);
         ws.close(1011, 'Realtime delivery failed');
       });
     };
 
     realtimeBus.on(REALTIME_EVENT, onChange);
-    ws.on('close', () => {
+    ws.on('close', (code) => {
+      console.log(`[ws] closed user=${user.id} code=${code}`);
       clearInterval(heartbeat);
       realtimeBus.off(REALTIME_EVENT, onChange);
     });

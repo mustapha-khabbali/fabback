@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { query, withTransaction } from '../db/pool.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { emitRealtimeChange } from '../realtime/bus.js';
+import { config } from '../config.js';
 
 export const attendanceRouter = express.Router();
 
@@ -87,13 +88,13 @@ async function findLatestOpenAttendance(client, userId) {
       select
         a.*,
         ((a.timestamp_in at time zone $2)::date = (now() at time zone $2)::date) as is_today,
-        (now() >= (((a.timestamp_in at time zone $2)::date + time '18:30') at time zone $2)) as is_expired
+        (now() >= (((a.timestamp_in at time zone $2)::date + $3::time) at time zone $2)) as is_expired
       from attendance a
       where a.user_id = $1 and a.timestamp_out is null
       order by a.timestamp_in desc
       limit 1
     `,
-    [userId, LAB_TIME_ZONE]
+    [userId, LAB_TIME_ZONE, config.labCloseTime]
   );
   return result.rows[0] || null;
 }
@@ -109,7 +110,7 @@ async function autoCloseAttendance(client, attendanceId) {
       set
         timestamp_out = greatest(
           timestamp_in,
-          ((timestamp_in at time zone $2)::date + time '18:30') at time zone $2
+          ((timestamp_in at time zone $2)::date + $3::time) at time zone $2
         ),
         rating = null,
         feedback_comment = null,
@@ -117,7 +118,7 @@ async function autoCloseAttendance(client, attendanceId) {
       where id = $1 and timestamp_out is null
       returning *
     `,
-    [attendanceId, LAB_TIME_ZONE]
+    [attendanceId, LAB_TIME_ZONE, config.labCloseTime]
   );
   return result.rows[0] || null;
 }
@@ -129,16 +130,16 @@ async function autoCloseExpiredOpenAttendances(client) {
       set
         timestamp_out = greatest(
           timestamp_in,
-          ((timestamp_in at time zone $1)::date + time '18:30') at time zone $1
+          ((timestamp_in at time zone $1)::date + $2::time) at time zone $1
         ),
         rating = null,
         feedback_comment = null,
         auto_closed = true
       where timestamp_out is null
-        and now() >= (((timestamp_in at time zone $1)::date + time '18:30') at time zone $1)
+        and now() >= (((timestamp_in at time zone $1)::date + $2::time) at time zone $1)
       returning id
     `,
-    [LAB_TIME_ZONE]
+    [LAB_TIME_ZONE, config.labCloseTime]
   );
 
   const joinedRows = [];
@@ -208,8 +209,13 @@ attendanceRouter.post('/check-in', async (req, res, next) => {
     const data = parsed.data;
     if (!(await assertPermanentQr(data.qr?.gate || 'GATE_IN', data.qr, res))) return;
 
-    const { attendance, autoClosed } = await withTransaction(async (client) => {
+    const { attendance, autoClosed, alreadyInside } = await withTransaction(async (client) => {
       const open = await findLatestOpenAttendance(client, req.user.id);
+      // Server-side guard: the client UI already blocks Gate-IN while inside,
+      // but a forged request must not create a second open attendance row.
+      if (open && isOpenAttendanceActive(open)) {
+        return { attendance: null, autoClosed: null, alreadyInside: true };
+      }
       const closed = open && !isOpenAttendanceActive(open) ? await autoCloseAttendance(client, open.id) : null;
       const result = await client.query(
         `
@@ -238,6 +244,11 @@ attendanceRouter.post('/check-in', async (req, res, next) => {
         autoClosed: closed ? await joinAttendance(client, closed.id) : null
       };
     });
+
+    if (alreadyInside) {
+      res.status(409).json({ error: 'Vous êtes déjà enregistré dans le FabLab.' });
+      return;
+    }
 
     emitAttendanceCheckOut(autoClosed);
     const mappedAttendance = mapAttendance(attendance);

@@ -30,5 +30,8 @@
         }
       ]
     }
-  ]
+  ],
+  "firestore": {
+    "rules": "fabweb0-master/firestore.rules"
+  }
 }

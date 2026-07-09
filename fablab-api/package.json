@@ -9,7 +9,9 @@
     "migrate": "node-pg-migrate up",
     "migrate:down": "node-pg-migrate down",
     "seed": "node seeds/seed.js",
-    "check": "find src seeds migrations scripts \\( -name '*.js' -o -name '*.mjs' \\) -print0 | xargs -0 -n1 node --check"
+    "check": "find src seeds migrations scripts \\( -name '*.js' -o -name '*.mjs' \\) -print0 | xargs -0 -n1 node --check",
+    "test:db": "docker run -d --name fablab-test-db -p 5433:5432 -e POSTGRES_USER=fablab -e POSTGRES_PASSWORD=fablab -e POSTGRES_DB=fablab_test postgres:16-alpine",
+    "test": "NODE_ENV=test DATABASE_URL=postgres://fablab:fablab@localhost:5433/fablab_test JWT_SECRET=fablab-test-secret LAB_CLOSE_TIME=23:59 sh -c 'node-pg-migrate up >/dev/null && node --test --test-concurrency=1 tests/'"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

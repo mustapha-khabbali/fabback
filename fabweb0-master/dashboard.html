@@ -824,26 +824,13 @@
             window.initRealtimeListeners();
         };
 
-        // Custom Credentials Auth
+        // Custom Credentials Auth — DISABLED (legacy page superseded by admin-main app).
+        // Hardcoded credentials were removed 2026-07-09 (ENGINEERING_CLEANUP.md Phase 0.2):
+        // client-side credential checks are visible in page source and provide no security.
         window.checkCustomAuth = async () => {
-            const user = document.getElementById('admin-username').value;
-            const pass = document.getElementById('admin-password').value;
             const error = document.getElementById('login-error');
-
-            if (user === 'SARA-LADOUY' && pass === 'saracmc2025') {
-                // Since we opened the Database rules to public, we no longer need the 
-                // Anonymous sign-in "bridge" which was causing the restricted-operation error.
-
-                // Mark as session authenticated
-                sessionStorage.setItem('admin_authenticated', 'true');
-
-                // Hide overlay and reveal content
-                document.getElementById('admin-login-overlay').style.display = 'none';
-                window.checkAuthState();
-            } else {
-                error.style.opacity = '1';
-                setTimeout(() => error.style.opacity = '0', 3000);
-            }
+            error.style.opacity = '1';
+            setTimeout(() => error.style.opacity = '0', 3000);
         };
 
         // Initial Security Check
