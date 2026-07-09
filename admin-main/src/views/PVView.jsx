@@ -62,8 +62,26 @@ const PRESENCE_TYPES_BY_ROLE = {
   ]
 };
 
+const LAB_TIME_ZONE = 'Africa/Casablanca';
+
+// Local-clock date parts: for dates parsed from plain 'YYYY-MM-DD' strings
+// this round-trips exactly, on any machine timezone (toISOString would shift).
 function toISODate(date) {
-  return date.toISOString().split('T')[0];
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+// Lab-timezone date of a real timestamp — attendance rows group by lab day.
+function toLabISODate(dateValue) {
+  const date = dateValue instanceof Date ? dateValue : new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return '';
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: LAB_TIME_ZONE, year: 'numeric', month: '2-digit', day: '2-digit'
+  }).formatToParts(date);
+  const partByType = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${partByType.year}-${partByType.month}-${partByType.day}`;
 }
 
 function safeDate(dateValue) {
@@ -72,7 +90,8 @@ function safeDate(dateValue) {
 }
 
 function isWeekend(dateStr) {
-  const date = new Date(dateStr);
+  // 'T00:00:00' forces local-time parsing (bare dates parse as UTC midnight)
+  const date = new Date(`${dateStr}T00:00:00`);
   const day = date.getDay();
   return day === 0 || day === 6;
 }
@@ -95,10 +114,13 @@ function eachDateInRange(dateFrom, dateTo) {
   return dates;
 }
 
+// Lab events always display in lab time, whatever the viewer's device is set to.
 function formatTime(dateValue, fallback = '') {
   const date = safeDate(dateValue);
   if (!date) return fallback || '—';
-  return date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  return new Intl.DateTimeFormat('fr-FR', {
+    timeZone: LAB_TIME_ZONE, hour: '2-digit', minute: '2-digit'
+  }).format(date);
 }
 
 function normalizeRole(role) {
@@ -150,7 +172,7 @@ function normalizeAttendanceRow(entry, index) {
     projectTitle: entry.projectTitle || '',
     timestampIn,
     timestampOut,
-    date: entry.date || (timestampIn ? toISODate(new Date(timestampIn)) : ''),
+    date: entry.date || (timestampIn ? toLabISODate(timestampIn) : ''),
     timeIn: entry.timeIn || formatTime(timestampIn),
     timeOut: entry.timeOut || formatTime(timestampOut),
     rating: Number(entry.rating || entry.feedbackRating || 0),
@@ -163,15 +185,17 @@ function buildRange(dateMode, singleDate, dateFrom, dateTo, timeFrom, timeTo) {
   const endDate = dateMode === 'single' ? singleDate : dateTo;
   const startTime = dateMode === 'single' ? (timeFrom || DEFAULT_TIME_FROM) : '00:00';
   const endTime = dateMode === 'single' ? (timeTo || DEFAULT_TIME_TO) : '23:59';
-  const start = safeDate(`${startDate}T${startTime}:00`);
-  const end = safeDate(`${endDate}T${endTime}:59`);
-  return { start, end };
+  // Lab wall-clock strings ('YYYY-MM-DDTHH:MM') — filter boundaries mean lab
+  // time regardless of the viewer's device timezone.
+  return { start: `${startDate}T${startTime}`, end: `${endDate}T${endTime}` };
 }
 
 function rowMatchesRange(row, start, end) {
-  const timestamp = safeDate(row.timestampIn || `${row.date}T${row.timeIn}:00`);
-  if (!timestamp || !start || !end || start > end) return false;
-  return timestamp >= start && timestamp <= end;
+  const wall = row.timestampIn
+    ? `${toLabISODate(row.timestampIn)}T${formatTime(row.timestampIn, '00:00')}`
+    : (row.date && row.timeIn ? `${row.date}T${row.timeIn}` : null);
+  if (!wall || !start || !end || start > end) return false;
+  return wall >= start && wall <= end;
 }
 
 function readAdminEvents(rows) {

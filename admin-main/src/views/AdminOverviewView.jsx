@@ -63,7 +63,9 @@ const PRESENCE_TYPES_BY_ROLE = {
 };
 
 function isWeekend(dateStr) {
-  const date = new Date(dateStr);
+  // 'T00:00:00' forces local-time parsing: bare 'YYYY-MM-DD' parses as UTC
+  // midnight and getDay() could land on the previous day on some devices.
+  const date = new Date(`${dateStr}T00:00:00`);
   const day = date.getDay();
   return day === 0 || day === 6;
 }
@@ -123,8 +125,13 @@ function presenceTypeLabel(item, showDetail = false) {
   return item?.presenceType || '—';
 }
 
+// Local-clock date parts: for dates parsed from plain 'YYYY-MM-DD' strings
+// this round-trips exactly, on any machine timezone (toISOString would shift).
 function toISODate(date) {
-  return date.toISOString().split('T')[0];
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
 }
 
 function toLabISODate(dateValue) {
@@ -140,11 +147,14 @@ function toLabISODate(dateValue) {
   return `${partByType.year}-${partByType.month}-${partByType.day}`;
 }
 
+// Lab events always display in lab time, whatever the viewer's device is set to.
 function formatTime(dateValue) {
   if (!dateValue) return '';
   const date = new Date(dateValue);
   if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  return new Intl.DateTimeFormat('fr-FR', {
+    timeZone: LAB_TIME_ZONE, hour: '2-digit', minute: '2-digit'
+  }).format(date);
 }
 
 function safeDate(dateValue) {
@@ -180,7 +190,7 @@ function normalizeDashboardJournalRow(entry, index) {
     projectTitle: entry.projectTitle || '',
     timestampIn,
     timestampOut,
-    date: entry.date || (timestampIn ? toISODate(new Date(timestampIn)) : ''),
+    date: entry.date || (timestampIn ? toLabISODate(timestampIn) : ''),
     timeIn: entry.timeIn || formatTime(timestampIn),
     timeOut: entry.timeOut || formatTime(timestampOut),
     rating: Number(entry.rating || entry.feedbackRating || 0)
@@ -188,15 +198,20 @@ function normalizeDashboardJournalRow(entry, index) {
 }
 
 function rowMatchesPeriod(row, dateMode, singleDate, dateFrom, dateTo, timeFrom, timeTo) {
-  const timestamp = safeDate(row.timestampIn || `${row.date}T${row.timeIn}:00`);
+  // Compare lab wall-clock strings ('YYYY-MM-DDTHH:MM') so filter boundaries
+  // mean lab time regardless of the viewer's device timezone.
+  const wall = row.timestampIn
+    ? `${toLabISODate(row.timestampIn)}T${formatTime(row.timestampIn)}`
+    : (row.date && row.timeIn ? `${row.date}T${row.timeIn}` : null);
   const startDate = dateMode === 'single' ? singleDate : dateFrom;
   const endDate = dateMode === 'single' ? singleDate : dateTo;
   const startTime = dateMode === 'single' ? timeFrom : '00:00';
   const endTime = dateMode === 'single' ? timeTo : '23:59';
-  const start = safeDate(`${startDate}T${startTime}:00`);
-  const end = safeDate(`${endDate}T${endTime}:59`);
-  if (!timestamp || !start || !end || start > end) return false;
-  return timestamp >= start && timestamp <= end;
+  if (!wall || !startDate || !endDate) return false;
+  const start = `${startDate}T${startTime}`;
+  const end = `${endDate}T${endTime}`;
+  if (start > end) return false;
+  return wall >= start && wall <= end;
 }
 
 function readCurrentPresenceRows(attendanceRows) {
