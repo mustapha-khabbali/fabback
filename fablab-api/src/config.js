@@ -39,7 +39,9 @@ export const config = {
     .map((origin) => origin.trim())
     .filter(Boolean),
   globalRateLimitWindowMs: Number(process.env.GLOBAL_RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000),
-  globalRateLimitMax: Number(process.env.GLOBAL_RATE_LIMIT_MAX || 1000),
+  // Per-client ceiling. The app polls (dashboard ~6 endpoints / 10s), so one
+  // active admin tab alone is ~500 req/15min — 1000 was too tight for real use.
+  globalRateLimitMax: Number(process.env.GLOBAL_RATE_LIMIT_MAX || 3000),
   authRateLimitWindowMs: Number(process.env.AUTH_RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000),
   authRateLimitMax: Number(process.env.AUTH_RATE_LIMIT_MAX || 20)
 };

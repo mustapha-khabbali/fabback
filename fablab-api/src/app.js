@@ -20,18 +20,26 @@ import { behaviorRouter } from './routes/behavior.js';
 export function createApp() {
   const app = express();
   app.set('trust proxy', 1);
+  // Behind the Cloudflare tunnel every connection reaches us from localhost,
+  // so per-IP buckets must key on the visitor's real IP (CF-Connecting-IP);
+  // otherwise all users share one bucket and the app 429s under normal use.
+  const clientKey = (req) => req.get('cf-connecting-ip') || req.ip || 'unknown';
   const globalLimiter = rateLimit({
     windowMs: config.globalRateLimitWindowMs,
     limit: config.globalRateLimitMax,
     standardHeaders: 'draft-7',
-    legacyHeaders: false
+    legacyHeaders: false,
+    keyGenerator: clientKey,
+    validate: { keyGeneratorIpFallback: false }
   });
   const authLimiter = rateLimit({
     windowMs: config.authRateLimitWindowMs,
     limit: config.authRateLimitMax,
     standardHeaders: 'draft-7',
     legacyHeaders: false,
-    skipSuccessfulRequests: true
+    skipSuccessfulRequests: true,
+    keyGenerator: clientKey,
+    validate: { keyGeneratorIpFallback: false }
   });
 
   // Request logging: one line per request with a short id so errors can be

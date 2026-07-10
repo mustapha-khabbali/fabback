@@ -4,7 +4,7 @@ import { query, withTransaction } from '../db/pool.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { emitRealtimeChange } from '../realtime/bus.js';
 import { config } from '../config.js';
-import { isOnLabNetwork } from '../services/labNetwork.js';
+import { getClientIp, isOnLabNetwork } from '../services/labNetwork.js';
 
 export const attendanceRouter = express.Router();
 
@@ -211,6 +211,7 @@ attendanceRouter.post('/check-in', async (req, res, next) => {
     // Presence: the gate QR is physically inside the lab; a check-in must come
     // from the school network, not from a photographed QR scanned at home.
     if (!isOnLabNetwork(req)) {
+      console.warn(`[req ${req.id}] gate network refused check-in ip=${getClientIp(req)} allow=${config.gateAllowedIps.join(',') || '(off)'}`);
       res.status(403).json({ error: 'Vous devez être au FabLab pour scanner (réseau de l\'école requis).' });
       return;
     }
@@ -290,6 +291,7 @@ attendanceRouter.post('/check-out', async (req, res, next) => {
     }
 
     if (!isOnLabNetwork(req)) {
+      console.warn(`[req ${req.id}] gate network refused check-out ip=${getClientIp(req)} allow=${config.gateAllowedIps.join(',') || '(off)'}`);
       res.status(403).json({ error: 'Vous devez être au FabLab pour scanner (réseau de l\'école requis).' });
       return;
     }
