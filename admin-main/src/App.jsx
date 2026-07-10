@@ -5,6 +5,7 @@ import AdminOverviewView from './views/AdminOverviewView';
 import QrCodesView from './views/QrCodesView';
 import PVView from './views/PVView';
 import UsersView from './views/UsersView';
+import SignalementsView from './views/SignalementsView';
 import AnalyseView from './views/AnalyseView';
 import { api } from './services/api';
 import { startRealtime, stopRealtime } from './services/realtime';
@@ -169,6 +170,7 @@ export default function App() {
           onProfileTargetHandled={handleProfileTargetHandled}
         />
       );
+      case ADMIN_VIEWS.SIGNALEMENTS: return <SignalementsView onNavigate={handleNavigate} />;
       case ADMIN_VIEWS.ANALYSE: return <AnalyseView onNavigate={handleNavigate} />;
       default: return <AdminOverviewView onNavigate={handleNavigate} />;
     }

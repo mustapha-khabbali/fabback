@@ -16,6 +16,7 @@ export const QR = {
 export const USERS = {
   admin: { id: 'test-admin', role: 'administrateur', prenom: 'Admin', nom: 'Test', email: 'admin@test.local' },
   stagiaire: { id: 'test-stagiaire', role: 'stagiaire', prenom: 'Stagiaire', nom: 'Test', email: 'stagiaire@test.local' },
+  peer: { id: 'test-peer', role: 'stagiaire', prenom: 'Peer', nom: 'Test', email: 'peer@test.local' },
   deactivated: { id: 'test-deactivated', role: 'stagiaire', prenom: 'Off', nom: 'Test', email: 'off@test.local' }
 };
 
@@ -36,6 +37,8 @@ export async function stopTestServer() {
 
 export async function resetDb() {
   await query('truncate attendance restart identity cascade');
+  await query('truncate recognitions restart identity cascade');
+  await query('truncate reports restart identity cascade');
   await query('delete from gate_config');
   await query(`delete from users where id like 'test-%'`);
 

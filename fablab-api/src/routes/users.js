@@ -53,8 +53,9 @@ export const userProfileSchema = z.object({
 });
 
 const userPatchSchema = userProfileSchema.partial().extend({
-  points: z.number().int().min(0).optional(),
-  comportementRating: z.number().min(0).max(5).optional()
+  points: z.number().int().min(0).optional()
+  // comportementRating is deliberately NOT patchable: the score is computed
+  // from the behavior ledger (recognitions/reports) — see services/behaviorScore.js
 });
 
 const createUserSchema = userProfileSchema.partial({
@@ -127,12 +128,6 @@ export function buildUserPatch(data) {
     values.push(Boolean(normalized.reproductionAccepted));
     params.push(values.length);
     columns.push(`reproduction_accepted = $${values.length}`);
-  }
-
-  if (Object.prototype.hasOwnProperty.call(normalized, 'comportementRating')) {
-    values.push(normalized.comportementRating);
-    params.push(values.length);
-    columns.push(`comportement_rating = $${values.length}`);
   }
 
   return { columns, values, params };
@@ -326,24 +321,9 @@ usersRouter.patch('/:id/reactivate', requireRole('administrateur'), async (req, 
   }
 });
 
-usersRouter.patch('/:id/behavior-rating', requireRole('administrateur'), async (req, res, next) => {
-  try {
-    const parsed = z.object({ rating: z.number().min(0).max(5) }).safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).json({ error: 'Invalid request body', details: parsed.error.flatten() });
-      return;
-    }
-
-    const result = await query(
-      'update users set comportement_rating = $1, updated_at = now() where id = $2 returning *',
-      [parsed.data.rating, req.params.id]
-    );
-    emitRealtimeChange({ entity: 'users', action: 'patch', id: result.rows[0].id });
-    res.json({ user: toPublicUser(result.rows[0]) });
-  } catch (error) {
-    next(error);
-  }
-});
+// The manual behavior-rating endpoint was removed on purpose: the score is a
+// pure function of the behavior ledger and has no direct write path — not
+// even for administrators. See services/behaviorScore.js.
 
 usersRouter.delete('/:id', requireRole('administrateur'), async (req, res, next) => {
   try {

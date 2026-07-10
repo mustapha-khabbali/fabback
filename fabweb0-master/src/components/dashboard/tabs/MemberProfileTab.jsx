@@ -1014,13 +1014,25 @@ export default function MemberProfileTab() {
             <div className="p-8 pt-4 shrink-0 bg-t-surface glass-card border-t border-t-border-subtle">
               <button
                 disabled={!recognitionComment.trim() || recognitionRating === 0}
-                onClick={() => {
-                  showNotification(`Reconnaissance envoyée à ${displayUser?.prenom} !`);
-                  setShowRecognitionModal(false);
-                  setRecognitionComment('');
-                  setSelectedMachine(null);
-                  setSelectedProjectId('');
-                  setRecognitionRating(0);
+                onClick={async () => {
+                  try {
+                    await api.sendRecognition({
+                      targetId: displayUserId,
+                      rating: recognitionRating,
+                      comment: recognitionComment.trim(),
+                      machineName: selectedMachine || null,
+                      projectId: selectedProjectId || null,
+                      projectTitle: userProjects?.find((p) => p.id === selectedProjectId)?.title || null
+                    });
+                    showNotification(`Reconnaissance envoyée à ${displayUser?.prenom} !`);
+                    setShowRecognitionModal(false);
+                    setRecognitionComment('');
+                    setSelectedMachine(null);
+                    setSelectedProjectId('');
+                    setRecognitionRating(0);
+                  } catch (error) {
+                    showNotification(error.message || "Échec de l'envoi de la reconnaissance.", 'error');
+                  }
                 }}
                 className="w-full py-5 bg-[#3B5FE6] text-white font-black rounded-3xl shadow-xl shadow-blue-500/20 active:scale-[0.98] transition-all uppercase tracking-widest text-sm disabled:opacity-20"
               >
@@ -1101,11 +1113,20 @@ export default function MemberProfileTab() {
             <div className="p-8 pt-4 shrink-0 bg-t-surface glass-card border-t border-t-border-subtle">
               <button
                 disabled={!reportType || !reportDetails.trim()}
-                onClick={() => {
-                  showNotification("Signalement envoyé à l'administration.", "success");
-                  setShowReportModal(false);
-                  setReportType('');
-                  setReportDetails('');
+                onClick={async () => {
+                  try {
+                    await api.sendReport({
+                      targetId: displayUserId,
+                      category: reportType,
+                      details: reportDetails.trim()
+                    });
+                    showNotification("Signalement envoyé à l'administration.", "success");
+                    setShowReportModal(false);
+                    setReportType('');
+                    setReportDetails('');
+                  } catch (error) {
+                    showNotification(error.message || "Échec de l'envoi du signalement.", 'error');
+                  }
                 }}
                 className="w-full py-5 bg-rose-500 text-white font-black rounded-3xl shadow-xl shadow-rose-500/20 active:scale-[0.98] transition-all uppercase tracking-widest text-sm disabled:opacity-20"
               >

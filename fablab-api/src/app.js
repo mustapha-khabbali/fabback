@@ -15,6 +15,7 @@ import { notificationsRouter } from './routes/notifications.js';
 import { interactionsRouter } from './routes/interactions.js';
 import { reviewsRouter } from './routes/reviews.js';
 import { streamRouter } from './routes/stream.js';
+import { behaviorRouter } from './routes/behavior.js';
 
 export function createApp() {
   const app = express();
@@ -96,6 +97,7 @@ export function createApp() {
   app.use('/api/notifications', notificationsRouter);
   app.use('/api/interactions', interactionsRouter);
   app.use('/api/reviews', reviewsRouter);
+  app.use('/api/behavior', behaviorRouter);
 
   app.use((req, res) => {
     res.status(404).json({ error: 'Not found', path: req.path });

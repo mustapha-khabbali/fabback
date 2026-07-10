@@ -114,12 +114,27 @@ export const api = {
     return toUiUser(body.user);
   },
 
-  async updateBehaviorRating(id, rating) {
-    const body = await request(`/users/${id}/behavior-rating`, {
+  // The comportement score is computed from the behavior ledger and has no
+  // manual write path (see fablab-api services/behaviorScore.js).
+  async getBehavior(userId) {
+    return request(`/behavior/users/${encodeURIComponent(userId)}`);
+  },
+
+  async getBehaviorReports(status) {
+    const suffix = status ? `?status=${encodeURIComponent(status)}` : '';
+    const body = await request(`/behavior/reports${suffix}`);
+    return body.reports || [];
+  },
+
+  async reviewBehaviorReport(id, status) {
+    return request(`/behavior/reports/${id}`, {
       method: 'PATCH',
-      body: JSON.stringify({ rating })
+      body: JSON.stringify({ status })
     });
-    return toUiUser(body.user);
+  },
+
+  async revokeRecognition(id) {
+    return request(`/behavior/recognitions/${id}/revoke`, { method: 'PATCH' });
   },
 
   async deleteUser(id) {

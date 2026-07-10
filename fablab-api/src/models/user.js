@@ -20,7 +20,10 @@ export function toPublicUser(user) {
     avatar: user.avatar,
     programs: user.programs || [],
     points: user.points,
-    comportementRating: Number(user.comportement_rating || 0),
+    // null = not yet rated (frontends display "—"); never coerce to 0
+    comportementRating: user.comportement_rating === null || user.comportement_rating === undefined
+      ? null
+      : Number(user.comportement_rating),
     isDeactivated: user.is_deactivated,
     charteAccepted: user.charte_accepted,
     reproductionAccepted: user.reproduction_accepted,

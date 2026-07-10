@@ -1,6 +1,7 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { UserService } from '../../services/UserService';
 import { InteractionService } from '../../services/InteractionService';
+import { api } from '../../services/api';
 
 const EMPTY_INTERACTIONS = {
   reviewedOthers: [],
@@ -8,6 +9,46 @@ const EMPTY_INTERACTIONS = {
   helpedBy: [],
   reviewedByOthers: []
 };
+
+const EMPTY_BEHAVIOR = {
+  score: null,
+  recognitionsReceived: [],
+  recognitionsSent: [],
+  reportsReceived: [],
+  reportsFiled: []
+};
+
+const REPORT_CATEGORY_LABELS = {
+  disrespect: 'Manque de respect',
+  cooperation: 'Mauvaise collaboration',
+  copy: "Vol ou copie d'idée"
+};
+
+const REPORT_STATUS_META = {
+  nouveau: { label: 'Nouveau', className: 'bg-accent-amber/10 text-accent-amber border-accent-amber/20' },
+  valide: { label: 'Validé', className: 'bg-accent-red/10 text-accent-red border-accent-red/20' },
+  rejete: { label: 'Rejeté', className: 'bg-white/[0.05] text-white/40 border-white/10 line-through' }
+};
+
+// Lab events display in lab time regardless of the viewer's device timezone.
+function formatLabDateTime(iso) {
+  if (!iso) return '';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  return new Intl.DateTimeFormat('fr-FR', {
+    timeZone: 'Africa/Casablanca',
+    day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+  }).format(date);
+}
+
+function ReportStatusBadge({ status }) {
+  const meta = REPORT_STATUS_META[status] || REPORT_STATUS_META.nouveau;
+  return (
+    <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${meta.className}`}>
+      {meta.label}
+    </span>
+  );
+}
 
 function ClickableLink({ text, onClick }) {
   const isClickable = typeof onClick === 'function';
@@ -31,10 +72,35 @@ export default function InteractionsPanel({ user, usersList, onOpenUser }) {
 
   const [activeCategory, setActiveCategory] = useState('all');
   const [expandedReviewId, setExpandedReviewId] = useState(null);
+  const [behavior, setBehavior] = useState(EMPTY_BEHAVIOR);
+
+  const loadBehavior = useCallback(() => {
+    if (!user?.id) {
+      setBehavior(EMPTY_BEHAVIOR);
+      return;
+    }
+    api.getBehavior(user.id)
+      .then((data) => setBehavior({ ...EMPTY_BEHAVIOR, ...data }))
+      .catch(() => setBehavior(EMPTY_BEHAVIOR));
+  }, [user?.id]);
+
+  useEffect(() => {
+    loadBehavior();
+  }, [loadBehavior]);
+
+  const reviewBehaviorReport = async (id, status) => {
+    try {
+      await api.reviewBehaviorReport(id, status);
+      loadBehavior();
+    } catch (error) {
+      alert(error.message);
+    }
+  };
 
   const reviewsCount = (interactions.reviewedOthers?.length || 0) + (interactions.reviewedByOthers?.length || 0);
   const helpCount = (interactions.helpedOthers?.length || 0) + (interactions.helpedBy?.length || 0);
-  const totalCount = reviewsCount + helpCount;
+  const comportementCount = behavior.recognitionsReceived.length + behavior.reportsReceived.length;
+  const totalCount = reviewsCount + helpCount + comportementCount;
 
   // Build unified chronological history
   const unifiedHistory = useMemo(() => {
@@ -53,15 +119,26 @@ export default function InteractionsPanel({ user, usersList, onOpenUser }) {
       history.push({ ...item, type: 'HELP_RECEIVED' });
     });
 
-    // Sort chronologically (most recent first)
-    history.sort((a, b) => {
-      const dateA = new Date(`${a.date}T${a.time || '00:00'}`);
-      const dateB = new Date(`${b.date}T${b.time || '00:00'}`);
-      return dateB - dateA;
+    // Comportement events join the same timeline (sortDate = real timestamp)
+    behavior.recognitionsReceived.forEach(item => {
+      history.push({ ...item, type: 'RECOGNITION_RECEIVED', sortDate: new Date(item.createdAt) });
+    });
+    behavior.recognitionsSent.forEach(item => {
+      history.push({ ...item, type: 'RECOGNITION_GIVEN', sortDate: new Date(item.createdAt) });
+    });
+    behavior.reportsReceived.forEach(item => {
+      history.push({ ...item, type: 'REPORT_RECEIVED', task: item.details, sortDate: new Date(item.createdAt) });
+    });
+    behavior.reportsFiled.forEach(item => {
+      history.push({ ...item, type: 'REPORT_FILED', task: item.details, sortDate: new Date(item.createdAt) });
     });
 
+    // Sort chronologically (most recent first)
+    const sortValue = (item) => item.sortDate || new Date(`${item.date}T${item.time || '00:00'}`);
+    history.sort((a, b) => sortValue(b) - sortValue(a));
+
     return history;
-  }, [interactions]);
+  }, [interactions, behavior]);
 
   const renderScorePill = (rating) => {
     const safeRating = Number(rating) || 0;
@@ -137,6 +214,13 @@ export default function InteractionsPanel({ user, usersList, onOpenUser }) {
       label: 'Entraide',
       count: helpCount,
       activeColor: 'bg-accent-green border-accent-green text-white',
+      inactiveColor: 'bg-white/[0.02] border-white/10 text-white/50 hover:bg-white/[0.05] hover:text-white',
+    },
+    {
+      id: 'comportement',
+      label: 'Comportement',
+      count: comportementCount,
+      activeColor: 'bg-accent-red border-accent-red text-white',
       inactiveColor: 'bg-white/[0.02] border-white/10 text-white/50 hover:bg-white/[0.05] hover:text-white',
     }
   ];
@@ -216,6 +300,26 @@ export default function InteractionsPanel({ user, usersList, onOpenUser }) {
                       SvgIcon = <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />;
                       content = <span>{renderUserLink(item.userId, peerName)} a apporté son aide sur la machine <span className="font-bold text-white/80">{item.machine}</span></span>;
                       break;
+                    case 'RECOGNITION_RECEIVED':
+                      iconBg = 'bg-accent-green/20'; iconColor = 'text-accent-green';
+                      SvgIcon = <path strokeLinecap="round" strokeLinejoin="round" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.196-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.783-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />;
+                      content = <span>{renderUserLink(item.senderId, item.senderName)} a envoyé une reconnaissance{item.machineName ? <> (machine <span className="font-bold text-white/80">{item.machineName}</span>)</> : null}{item.counted === false ? <span className="text-white/30"> — non comptée</span> : null}</span>;
+                      break;
+                    case 'RECOGNITION_GIVEN':
+                      iconBg = 'bg-accent-green/20'; iconColor = 'text-accent-green';
+                      SvgIcon = <path strokeLinecap="round" strokeLinejoin="round" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.196-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.783-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />;
+                      content = <span>A envoyé une reconnaissance à {renderUserLink(item.targetId, item.targetName)}</span>;
+                      break;
+                    case 'REPORT_RECEIVED':
+                      iconBg = 'bg-accent-red/20'; iconColor = 'text-accent-red';
+                      SvgIcon = <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />;
+                      content = <span>{renderUserLink(item.senderId, item.senderName)} a signalé : <span className="font-bold text-white/80">{REPORT_CATEGORY_LABELS[item.category] || item.category}</span> <ReportStatusBadge status={item.status} /></span>;
+                      break;
+                    case 'REPORT_FILED':
+                      iconBg = 'bg-accent-red/20'; iconColor = 'text-accent-red';
+                      SvgIcon = <path strokeLinecap="round" strokeLinejoin="round" d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2z" />;
+                      content = <span>A signalé {renderUserLink(item.targetId, item.targetName)} : <span className="font-bold text-white/80">{REPORT_CATEGORY_LABELS[item.category] || item.category}</span> <ReportStatusBadge status={item.status} /></span>;
+                      break;
                   }
 
                   return (
@@ -232,7 +336,9 @@ export default function InteractionsPanel({ user, usersList, onOpenUser }) {
                           <div className="flex items-center justify-between gap-2">
                             <div className="text-[13px] text-white/70">{content}</div>
                             <div className="flex items-center gap-2 shrink-0">
-                              <span className="text-[10px] text-white/30 font-mono bg-white/5 px-2 py-0.5 rounded">{item.date} {item.time}</span>
+                              <span className="text-[10px] text-white/30 font-mono bg-white/5 px-2 py-0.5 rounded">
+                                {item.sortDate ? formatLabDateTime(item.createdAt) : `${item.date} ${item.time}`}
+                              </span>
                             </div>
                           </div>
                           
@@ -537,7 +643,127 @@ export default function InteractionsPanel({ user, usersList, onOpenUser }) {
             </div>
           </>
         )}
-        
+
+        {/* SECTION: COMPORTEMENT (RECONNAISSANCES + SIGNALEMENTS) */}
+        {activeCategory === 'comportement' && (
+          <>
+            <div className="space-y-4">
+              <h5 className="text-[11px] font-bold text-accent-green uppercase tracking-[1.5px] flex items-center gap-2 px-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-accent-green"></span>
+                Reconnaissances Reçues
+              </h5>
+              {behavior.recognitionsReceived.length === 0 ? (
+                renderEmptyState("Aucune reconnaissance reçue.", "text-accent-green")
+              ) : (
+                <div className="grid grid-cols-1 gap-3">
+                  {behavior.recognitionsReceived.map((item) => (
+                    <div key={item.id} className="bg-white/[0.02] border border-white/5 rounded-2xl p-4 flex flex-col gap-3 hover:bg-white/[0.04] transition-colors w-full">
+                      <div className="flex gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-accent-green/10 border border-accent-green/20 text-accent-green flex items-center justify-center font-bold text-[12px] shrink-0">
+                          {getInitials(item.senderName)}
+                        </div>
+                        <div className="space-y-1.5 flex-grow min-w-0">
+                          <div className="flex items-start justify-between gap-2">
+                            <h6 className="text-[13px] font-semibold text-white truncate">{renderUserLink(item.senderId, item.senderName)}</h6>
+                            <span className="text-[10px] text-white/30 shrink-0">{formatLabDateTime(item.createdAt)}</span>
+                          </div>
+                          <p className="text-[12px] text-white/70">
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-accent-green/10 text-accent-green mr-2">
+                              {item.machineName || item.projectTitle || 'Général'}
+                            </span>
+                            {item.counted === false && (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-white/[0.05] text-white/40">non comptée</span>
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="mt-2 pl-12 space-y-2">
+                        <div className="flex items-center gap-3">
+                          {renderScorePill(item.rating)}
+                          {item.counted !== false && (
+                            <button
+                              onClick={() => {
+                                if (!window.confirm('Révoquer cette reconnaissance ? Le score sera recalculé.')) return;
+                                api.revokeRecognition(item.id).then(loadBehavior).catch((error) => alert(error.message));
+                              }}
+                              className="text-[10px] font-bold uppercase tracking-widest text-white/30 hover:text-accent-red transition-colors"
+                            >
+                              Révoquer
+                            </button>
+                          )}
+                        </div>
+                        {item.comment && (
+                          <p className="text-[11px] text-white/50 bg-white/[0.01] border-l-2 border-accent-green/50 rounded-r-lg p-2 italic leading-relaxed">
+                            "{item.comment}"
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-4">
+              <h5 className="text-[11px] font-bold text-accent-red uppercase tracking-[1.5px] flex items-center gap-2 px-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-accent-red"></span>
+                Signalements Reçus
+              </h5>
+              {behavior.reportsReceived.length === 0 ? (
+                renderEmptyState("Aucun signalement.", "text-accent-red")
+              ) : (
+                <div className="grid grid-cols-1 gap-3">
+                  {behavior.reportsReceived.map((item) => (
+                    <div key={item.id} className="bg-white/[0.02] border border-white/5 rounded-2xl p-4 flex flex-col gap-3 hover:bg-white/[0.04] transition-colors w-full">
+                      <div className="flex gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-accent-red/10 border border-accent-red/20 text-accent-red flex items-center justify-center font-bold text-[12px] shrink-0">
+                          {getInitials(item.senderName)}
+                        </div>
+                        <div className="space-y-1.5 flex-grow min-w-0">
+                          <div className="flex items-start justify-between gap-2">
+                            <h6 className="text-[13px] font-semibold text-white truncate">{renderUserLink(item.senderId, item.senderName)}</h6>
+                            <span className="text-[10px] text-white/30 shrink-0">{formatLabDateTime(item.createdAt)}</span>
+                          </div>
+                          <p className="text-[12px] text-white/70 flex items-center gap-2 flex-wrap">
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-accent-red/10 text-accent-red">
+                              {REPORT_CATEGORY_LABELS[item.category] || item.category}
+                            </span>
+                            <ReportStatusBadge status={item.status} />
+                            {item.reviewedByName && item.status !== 'nouveau' && (
+                              <span className="text-[10px] text-white/30">par {item.reviewedByName}</span>
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="mt-2 pl-12 space-y-2">
+                        <p className="text-[11px] text-white/50 bg-white/[0.01] border-l-2 border-accent-red/50 rounded-r-lg p-2 italic leading-relaxed">
+                          "{item.details}"
+                        </p>
+                        {item.status === 'nouveau' && (
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => reviewBehaviorReport(item.id, 'valide')}
+                              className="px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest bg-accent-red/10 border border-accent-red/20 text-accent-red hover:bg-accent-red hover:text-white transition-colors"
+                            >
+                              Valider
+                            </button>
+                            <button
+                              onClick={() => reviewBehaviorReport(item.id, 'rejete')}
+                              className="px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest bg-white/[0.02] border border-white/10 text-white/50 hover:text-white transition-colors"
+                            >
+                              Rejeter
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
       </div>
     </div>
   );

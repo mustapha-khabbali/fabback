@@ -132,16 +132,6 @@ export default function UsersView({ profileTarget, onProfileOpened, onProfileClo
     patchSelectedUser({ recycleBin: newBin });
   };
 
-  const updateStagiaireRating = async (rating) => {
-    if (!selectedUser || selectedUser.role !== 'Stagiaire') return;
-    try {
-      const updated = await api.updateBehaviorRating(selectedUser.id, rating);
-      patchSelectedUser(updated);
-    } catch (error) {
-      alert(error.message);
-    }
-  };
-
   const updateSelectedUserPrograms = async (programs) => {
     if (!selectedUser || selectedUser.role !== 'Stagiaire') return false;
 
@@ -473,28 +463,29 @@ export default function UsersView({ profileTarget, onProfileOpened, onProfileClo
                     Comportement
                   </h4>
                   <span className="text-[11px] font-bold text-accent-amber">
-                    {selectedUser.comportementRating || 0}/5
+                    {selectedUser.comportementRating == null ? '—' : `${Number(selectedUser.comportementRating).toFixed(1)}/5`}
                   </span>
                 </div>
-                <div className="flex items-center gap-1.5">
+                {/* Score computed from validated reconnaissances/signalements — no manual write path, by design */}
+                <div className="flex items-center gap-1.5" title="Score calculé à partir des reconnaissances et signalements validés — non modifiable">
                   {[1, 2, 3, 4, 5].map((star) => {
-                    const isActive = star <= (selectedUser.comportementRating || 0);
+                    const isActive = star <= Math.round(selectedUser.comportementRating || 0);
                     return (
-                      <button
+                      <span
                         key={star}
-                        type="button"
-                        onClick={() => updateStagiaireRating(star)}
-                        className={`p-1 rounded-lg transition-all cursor-pointer hover:scale-110 ${
-                          isActive ? 'text-accent-amber bg-accent-amber/10' : 'text-white/20 hover:text-accent-amber hover:bg-white/[0.04]'
+                        className={`p-1 rounded-lg ${
+                          isActive ? 'text-accent-amber bg-accent-amber/10' : 'text-white/20'
                         }`}
-                        aria-label={`Noter ${star} sur 5`}
                       >
                         <svg className="w-7 h-7 fill-current" viewBox="0 0 20 20">
                           <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                         </svg>
-                      </button>
+                      </span>
                     );
                   })}
+                  {selectedUser.comportementRating == null && (
+                    <span className="text-[11px] text-white/30 ml-2">Pas encore évalué</span>
+                  )}
                 </div>
               </div>
             )}

@@ -30,6 +30,11 @@ export function shouldDeliver(change, user) {
   if (change.entity === 'notifications') {
     return change.recipientId && String(change.recipientId) === String(user.id);
   }
+  // Behavior events (signalements/reconnaissances) are admin-eyes-only:
+  // a reported user must never learn a report exists.
+  if (change.entity === 'behavior') {
+    return user.role === 'administrateur';
+  }
   return true;
 }
 

@@ -230,6 +230,22 @@ export const api = {
     return body.review;
   },
 
+  async sendRecognition(payload) {
+    const body = await request('/behavior/recognitions', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+    return body.recognition;
+  },
+
+  async sendReport(payload) {
+    const body = await request('/behavior/reports', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+    return body.report;
+  },
+
   logout() {
     setUserToken(null);
   }
