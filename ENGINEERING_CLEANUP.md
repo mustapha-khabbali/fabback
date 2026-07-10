@@ -21,7 +21,8 @@
 |---|---|
 | VM password stays as provided by IT; SSH password auth stays enabled. Mitigation: SSH is never carried by the tunnel — LAN-only door. | Mustapha, 07-10 |
 | Data stays in **one place** — the VM. No off-machine copies. Catastrophic-loss cover = the school's own VM backup (must be confirmed, see §2). | Mustapha, 07-10 |
-| App usable from anywhere by everyone (admin is non-technical, zero client setup); **check-in/out LAN-locked server-side**. | Mustapha, 07-10 |
+| App usable from anywhere by everyone (admin is non-technical, zero client setup). | Mustapha, 07-10 |
+| **Check-in/out fully public** — the IP gate was built (+tests) but turned OFF: the school Wi-Fi exits via multiple/changeable IPs, and an allowlist breaks silently whenever IT adds an access point — unacceptable for an unattended system. `GATE_ALLOWED_IPS` stays in the code (one env var re-enables it). If QR-photo fraud ever becomes real, the proper fix is **rotating QR codes** (screen at the door, ~60s refresh) — network-independent. | Mustapha, 07-10 |
 | Domain: `fablab-api.ofppt.me` (student-pack Namecheap; existing ofppt.me site must survive untouched). | Mustapha, 07-10 |
 
 ---
