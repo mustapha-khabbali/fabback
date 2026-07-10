@@ -28,6 +28,11 @@
 * 📌 Owner instruction (2026-07-10): the VM password stays as provided by IT; SSH password auth stays enabled. Accepted risk — decision owner: Mustapha.
 * ℹ️ Shipped alongside the plan (product work, 07-09/10): the Comportement score system — Bayesian score from reconnaissances/signalements, admin-only review, no manual write path — with 12 new tests (suite: 32 green).
 
+**2026-07-10 evening — architecture finalized (supersedes the LAN-only draft above):**
+* 📐 New requirement surfaced: **the admin needs access from outside the school, and she is not technical** — client-side VPN (Tailscale) rejected for her sake. Final design: **named Cloudflare Tunnel** on `fablab-api.ofppt.me` (owner's Namecheap student-pack domain; existing website untouched on its own records). Whole app usable from anywhere by everyone, zero client setup; **gate check-in/out LAN-locked server-side** — presence stays un-fakeable. DigitalOcean considered and rejected (splitting API from DB solves nothing; full move re-opens fraud and abandons the school VM).
+* 📌 Owner decision: **data stays in one place — the VM.** No off-machine copies. Residual catastrophic-loss risk carried by the school's VM backup (confirming it with IT = the one remaining IT question). Decision owner: Mustapha.
+* ⏳ Remaining owner actions before deployment: create a free Cloudflare account; be on school Wi-Fi for the session. Then: Docker → project → secrets → stack → tunnel → LAN-gate + tests → rebuild/redeploy apps → full verification → Mac tunnel retired.
+
 **Known issue discovered by the tests:** after `LAB_CLOSE_TIME` (18:30), an open attendance is instantly "expired" — a Gate-OUT scan at 18:45 auto-closes the session, **discards the rating**, and reports "no open attendance". If the lab is ever open past 18:30, this is a data-loss path; decide whether the cutoff should be later or checkout-after-cutoff should keep the rating.
 
 ---
@@ -61,18 +66,23 @@ Realtime:  WebSocket (src/realtime/socket.js + bus.js)
 API layer: services/api.js in both frontends
 ```
 
-Target (updated 2026-07-10 — **school policy: LAN-only, non-negotiable**): same stack, but the API lives on the school VM and is reachable **only from inside the school network**. This is imposed by the school, not chosen — and it doubles as the anti-fraud design: a photographed gate QR scanned from home cannot reach the API at all, so physical presence is enforced by the network itself.
+Target (**final, decided 2026-07-10 evening** — supersedes the LAN-only draft from earlier the same day): the school VM hosts everything, the school firewall stays untouched (inbound is blocked and stays blocked), and the outside world reaches the API through a **named Cloudflare Tunnel** — a permanent outbound corridor from the VM. The app is usable **from anywhere, by everyone, with zero setup** (requirement: the admin is not technical) — with one deliberate exception: **gate check-in/check-out only works from inside the school network**, enforced server-side. Physical presence stays un-fakeable; a photographed QR scanned from home gets a refusal.
 
 ```
-Firebase-hosted apps (same permanent URLs, Google login unchanged)
-        ↓  HTTPS
-https://<name>.duckdns.org  →  DNS A record pointing at the PRIVATE IP 10.34.107.30
-        ↓  resolves usefully only inside the school LAN
-School VM (vm-fablab, Ubuntu 24.04): nginx (TLS via Let's Encrypt DNS-01,
-no inbound ports needed) → fablab-api → PostgreSQL, all in Docker
+Firebase-hosted apps (same permanent URLs forever, Google login unchanged)
+        ↓  HTTPS from anywhere
+https://fablab-api.ofppt.me   (subdomain of the owner's Namecheap student-pack
+        ↓                      domain; the existing ofppt.me website is untouched)
+Cloudflare (free): TLS, hides the school IP, absorbs floods
+        ↓  outbound-only tunnel (cloudflared) — no inbound ports, nothing asked of IT
+School VM vm-fablab @ 10.34.107.30 (Ubuntu 24.04, LAN-only by school policy):
+  Docker: nginx → fablab-api → PostgreSQL  + cloudflared + backup cron
+        ↑
+  Gate endpoints additionally listen on the LAN path only:
+  check-in from school Wi-Fi ✅ — check-in through the tunnel ❌ (403)
 ```
 
-Consequences, stated honestly: outside the school the app pages load (Firebase is public) but login and data fail — the entire product is school-Wi-Fi-only by policy. Inside the school, everything works. The demo tunnel is retired after the switch (optionally kept for soutenance demos only). **Nothing is needed from school IT** — no ports, no DNS, no firewall changes; the certificate is obtained via DNS challenge using only outbound internet.
+Security posture of the public face: every API route requires a bearer token (anonymous = 401, enforced by the 32-test suite), roles checked server-side, rate limiting on auth, CORS locked to the two hosting origins, Postgres sealed inside Docker, **SSH not carried by the tunnel** (reachable from the school LAN only). Exposure is not new — the demo tunnel has been public for days; this swap makes the address permanent and adds Cloudflare's shield.
 
 ---
 
@@ -98,35 +108,38 @@ The data plane is PostgreSQL now. Set `firestore.rules` to deny-all (or scope to
 
 This phase eliminates roughly 80% of the real risk. **Nothing in Phase 2 starts until Phase 1 is done.** That sequencing is the whole point of this document.
 
-### 1.1 Kill the tunnel: LAN-only school-server deployment *(rewritten 2026-07-10)*
+### 1.1 Kill the Mac tunnel: school-VM deployment behind a named Cloudflare Tunnel *(final version, 2026-07-10 evening)*
 
-The cloudflared tunnel on the Mac was always a test/demo rig. The real target is now concrete: **`vm-fablab@10.34.107.30`** — Ubuntu 24.04 LTS, 39 GB free disk, 7.7 GB RAM, SSH key installed, health-checked on 2026-07-10. School policy makes it **LAN-only**; that constraint is accepted and baked into the design above.
+The cloudflared tunnel on the Mac was always a test/demo rig. The real target is concrete: **`vm-fablab@10.34.107.30`** — Ubuntu 24.04 LTS, 39 GB free disk, 7.7 GB RAM, SSH key installed, health-checked on 2026-07-10. Inbound is blocked by school policy and stays blocked; the named tunnel replaces it.
 
 * Install Docker on the VM (only missing piece — verified absent).
 * Copy the project **directly from the Mac** (rsync/scp), not from GitHub — commits are ahead of origin.
 * Production `.env` with fresh secrets: `JWT_SECRET`, Postgres password, **new `ADMIN_SEED_*`** (this is what finally rotates the admin credential — closes the 0.2 tail).
 * Postgres + API + nginx via the existing docker-compose files, `restart: unless-stopped` — survives reboot without a human.
-* **TLS via Let's Encrypt DNS-01 challenge** (DuckDNS token) — a real browser-trusted certificate with zero inbound exposure. This keeps HTTPS→HTTPS from the Firebase-hosted apps and keeps Google login working. The old HTTP-01/certbot-standalone path in the compose files is replaced by the DNS-01 flow.
-* nginx must carry the **WebSocket upgrade blocks** (already fixed in all 4 templates on 2026-07-09 — realtime dies without them).
+* **Named Cloudflare Tunnel** (`cloudflared` as a service on the VM, free plan) bound to `fablab-api.ofppt.me`. TLS comes with it — no certbot, no DNS-01, no inbound ports. The DuckDNS/DNS-01 draft from earlier on 07-10 is **superseded**.
+* Domain onboarding, done carefully: `ofppt.me` moves its DNS management to Cloudflare (free). Cloudflare auto-imports existing records; **verify the existing website's records survived before flipping nameservers at Namecheap** — the owner's live site must not blink.
+* **New code item — LAN-lock the gate:** check-in/check-out endpoints accept requests only when they arrive via the school-LAN path, not through the tunnel (the API can tell the two apart). Scan from home → 403 «Vous devez être au FabLab». **With tests**, like every other business rule.
+* nginx carries the **WebSocket upgrade blocks** (fixed in all 4 templates on 2026-07-09 — realtime dies without them).
 * CORS stays scoped to the two Firebase hosting origins.
 * Both apps rebuilt once with the permanent URL and redeployed:
 
 ```
-VITE_API_URL=https://<name>.duckdns.org/api
+VITE_API_URL=https://fablab-api.ofppt.me/api
 ```
 
-* **VM password policy: per the owner's explicit instruction (2026-07-10), the VM login password is NOT to be changed and password SSH auth is NOT to be disabled.** Noted as an accepted risk, decision owner: Mustapha.
+* **VM password policy: per the owner's explicit instruction (2026-07-10), the VM login password is NOT to be changed and password SSH auth is NOT to be disabled.** Noted as an accepted risk, decision owner: Mustapha. Mitigation that remains true: SSH is not exposed through the tunnel — that door exists on the school LAN only.
+* Courtesy, not a blocker: one transparency sentence to school IT about the outbound tunnel for admin remote access.
 
-**Blocked on exactly one thing:** a DuckDNS domain + token (2-minute free signup, must be under the owner's account).
+**Blocked on exactly two owner actions:** a free Cloudflare account, and being on school Wi-Fi for the deployment session.
 
-**Done when:** the VM reboots and everything comes back alone; `/api/health` answers over HTTPS from a phone on school Wi-Fi; the same URL fails from 4G (LAN-only proven); a WebSocket stays alive through nginx for 10+ minutes; a full QR check-in lands on the admin dashboard live; the tunnel is off.
+**Done when:** the VM reboots and everything comes back alone; `/api/health` answers at `https://fablab-api.ofppt.me` from a phone on 4G; login and dashboard work from outside the school with zero client setup; a QR check-in **succeeds on school Wi-Fi and is refused from 4G** (both proven); a WebSocket stays alive through the tunnel for 10+ minutes; the existing ofppt.me website still works; the Mac tunnel is off.
 
 ### 1.2 Prove the backup restores
 
 The school is said to back servers up daily — **confirm the claim applies to this specific VM** (`10.34.107.30`); that is now the single remaining question for school IT. A backup that has never been restored is a hope, not a backup.
 
 * Confirm: is this VM included at all, frequency, retention, and whether **PostgreSQL data is usable from it** (a filesystem snapshot of a running Postgres can be inconsistent — confirm `pg_dump` or snapshot+WAL).
-* **If the VM is NOT covered:** self-manage from day one — `deploy/scripts/backup-postgres.sh` on a cron (it already exists, 14-day retention), plus a periodic copy of the dumps **off the VM** (e.g., to the Mac over SSH); a backup that lives only on the machine it protects dies with it.
+* **Owner decision (2026-07-10): data stays in ONE place — the VM. No copies leave the machine.** Local dumps stay (`deploy/scripts/backup-postgres.sh` on a cron, 14-day retention) — they cover software accidents (bad migration, accidental deletion). What they cannot cover: the disk dying, the VM being wiped or reimaged. **That risk is carried entirely by the school's own backup of the VM — which makes confirming it with IT the single most important remaining question.** If IT says "not covered," that gap is an accepted, documented risk. Decision owner: Mustapha.
 * Run **one real restore test** onto a non-production machine. Time it. Write down the steps.
 * **The daily-backup gap:** the most valuable data is *today's* attendance — exactly what a daily backup hasn't captured. A disk failure at 16:00 erases the day. Pick one, in writing:
   * intraday `pg_dump` every 2–4 hours (cron, keep 48h), **or**
@@ -198,8 +211,9 @@ The bus factor is currently 1. If the author finishes the stage and leaves, nobo
 
 Check every box before touching Phase 2:
 
-- [ ] API on the school VM behind a stable HTTPS name, working on school Wi-Fi and (by design) unreachable from outside; tunnel retired; VM reboots and everything returns unattended.
-- [ ] A full QR check-in from a phone on school Wi-Fi appears live on the admin dashboard.
+- [ ] API on the school VM behind `https://fablab-api.ofppt.me`, working **from anywhere**; Mac tunnel retired; VM reboots and everything returns unattended; existing ofppt.me website unharmed.
+- [ ] A full QR check-in from a phone on school Wi-Fi appears live on the admin dashboard — **and the same scan from 4G is refused** (LAN-lock proven both ways).
+- [ ] Admin logs into the dashboard from outside the school with zero client setup.
 - [ ] One real restore performed, timed, documented; intraday-loss policy written; VM backup coverage confirmed with IT (or self-managed cron + off-VM copies running).
 - [x] `npm test` green on attendance + auth boundary; required before deploy. *(32 tests, 2026-07-10)*
 - [x] Indexes migration shipped. *(2026-07-09)*
