@@ -4,6 +4,7 @@ import { query, withTransaction } from '../db/pool.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { emitRealtimeChange } from '../realtime/bus.js';
 import { config } from '../config.js';
+import { isOnLabNetwork } from '../services/labNetwork.js';
 
 export const attendanceRouter = express.Router();
 
@@ -207,6 +208,12 @@ attendanceRouter.post('/check-in', async (req, res, next) => {
     }
 
     const data = parsed.data;
+    // Presence: the gate QR is physically inside the lab; a check-in must come
+    // from the school network, not from a photographed QR scanned at home.
+    if (!isOnLabNetwork(req)) {
+      res.status(403).json({ error: 'Vous devez être au FabLab pour scanner (réseau de l\'école requis).' });
+      return;
+    }
     if (!(await assertPermanentQr(data.qr?.gate || 'GATE_IN', data.qr, res))) return;
 
     // Gate-IN outside opening hours is refused: without this, an evening scan
@@ -282,6 +289,10 @@ attendanceRouter.post('/check-out', async (req, res, next) => {
       return;
     }
 
+    if (!isOnLabNetwork(req)) {
+      res.status(403).json({ error: 'Vous devez être au FabLab pour scanner (réseau de l\'école requis).' });
+      return;
+    }
     if (!(await assertPermanentQr('GATE_OUT', parsed.data.qr, res))) return;
 
     const { openToday, staleClosed } = await withTransaction(async (client) => {

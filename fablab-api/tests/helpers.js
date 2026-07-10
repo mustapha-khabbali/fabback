@@ -69,12 +69,13 @@ export function forgedTokenFor(user) {
   return jwt.sign({ sub: user.id, role: user.role }, 'wrong-secret', { expiresIn: '1h' });
 }
 
-export async function api(baseUrl, path, { method = 'GET', token, body } = {}) {
+export async function api(baseUrl, path, { method = 'GET', token, body, headers = {} } = {}) {
   const res = await fetch(`${baseUrl}/api${path}`, {
     method,
     headers: {
       ...(token ? { authorization: `Bearer ${token}` } : {}),
-      ...(body ? { 'content-type': 'application/json' } : {})
+      ...(body ? { 'content-type': 'application/json' } : {}),
+      ...headers
     },
     body: body ? JSON.stringify(body) : undefined
   });

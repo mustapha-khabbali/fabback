@@ -152,6 +152,51 @@ test("yesterday's open attendance does not block today's Gate-IN", async () => {
   assert.equal(res.status, 201, 'stale open attendance must be auto-closed, not block check-in');
 });
 
+test('check-in from outside the school network is refused (403), from inside allowed', async (t) => {
+  const saved = [...config.gateAllowedIps];
+  t.after(() => { config.gateAllowedIps = saved; });
+  config.gateAllowedIps = ['105.158.133.46', '10.34.0.0/16'];
+
+  // No CF-Connecting-IP → treated as outside → refused.
+  const outside = await api(baseUrl, '/attendance/check-in', {
+    method: 'POST', token: stagiaire(), body: checkInBody()
+  });
+  assert.equal(outside.status, 403);
+  assert.match(outside.body.error, /FabLab|école/i);
+
+  // A home IP → refused.
+  const home = await api(baseUrl, '/attendance/check-in', {
+    method: 'POST', token: stagiaire(), body: checkInBody(),
+    headers: { 'cf-connecting-ip': '41.92.10.10' }
+  });
+  assert.equal(home.status, 403);
+
+  // The school egress IP → allowed.
+  const school = await api(baseUrl, '/attendance/check-in', {
+    method: 'POST', token: stagiaire(), body: checkInBody(),
+    headers: { 'cf-connecting-ip': '105.158.133.46' }
+  });
+  assert.equal(school.status, 201);
+
+  // A device inside the school LAN CIDR → allowed.
+  await resetDb();
+  const lan = await api(baseUrl, '/attendance/check-in', {
+    method: 'POST', token: stagiaire(), body: checkInBody(),
+    headers: { 'cf-connecting-ip': '10.34.94.15' }
+  });
+  assert.equal(lan.status, 201);
+});
+
+test('empty allowlist disables enforcement (dev/test default)', async (t) => {
+  const saved = [...config.gateAllowedIps];
+  t.after(() => { config.gateAllowedIps = saved; });
+  config.gateAllowedIps = [];
+  const res = await api(baseUrl, '/attendance/check-in', {
+    method: 'POST', token: stagiaire(), body: checkInBody()
+  });
+  assert.equal(res.status, 201);
+});
+
 test('Gate-IN while the lab is closed is refused with 403 and a French message', async (t) => {
   const saved = { open: config.labOpenTime, close: config.labCloseTime };
   t.after(() => { config.labOpenTime = saved.open; config.labCloseTime = saved.close; });
