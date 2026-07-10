@@ -1,3 +1,7 @@
+import { useState, useEffect, useCallback } from 'react';
+import { api } from './services/api';
+import { subscribeRealtime } from './services/realtime';
+
 export const ADMIN_VIEWS = {
   DASHBOARD: 'dashboard',
   QR: 'qr',
@@ -59,6 +63,22 @@ const NAV_ITEMS = [
 ];
 
 export default function AdminSidebar({ activeView, onSelectView, onLogout }) {
+  // Plain red dot on "Signalements" while at least one report awaits review.
+  const [hasPendingReports, setHasPendingReports] = useState(false);
+
+  const refreshPendingReports = useCallback(() => {
+    api.getBehaviorReports('nouveau')
+      .then((rows) => setHasPendingReports(rows.length > 0))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    refreshPendingReports();
+    return subscribeRealtime((change) => {
+      if (change.entity === 'behavior' || change.entity === 'sync') refreshPendingReports();
+    });
+  }, [refreshPendingReports]);
+
   return (
     <aside className="sidebar w-[275px] flex flex-col shrink-0 z-50 px-4 py-8 relative">
       <div className="absolute -top-20 -left-20 w-40 h-40 bg-[#0075FF] rounded-full blur-[100px] opacity-30 pointer-events-none" />
@@ -86,6 +106,9 @@ export default function AdminSidebar({ activeView, onSelectView, onLogout }) {
             <span className={`nav-label font-medium text-[13px] ${activeView === item.id ? 'text-white' : 'text-white/50'}`}>
               {item.label}
             </span>
+            {item.id === ADMIN_VIEWS.SIGNALEMENTS && hasPendingReports && (
+              <span className="ml-auto w-2 h-2 rounded-full bg-accent-red animate-pulse shrink-0" aria-label="Signalements en attente" />
+            )}
           </button>
         ))}
       </nav>

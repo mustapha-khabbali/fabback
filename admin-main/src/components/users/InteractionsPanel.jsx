@@ -236,8 +236,8 @@ export default function InteractionsPanel({ user, usersList, onOpenUser }) {
           </p>
         </div>
 
-        {/* Brutal Minimalist Horizontal Pills */}
-        <div className="flex flex-wrap items-center gap-2">
+        {/* Brutal Minimalist Horizontal Pills — always one line */}
+        <div className="flex flex-nowrap items-center gap-2 overflow-x-auto">
           {navItems.map((item) => {
             const isActive = activeCategory === item.id;
             return (
@@ -247,7 +247,7 @@ export default function InteractionsPanel({ user, usersList, onOpenUser }) {
                   setActiveCategory(item.id);
                   setExpandedReviewId(null);
                 }}
-                className={`px-4 py-2 rounded-lg border text-[12px] font-bold flex items-center gap-2 transition-colors cursor-pointer ${
+                className={`px-4 py-2 rounded-lg border text-[12px] font-bold flex items-center gap-2 transition-colors cursor-pointer shrink-0 whitespace-nowrap ${
                   isActive ? item.activeColor : item.inactiveColor
                 }`}
               >

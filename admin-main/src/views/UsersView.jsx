@@ -483,9 +483,6 @@ export default function UsersView({ profileTarget, onProfileOpened, onProfileClo
                       </span>
                     );
                   })}
-                  {selectedUser.comportementRating == null && (
-                    <span className="text-[11px] text-white/30 ml-2">Pas encore évalué</span>
-                  )}
                 </div>
               </div>
             )}
