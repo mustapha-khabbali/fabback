@@ -14,9 +14,10 @@ const STATUS_META = {
   rejete: { label: 'Rejeté', className: 'bg-white/[0.05] text-white/40 border-white/10' }
 };
 
+// One inbox, two archives — the three statuses are exclusive and complete,
+// so a "Tous" filter would carry no extra information.
 const FILTERS = [
   { id: 'nouveau', label: 'Nouveaux' },
-  { id: 'all', label: 'Tous' },
   { id: 'valide', label: 'Validés' },
   { id: 'rejete', label: 'Rejetés' }
 ];
@@ -38,7 +39,7 @@ export default function SignalementsView({ onNavigate }) {
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(() => {
-    api.getBehaviorReports(filter === 'all' ? undefined : filter)
+    api.getBehaviorReports(filter)
       .then((rows) => setReports(rows))
       .catch((error) => alert(error.message))
       .finally(() => setLoading(false));
