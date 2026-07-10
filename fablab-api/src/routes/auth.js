@@ -160,7 +160,11 @@ authRouter.post('/google', async (req, res, next) => {
 });
 
 authRouter.get('/me', requireAuth, (req, res) => {
-  res.json({ user: req.publicUser });
+  const profileComplete = isProfileComplete(req.user);
+  res.json({
+    user: profileComplete ? req.publicUser : null,
+    profileComplete
+  });
 });
 
 authRouter.post('/register', requireAuth, async (req, res, next) => {

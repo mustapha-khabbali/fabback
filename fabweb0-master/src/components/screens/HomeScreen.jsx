@@ -35,6 +35,7 @@ export default function HomeScreen() {
         setCurrentUser(ensureUserIdentity(session.user));
         showLogin();
       } else {
+        setCurrentUser({});
         navigateTo(SCREENS.ROLE_SELECTION);
       }
     } catch (error) {

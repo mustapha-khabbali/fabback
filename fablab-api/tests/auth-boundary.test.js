@@ -11,6 +11,7 @@ import {
   forgedTokenFor,
   USERS
 } from './helpers.js';
+import { query } from '../src/db/pool.js';
 
 let baseUrl;
 
@@ -73,4 +74,28 @@ test('role claim inside the token cannot escalate privileges (DB role wins)', as
     token: tokenFor({ ...USERS.stagiaire, role: 'administrateur' })
   });
   assert.equal(res.status, 403);
+});
+
+test('incomplete profiles are not rehydrated as logged-in app users', async () => {
+  const res = await api(baseUrl, '/auth/me', { token: tokenFor(USERS.stagiaire) });
+  assert.equal(res.status, 200);
+  assert.equal(res.body.profileComplete, false);
+  assert.equal(res.body.user, null);
+});
+
+test('complete profiles rehydrate normally', async () => {
+  await query(
+    `
+      update users
+      set charte_accepted = true, reproduction_accepted = true
+      where id = $1
+    `,
+    [USERS.stagiaire.id]
+  );
+
+  const res = await api(baseUrl, '/auth/me', { token: tokenFor(USERS.stagiaire) });
+  assert.equal(res.status, 200);
+  assert.equal(res.body.profileComplete, true);
+  assert.equal(res.body.user.id, USERS.stagiaire.id);
+  assert.equal(res.body.user.role, 'stagiaire');
 });

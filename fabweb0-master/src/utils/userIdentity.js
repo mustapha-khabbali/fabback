@@ -17,6 +17,17 @@ export function ensureUserIdentity(user) {
   };
 }
 
+export function isCompleteUserProfile(user) {
+  return Boolean(
+    user
+    && user.prenom
+    && user.nom
+    && user.role
+    && user.charteAccepted
+    && user.reproductionAccepted
+  );
+}
+
 export function getUserIdentityCandidates(user) {
   return [user?.id, user?.uid, user?.cin, user?.email]
     .filter(Boolean)

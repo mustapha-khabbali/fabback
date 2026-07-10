@@ -5,7 +5,7 @@ import {
   savePresenceActivityEvent,
   PRESENCE_ACTIVITY_STORAGE_KEY
 } from '../utils/presenceActivity';
-import { ensureUserIdentity, mergeUserByIdentity, getPrimaryUserId } from '../utils/userIdentity';
+import { ensureUserIdentity, isCompleteUserProfile, mergeUserByIdentity, getPrimaryUserId } from '../utils/userIdentity';
 import { api, getUserToken } from '../services/api';
 import { startRealtime, stopRealtime, subscribeRealtime } from '../services/realtime';
 import { useFirebase } from './FirebaseContext';
@@ -52,7 +52,8 @@ export function AppProvider({ children }) {
       // object with only a generated id is a leftover "phantom" from a previous
       // bug — treat it as logged-out so the real login screen is shown.
       if (!stored || (!stored.role && !stored.email)) return {};
-      return ensureUserIdentity(stored) || {};
+      const normalized = ensureUserIdentity(stored) || {};
+      return isCompleteUserProfile(normalized) ? normalized : {};
     } catch {
       return {};
     }
@@ -284,7 +285,13 @@ export function AppProvider({ children }) {
     if (!userId) return;
     api.getUser(userId)
       .then((user) => {
-        if (!cancelledRef.current) setCurrentUser(ensureUserIdentity(user));
+        if (cancelledRef.current) return;
+        const normalized = ensureUserIdentity(user);
+        if (isCompleteUserProfile(normalized)) {
+          setCurrentUser(normalized);
+        } else {
+          setCurrentUser({});
+        }
       })
       .catch(() => {});
   }, [setCurrentUser]);
@@ -356,8 +363,16 @@ export function AppProvider({ children }) {
 
       api.getCurrentUser()
         .then((user) => {
-          if (cancelled || !user) return;
-          setCurrentUser(ensureUserIdentity(user));
+          if (cancelled) return;
+          const normalized = ensureUserIdentity(user);
+          if (!isCompleteUserProfile(normalized)) {
+            setCurrentUser({});
+            if (location.pathname === '/' || location.pathname.startsWith('/login')) {
+              navigate('/role-selection', { replace: true });
+            }
+            return;
+          }
+          setCurrentUser(normalized);
           if (location.pathname === '/') {
             showLogin();
           }
@@ -369,7 +384,7 @@ export function AppProvider({ children }) {
       cancelled = true;
       unsubscribe();
     };
-  }, [firebase, location.pathname, setCurrentUser, showLogin]);
+  }, [firebase, location.pathname, navigate, setCurrentUser, showLogin]);
 
   useEffect(() => {
     if (!getUserToken()) {
