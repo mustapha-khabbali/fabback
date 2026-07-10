@@ -133,9 +133,9 @@ export default function App() {
   const handleNavigate = (view, payload = null) => {
     const targetView = sanitizeView(view);
     if (targetView === ADMIN_VIEWS.USERS && payload) {
-      if (activeView !== ADMIN_VIEWS.USERS) {
-        writeNavigationState(ADMIN_VIEWS.USERS);
-      }
+      // One history entry per real navigation: the browser back button must
+      // return to the page the profile was opened from (e.g. Signalements),
+      // not to a Users-list entry the admin never actually visited.
       writeNavigationState(ADMIN_VIEWS.USERS, payload);
       return;
     }
