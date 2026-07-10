@@ -16,8 +16,17 @@
 * ✅ **1.5** Request logs with ids, production error logging (was: prod errors silently swallowed), WS connect/reject/close logs.
 * ✅ **1.6** `RUNBOOK.md` written — school-IT contact line intentionally blank; filling it is part of the exit criteria.
 * ✅ **0.1** Stale copy `/Users/mac/fablab` deleted (423 MB, user-approved).
-* 🟡 **1.1 / 1.2** Server-side execution blocked on school access, but **fully prepared**: `DEPLOYMENT_DAY.md` checklist, nginx templates fixed (WebSocket upgrade blocks were missing from all 4 — realtime would have died in production), TLS bootstrap procedure, `deploy/scripts/preflight.sh` gate (check + tests + builds, verified passing), `.env.example` with secret-generation commands, backup cron + restore rehearsal steps. Remaining: a server, a DNS record, ports 80/443.
-* ✅ Committed admin password removed from `DEPLOY_CHEATSHEET.md`; the credential itself rotates automatically when the server is seeded with new `ADMIN_SEED_*` values (DEPLOYMENT_DAY step 2).
+* 🟡 **1.1 / 1.2** Fully prepared on 07-09: `DEPLOYMENT_DAY.md` checklist, nginx templates fixed (WebSocket upgrade blocks were missing from all 4 — realtime would have died in production), `deploy/scripts/preflight.sh` gate (check + tests + builds, verified passing), `.env.example` with secret-generation commands, backup cron + restore rehearsal steps.
+* ✅ Committed admin password removed from `DEPLOY_CHEATSHEET.md`; the credential itself rotates automatically when the server is seeded with new `ADMIN_SEED_*` values.
+
+## Execution Log — 2026-07-10 (server acquired, architecture decided)
+
+* ✅ **SSH access to the school VM obtained and verified**: `vm-fablab@10.34.107.30` — Ubuntu 24.04 LTS, 39 GB free disk, 7.7 GB RAM, key auth installed from this Mac. Docker not yet installed (only missing piece).
+* 📐 **School policy: the VM is LAN-only — public exposure is not available and not the owner's decision.** Target architecture and Priority 1.1 rewritten accordingly: DuckDNS name → private IP `10.34.107.30`, real TLS via Let's Encrypt **DNS-01** (outbound-only), Firebase-hosted apps unchanged, everything functional **inside the school only**. Accepted consequence — and turned into a feature: a photographed gate QR cannot be scanned from home, presence is enforced by the network.
+* 🎯 **No asks remain toward school IT** except one: confirm whether this VM is covered by the school's backups (1.2).
+* ⏳ 1.1 execution blocked on exactly one item: the owner's **DuckDNS domain + token**.
+* 📌 Owner instruction (2026-07-10): the VM password stays as provided by IT; SSH password auth stays enabled. Accepted risk — decision owner: Mustapha.
+* ℹ️ Shipped alongside the plan (product work, 07-09/10): the Comportement score system — Bayesian score from reconnaissances/signalements, admin-only review, no manual write path — with 12 new tests (suite: 32 green).
 
 **Known issue discovered by the tests:** after `LAB_CLOSE_TIME` (18:30), an open attendance is instantly "expired" — a Gate-OUT scan at 18:45 auto-closes the session, **discards the rating**, and reports "no open attendance". If the lab is ever open past 18:30, this is a data-loss path; decide whether the cutoff should be later or checkout-after-cutoff should keep the rating.
 
@@ -52,7 +61,18 @@ Realtime:  WebSocket (src/realtime/socket.js + bus.js)
 API layer: services/api.js in both frontends
 ```
 
-Target: same stack, but the API lives on the school server behind a **stable HTTPS domain**, and the demo tunnel is retired.
+Target (updated 2026-07-10 — **school policy: LAN-only, non-negotiable**): same stack, but the API lives on the school VM and is reachable **only from inside the school network**. This is imposed by the school, not chosen — and it doubles as the anti-fraud design: a photographed gate QR scanned from home cannot reach the API at all, so physical presence is enforced by the network itself.
+
+```
+Firebase-hosted apps (same permanent URLs, Google login unchanged)
+        ↓  HTTPS
+https://<name>.duckdns.org  →  DNS A record pointing at the PRIVATE IP 10.34.107.30
+        ↓  resolves usefully only inside the school LAN
+School VM (vm-fablab, Ubuntu 24.04): nginx (TLS via Let's Encrypt DNS-01,
+no inbound ports needed) → fablab-api → PostgreSQL, all in Docker
+```
+
+Consequences, stated honestly: outside the school the app pages load (Firebase is public) but login and data fail — the entire product is school-Wi-Fi-only by policy. Inside the school, everything works. The demo tunnel is retired after the switch (optionally kept for soutenance demos only). **Nothing is needed from school IT** — no ports, no DNS, no firewall changes; the certificate is obtained via DNS challenge using only outbound internet.
 
 ---
 
@@ -78,28 +98,35 @@ The data plane is PostgreSQL now. Set `firestore.rules` to deny-all (or scope to
 
 This phase eliminates roughly 80% of the real risk. **Nothing in Phase 2 starts until Phase 1 is done.** That sequencing is the whole point of this document.
 
-### 1.1 Kill the tunnel: stable school-server deployment
+### 1.1 Kill the tunnel: LAN-only school-server deployment *(rewritten 2026-07-10)*
 
-The cloudflared tunnel on the Mac was always a test/demo rig — the real deployment target is the school server. That's the right plan. The risk being flagged here is not the plan; it's the gap between plan and reality: **until this item is executed, the demo rig is the only deployment that exists.** Closing that gap is worth more than everything else in this document combined.
+The cloudflared tunnel on the Mac was always a test/demo rig. The real target is now concrete: **`vm-fablab@10.34.107.30`** — Ubuntu 24.04 LTS, 39 GB free disk, 7.7 GB RAM, SSH key installed, health-checked on 2026-07-10. School policy makes it **LAN-only**; that constraint is accepted and baked into the design above.
 
-* Deploy `fablab-api` on the school server (docker-compose files already exist — reuse them).
-* Process supervision: Docker restart policy, `pm2`, or `systemd`. Survives reboot without a human.
-* Nginx/Caddy reverse proxy in front, **with WebSocket upgrade configured** (`Upgrade`/`Connection` headers, long idle timeouts — default Nginx silently kills WS at 60s).
-* **HTTPS is mandatory, not optional:** the frontends are served over HTTPS by Firebase; browsers block HTTPS→HTTP calls (mixed content). No TLS on the school server = integration fails on day one.
-* CORS scoped to exactly the two hosting origins. Not `*`.
-* Permanent URL baked into both apps' `.env.production` once, forever:
+* Install Docker on the VM (only missing piece — verified absent).
+* Copy the project **directly from the Mac** (rsync/scp), not from GitHub — commits are ahead of origin.
+* Production `.env` with fresh secrets: `JWT_SECRET`, Postgres password, **new `ADMIN_SEED_*`** (this is what finally rotates the admin credential — closes the 0.2 tail).
+* Postgres + API + nginx via the existing docker-compose files, `restart: unless-stopped` — survives reboot without a human.
+* **TLS via Let's Encrypt DNS-01 challenge** (DuckDNS token) — a real browser-trusted certificate with zero inbound exposure. This keeps HTTPS→HTTPS from the Firebase-hosted apps and keeps Google login working. The old HTTP-01/certbot-standalone path in the compose files is replaced by the DNS-01 flow.
+* nginx must carry the **WebSocket upgrade blocks** (already fixed in all 4 templates on 2026-07-09 — realtime dies without them).
+* CORS stays scoped to the two Firebase hosting origins.
+* Both apps rebuilt once with the permanent URL and redeployed:
 
 ```
-https://api.<school-domain>.ma/api
+VITE_API_URL=https://<name>.duckdns.org/api
 ```
 
-**Done when:** the server reboots and the API comes back alone; `/api/health` answers publicly over HTTPS; a WebSocket stays alive through the proxy for 10+ minutes idle; neither app has been rebuilt for a URL change in a week.
+* **VM password policy: per the owner's explicit instruction (2026-07-10), the VM login password is NOT to be changed and password SSH auth is NOT to be disabled.** Noted as an accepted risk, decision owner: Mustapha.
+
+**Blocked on exactly one thing:** a DuckDNS domain + token (2-minute free signup, must be under the owner's account).
+
+**Done when:** the VM reboots and everything comes back alone; `/api/health` answers over HTTPS from a phone on school Wi-Fi; the same URL fails from 4G (LAN-only proven); a WebSocket stays alive through nginx for 10+ minutes; a full QR check-in lands on the admin dashboard live; the tunnel is off.
 
 ### 1.2 Prove the backup restores
 
-The school server has daily backups by default. A backup that has never been restored is a hope, not a backup.
+The school is said to back servers up daily — **confirm the claim applies to this specific VM** (`10.34.107.30`); that is now the single remaining question for school IT. A backup that has never been restored is a hope, not a backup.
 
-* Confirm: frequency, retention, and that **PostgreSQL data is actually included** (a filesystem snapshot of a running Postgres can be inconsistent — confirm `pg_dump` or snapshot+WAL).
+* Confirm: is this VM included at all, frequency, retention, and whether **PostgreSQL data is usable from it** (a filesystem snapshot of a running Postgres can be inconsistent — confirm `pg_dump` or snapshot+WAL).
+* **If the VM is NOT covered:** self-manage from day one — `deploy/scripts/backup-postgres.sh` on a cron (it already exists, 14-day retention), plus a periodic copy of the dumps **off the VM** (e.g., to the Mac over SSH); a backup that lives only on the machine it protects dies with it.
 * Run **one real restore test** onto a non-production machine. Time it. Write down the steps.
 * **The daily-backup gap:** the most valuable data is *today's* attendance — exactly what a daily backup hasn't captured. A disk failure at 16:00 erases the day. Pick one, in writing:
   * intraday `pg_dump` every 2–4 hours (cron, keep 48h), **or**
@@ -171,11 +198,12 @@ The bus factor is currently 1. If the author finishes the stage and leaves, nobo
 
 Check every box before touching Phase 2:
 
-- [ ] API on a stable HTTPS domain; tunnel retired; survives reboot unattended.
-- [ ] One real restore performed, timed, documented; intraday-loss policy written.
-- [ ] `npm test` green on attendance + auth boundary; required before deploy.
-- [ ] Indexes migration shipped.
-- [ ] Logs answer "where is it broken" in minutes.
+- [ ] API on the school VM behind a stable HTTPS name, working on school Wi-Fi and (by design) unreachable from outside; tunnel retired; VM reboots and everything returns unattended.
+- [ ] A full QR check-in from a phone on school Wi-Fi appears live on the admin dashboard.
+- [ ] One real restore performed, timed, documented; intraday-loss policy written; VM backup coverage confirmed with IT (or self-managed cron + off-VM copies running).
+- [x] `npm test` green on attendance + auth boundary; required before deploy. *(32 tests, 2026-07-10)*
+- [x] Indexes migration shipped. *(2026-07-09)*
+- [x] Logs answer "where is it broken" in minutes. *(request ids + WS logs, 2026-07-09)*
 - [ ] A non-author has deployed and restarted the system using RUNBOOK.md alone.
 
 ---
