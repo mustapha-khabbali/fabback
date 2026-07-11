@@ -9,6 +9,7 @@ import {
   api,
   tokenFor,
   insertAttendance,
+  insertEvent,
   getAttendanceRow,
   USERS,
   QR
@@ -144,6 +145,74 @@ test('EVENT scan while already inside records the event without opening lab pres
   const mine = await api(baseUrl, '/attendance/mine', { token: stagiaire() });
   const open = mine.body.attendance.filter((a) => a.type === 'in');
   assert.equal(open.length, 1, 'the original Gate-IN row is the only open lab presence');
+});
+
+test('EVENT scan in a configured FabLab space opens lab presence when the user is not already inside', async () => {
+  const eventId = await insertEvent({ title: 'FabLab workshop', spaces: ['FabLab', 'Amphithéâtre 1'] });
+
+  const event = await api(baseUrl, '/attendance/check-in', {
+    method: 'POST',
+    token: stagiaire(),
+    body: checkInBody({
+      qr: { gate: 'EVENT', id: QR.EVENT },
+      objective: 'Event',
+      eventId,
+      eventTitle: 'FabLab workshop',
+      eventSpace: 'FabLab'
+    })
+  });
+
+  assert.equal(event.status, 201);
+  assert.equal(event.body.attendance.eventSpace, 'FabLab');
+  assert.equal(event.body.attendance.type, 'in');
+  assert.equal(event.body.attendance.timestampOut, null, 'FabLab event space must count as open lab presence');
+
+  const open = await api(baseUrl, '/attendance/open', { token: stagiaire() });
+  assert.equal(open.status, 200);
+  assert.equal(open.body.attendance.id, event.body.attendance.id);
+});
+
+test('EVENT scan in a configured outside space stays completed and does not count present', async () => {
+  const eventId = await insertEvent({ title: 'Conference event', spaces: ['Amphithéâtre 1'] });
+
+  const event = await api(baseUrl, '/attendance/check-in', {
+    method: 'POST',
+    token: stagiaire(),
+    body: checkInBody({
+      qr: { gate: 'EVENT', id: QR.EVENT },
+      objective: 'Event',
+      eventId,
+      eventTitle: 'Conference event',
+      eventSpace: 'Amphithéâtre 1'
+    })
+  });
+
+  assert.equal(event.status, 201);
+  assert.equal(event.body.attendance.eventSpace, 'Amphithéâtre 1');
+  assert.ok(event.body.attendance.timestampOut, 'outside event space must complete immediately');
+
+  const open = await api(baseUrl, '/attendance/open', { token: stagiaire() });
+  assert.equal(open.status, 200);
+  assert.equal(open.body.attendance, null);
+});
+
+test('EVENT scan cannot use a space that is not configured on the selected event', async () => {
+  const eventId = await insertEvent({ title: 'Outside only event', spaces: ['Espace Coworking'] });
+
+  const event = await api(baseUrl, '/attendance/check-in', {
+    method: 'POST',
+    token: stagiaire(),
+    body: checkInBody({
+      qr: { gate: 'EVENT', id: QR.EVENT },
+      objective: 'Event',
+      eventId,
+      eventTitle: 'Outside only event',
+      eventSpace: 'FabLab'
+    })
+  });
+
+  assert.equal(event.status, 400);
+  assert.match(event.body.error, /Espace/i);
 });
 
 test('Gate-OUT closes the open attendance and stores the rating', async () => {

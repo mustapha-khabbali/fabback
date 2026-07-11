@@ -190,6 +190,7 @@ function normalizeDashboardJournalRow(entry, index) {
     detail: entry.detail || entry.comment || '',
     eventId: entry.eventId || '',
     eventTitle: entry.eventTitle || '',
+    eventSpace: entry.eventSpace || '',
     projectId: entry.projectId || '',
     projectTitle: entry.projectTitle || '',
     timestampIn,

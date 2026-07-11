@@ -37,6 +37,7 @@ export async function stopTestServer() {
 
 export async function resetDb() {
   await query('truncate attendance restart identity cascade');
+  await query('truncate events restart identity cascade');
   await query('truncate recognitions restart identity cascade');
   await query('truncate reports restart identity cascade');
   await query('delete from gate_config');
@@ -95,6 +96,18 @@ export async function insertAttendance(userId, { timestampIn }) {
     `insert into attendance (user_id, objective, timestamp_in)
      values ($1, 'test', $2) returning id`,
     [userId, timestampIn]
+  );
+  return result.rows[0].id;
+}
+
+export async function insertEvent({ title = 'Test event', spaces = ['FabLab'] } = {}) {
+  const result = await query(
+    `
+      insert into events (title, description, date_mode, date, spaces, intervenants, archived)
+      values ($1, '', 'single', current_date, $2::jsonb, '[]'::jsonb, false)
+      returning id
+    `,
+    [title, JSON.stringify(spaces)]
   );
   return result.rows[0].id;
 }

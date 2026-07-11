@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useApp, TABS } from '../../context/AppContext';
 import { getPrimaryUserId, isCurrentUserId } from '../../utils/userIdentity';
+import { getEventSpaces } from '../../utils/eventSpaces';
 import { api } from '../../services/api';
 
 const SYSTEM_SUPERVISOR_IDS = ['user-sara', 'system-sara'];
@@ -102,6 +103,7 @@ export default function ScanObjectiveModal() {
   const [selectedProjectId, setSelectedProjectId] = useState('');
   const [selectedSupervisorId, setSelectedSupervisorId] = useState('');
   const [selectedEventId, setSelectedEventId] = useState('');
+  const [selectedEventSpace, setSelectedEventSpace] = useState('');
   const [customText, setCustomText] = useState('');
   const [showNewSupervisor, setShowNewSupervisor] = useState(false);
   const [presetPick, setPresetPick] = useState(null);
@@ -135,6 +137,8 @@ export default function ScanObjectiveModal() {
 
   const effectiveSelectedOptionId = selectedOptionId || forcedOptionId;
   const selectedOption = options.find((option) => option.id === effectiveSelectedOptionId);
+  const selectedEvent = events.find((item) => item.id === selectedEventId);
+  const selectedEventSpaces = getEventSpaces(selectedEvent);
   const selectedProject = allAvailableProjects.find((project) => project.id === selectedProjectId);
   const projectSupervisorIds = selectedProject
     ? uniqueById((selectedProject.supervisorIds || [])
@@ -154,6 +158,7 @@ export default function ScanObjectiveModal() {
     setSelectedProjectId('');
     setSelectedSupervisorId('');
     setSelectedEventId('');
+    setSelectedEventSpace('');
     setCustomText('');
     setShowNewSupervisor(false);
     setPresetPick(null);
@@ -175,6 +180,7 @@ export default function ScanObjectiveModal() {
     setSelectedProjectId('');
     setSelectedSupervisorId('');
     setSelectedEventId('');
+    setSelectedEventSpace('');
     setCustomText('');
     setShowNewSupervisor(false);
     setPresetPick(null);
@@ -288,12 +294,16 @@ export default function ScanObjectiveModal() {
       showNotification('Veuillez choisir un événement.', 'error');
       return;
     }
+    if (selectedOption.requiresEvent && selectedEventSpaces.length > 0 && !selectedEventSpace) {
+      showNotification('Veuillez choisir un espace.', 'error');
+      return;
+    }
     if (selectedOption.requiresText && !customText.trim()) {
       showNotification("Veuillez indiquer l'objectif.", 'error');
       return;
     }
 
-    const event = events.find((item) => item.id === selectedEventId);
+    const event = selectedEvent;
     const finalSupervisorId = selectedSupervisorId || 'user-sara';
     const supervisor = userById[finalSupervisorId] || SARA_SUPERVISOR;
     const logEntry = {
@@ -321,6 +331,7 @@ export default function ScanObjectiveModal() {
     if (selectedOption.requiresEvent) {
       logEntry.eventId = event?.id || selectedEventId;
       logEntry.eventTitle = event?.title || '';
+      logEntry.eventSpace = selectedEventSpace || '';
     }
     if (selectedOption.requiresText) {
       logEntry.comment = customText.trim();
@@ -335,7 +346,7 @@ export default function ScanObjectiveModal() {
       attendance.unshift(saved || logEntry);
       localStorage.setItem('lab_attendance', JSON.stringify(attendance));
 
-      if (pendingScanPayload?.gate !== 'EVENT') {
+      if (saved && !saved.timestampOut) {
         setIsUserInLab(true);
       }
       setPendingScanPayload(null);
@@ -506,12 +517,37 @@ export default function ScanObjectiveModal() {
               )}
             </>
           ) : selectedOption?.requiresEvent ? (
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold text-t-tertiary uppercase px-1">Event</label>
-              <select value={selectedEventId} onChange={(e) => setSelectedEventId(e.target.value)} className="w-full p-4 bg-t-surface-alt border border-t-border-strong rounded-2xl outline-none focus:bg-t-surface glass-card focus:border-midnight-blue text-sm font-bold transition-all">
-                <option value="">Choisir un event</option>
-                {events.map((event) => <option key={event.id} value={event.id}>{event.title}</option>)}
-              </select>
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-t-tertiary uppercase px-1">Event</label>
+                <select
+                  value={selectedEventId}
+                  onChange={(e) => {
+                    const eventId = e.target.value;
+                    const event = events.find((item) => item.id === eventId);
+                    const spaces = getEventSpaces(event);
+                    setSelectedEventId(eventId);
+                    setSelectedEventSpace(spaces.length === 1 ? spaces[0] : '');
+                  }}
+                  className="w-full p-4 bg-t-surface-alt border border-t-border-strong rounded-2xl outline-none focus:bg-t-surface glass-card focus:border-midnight-blue text-sm font-bold transition-all"
+                >
+                  <option value="">Choisir un event</option>
+                  {events.map((event) => <option key={event.id} value={event.id}>{event.title}</option>)}
+                </select>
+              </div>
+              {selectedEventSpaces.length > 0 && (
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-t-tertiary uppercase px-1">Espace</label>
+                  <select
+                    value={selectedEventSpace}
+                    onChange={(e) => setSelectedEventSpace(e.target.value)}
+                    className="w-full p-4 bg-t-surface-alt border border-t-border-strong rounded-2xl outline-none focus:bg-t-surface glass-card focus:border-midnight-blue text-sm font-bold transition-all"
+                  >
+                    <option value="">Choisir un espace</option>
+                    {selectedEventSpaces.map((space) => <option key={space} value={space}>{space}</option>)}
+                  </select>
+                </div>
+              )}
             </div>
           ) : selectedOption?.requiresText ? (
             <div className="space-y-1">

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useApp, TABS } from '../../context/AppContext';
 import { getPrimaryUserId } from '../../utils/userIdentity';
+import { getEventSpaces } from '../../utils/eventSpaces';
 import { api } from '../../services/api';
 
 const DEFAULT_GATE_IN_CONFIG = {
@@ -64,6 +65,7 @@ export default function RoleScanObjectiveModal() {
   const [customText, setCustomText] = useState('');
   const [selectedProjectId, setSelectedProjectId] = useState('');
   const [selectedEventId, setSelectedEventId] = useState('');
+  const [selectedEventSpace, setSelectedEventSpace] = useState('');
   const currentUserId = getPrimaryUserId(currentUser);
   const forcedOptionId = pendingScanPayload?.gate === 'EVENT' ? 'event' : '';
 
@@ -77,12 +79,15 @@ export default function RoleScanObjectiveModal() {
 
   const effectiveSelectedOptionId = selectedOptionId || forcedOptionId;
   const selectedOption = options.find((option) => option.id === effectiveSelectedOptionId);
+  const selectedEvent = events.find((item) => item.id === selectedEventId);
+  const selectedEventSpaces = getEventSpaces(selectedEvent);
 
   const reset = () => {
     setSelectedOptionId('');
     setCustomText('');
     setSelectedProjectId('');
     setSelectedEventId('');
+    setSelectedEventSpace('');
   };
 
   const close = () => {
@@ -108,9 +113,13 @@ export default function RoleScanObjectiveModal() {
       showNotification('Veuillez choisir un événement.', 'error');
       return;
     }
+    if (selectedOption.requiresEvent && selectedEventSpaces.length > 0 && !selectedEventSpace) {
+      showNotification('Veuillez choisir un espace.', 'error');
+      return;
+    }
 
     const project = supervisedProjects.find((item) => item.id === selectedProjectId);
-    const event = events.find((item) => item.id === selectedEventId);
+    const event = selectedEvent;
     const logEntry = {
       qr: pendingScanPayload,
       userId: currentUserId || 'guest',
@@ -136,6 +145,7 @@ export default function RoleScanObjectiveModal() {
     if (selectedOption.requiresEvent) {
       logEntry.eventId = event?.id || selectedEventId;
       logEntry.eventTitle = event?.title || '';
+      logEntry.eventSpace = selectedEventSpace || '';
     }
 
     try {
@@ -147,7 +157,7 @@ export default function RoleScanObjectiveModal() {
       attendance.unshift(saved || logEntry);
       localStorage.setItem('lab_attendance', JSON.stringify(attendance));
 
-      if (pendingScanPayload?.gate !== 'EVENT') {
+      if (saved && !saved.timestampOut) {
         setIsUserInLab(true);
       }
       setPendingScanPayload(null);
@@ -221,12 +231,37 @@ export default function RoleScanObjectiveModal() {
               </select>
             </div>
           ) : selectedOption?.requiresEvent ? (
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold text-t-tertiary uppercase px-1">Event</label>
-              <select value={selectedEventId} onChange={(e) => setSelectedEventId(e.target.value)} className="w-full p-4 bg-t-surface-alt border border-t-border-strong rounded-2xl outline-none focus:bg-t-surface glass-card focus:border-midnight-blue text-sm font-bold transition-all">
-                <option value="">Choisir un event</option>
-                {events.map((event) => <option key={event.id} value={event.id}>{event.title}</option>)}
-              </select>
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-t-tertiary uppercase px-1">Event</label>
+                <select
+                  value={selectedEventId}
+                  onChange={(e) => {
+                    const eventId = e.target.value;
+                    const event = events.find((item) => item.id === eventId);
+                    const spaces = getEventSpaces(event);
+                    setSelectedEventId(eventId);
+                    setSelectedEventSpace(spaces.length === 1 ? spaces[0] : '');
+                  }}
+                  className="w-full p-4 bg-t-surface-alt border border-t-border-strong rounded-2xl outline-none focus:bg-t-surface glass-card focus:border-midnight-blue text-sm font-bold transition-all"
+                >
+                  <option value="">Choisir un event</option>
+                  {events.map((event) => <option key={event.id} value={event.id}>{event.title}</option>)}
+                </select>
+              </div>
+              {selectedEventSpaces.length > 0 && (
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-t-tertiary uppercase px-1">Espace</label>
+                  <select
+                    value={selectedEventSpace}
+                    onChange={(e) => setSelectedEventSpace(e.target.value)}
+                    className="w-full p-4 bg-t-surface-alt border border-t-border-strong rounded-2xl outline-none focus:bg-t-surface glass-card focus:border-midnight-blue text-sm font-bold transition-all"
+                  >
+                    <option value="">Choisir un espace</option>
+                    {selectedEventSpaces.map((space) => <option key={space} value={space}>{space}</option>)}
+                  </select>
+                </div>
+              )}
             </div>
           ) : null}
         </div>

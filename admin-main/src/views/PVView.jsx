@@ -168,6 +168,7 @@ function normalizeAttendanceRow(entry, index) {
     detail: normalizeDetail(entry),
     eventId: entry.eventId || '',
     eventTitle: entry.eventTitle || '',
+    eventSpace: entry.eventSpace || '',
     projectId: entry.projectId || '',
     projectTitle: entry.projectTitle || '',
     timestampIn,

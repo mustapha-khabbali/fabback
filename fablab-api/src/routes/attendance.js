@@ -20,7 +20,8 @@ const checkInSchema = z.object({
   supervisorId: z.string().optional(),
   supervisorName: z.string().optional(),
   eventId: z.string().optional(),
-  eventTitle: z.string().optional()
+  eventTitle: z.string().optional(),
+  eventSpace: z.string().optional()
 });
 
 const checkOutSchema = z.object({
@@ -93,6 +94,7 @@ function mapAttendance(row) {
     supervisorName: row.supervisor_name,
     eventId: row.event_id,
     eventTitle: row.event_title,
+    eventSpace: row.event_space || '',
     timestamp: row.timestamp_in,
     timestampOut: row.timestamp_out,
     rating: row.rating,
@@ -199,6 +201,48 @@ function uuidOrNull(value) {
     : null;
 }
 
+function eventSpaceLabel(space) {
+  if (typeof space === 'string') return space;
+  if (!space || typeof space !== 'object') return '';
+  return String(space.label || space.name || space.title || space.value || '');
+}
+
+function normalizeEventSpace(space) {
+  return String(eventSpaceLabel(space) || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+}
+
+function isFabLabSpace(space) {
+  return normalizeEventSpace(space).includes('fablab');
+}
+
+function matchConfiguredEventSpace(spaces, selectedSpace) {
+  const selected = normalizeEventSpace(selectedSpace);
+  if (!selected) return '';
+  return (Array.isArray(spaces) ? spaces : [])
+    .map(eventSpaceLabel)
+    .find((space) => normalizeEventSpace(space) === selected) || '';
+}
+
+async function resolveEventSpace(client, eventId, selectedSpace) {
+  const trimmedSpace = typeof selectedSpace === 'string' ? selectedSpace.trim() : '';
+  if (!trimmedSpace) return { label: null, isConfigured: true, isFabLab: false };
+
+  const parsedEventId = uuidOrNull(eventId);
+  if (!parsedEventId) return { label: trimmedSpace, isConfigured: false, isFabLab: false };
+
+  const result = await client.query('select spaces from events where id = $1', [parsedEventId]);
+  const matchedSpace = matchConfiguredEventSpace(result.rows[0]?.spaces || [], trimmedSpace);
+  return {
+    label: matchedSpace || trimmedSpace,
+    isConfigured: Boolean(matchedSpace),
+    isFabLab: isFabLabSpace(matchedSpace)
+  };
+}
+
 attendanceRouter.use(requireAuth);
 
 attendanceRouter.get('/open', async (req, res, next) => {
@@ -277,12 +321,19 @@ attendanceRouter.post('/check-in', async (req, res, next) => {
       }
     }
 
-    const { attendance, autoClosed, alreadyInside } = await withTransaction(async (client) => {
+    const { attendance, autoClosed, alreadyInside, invalidEventSpace } = await withTransaction(async (client) => {
+      const eventSpace = await resolveEventSpace(client, data.eventId, data.eventSpace);
+      if (isEventCheckIn && data.eventSpace && !eventSpace.isConfigured) {
+        return { attendance: null, autoClosed: null, alreadyInside: false, invalidEventSpace: true };
+      }
+
       const open = await findLatestOpenAttendance(client, req.user.id);
+      const activeOpen = open && isOpenAttendanceActive(open);
+      const eventOpensFabLabPresence = isEventCheckIn && eventSpace.isFabLab && !activeOpen;
       // Server-side guard: Gate-IN must not create a second open lab presence
-      // row. EVENT scans are attendance records only and may happen while the
-      // user is already inside the lab or at an outside event.
-      if (!isEventCheckIn && open && isOpenAttendanceActive(open)) {
+      // row. EVENT scans are event records, except when the admin-configured
+      // event space is FabLab and the user is not already marked inside.
+      if (!isEventCheckIn && activeOpen) {
         return { attendance: null, autoClosed: null, alreadyInside: true };
       }
       const closed = open && !isOpenAttendanceActive(open) ? await autoCloseAttendance(client, open.id) : null;
@@ -290,9 +341,9 @@ attendanceRouter.post('/check-in', async (req, res, next) => {
         `
           insert into attendance (
             user_id, objective, comment, project_id, project_title,
-            supervisor_id, supervisor_name, event_id, event_title, timestamp_out
+            supervisor_id, supervisor_name, event_id, event_title, event_space, timestamp_out
           )
-          values ($1, $2, $3, $4, $5, $6, $7, $8, $9, case when $10::boolean then now() else null end)
+          values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, case when $11::boolean then now() else null end)
           returning *
         `,
         [
@@ -305,7 +356,8 @@ attendanceRouter.post('/check-in', async (req, res, next) => {
           data.supervisorName || null,
           uuidOrNull(data.eventId),
           data.eventTitle || null,
-          isEventCheckIn
+          eventSpace.label,
+          isEventCheckIn && !eventOpensFabLabPresence
         ]
       );
 
@@ -314,6 +366,11 @@ attendanceRouter.post('/check-in', async (req, res, next) => {
         autoClosed: closed ? await joinAttendance(client, closed.id) : null
       };
     });
+
+    if (invalidEventSpace) {
+      res.status(400).json({ error: 'Espace événement invalide.' });
+      return;
+    }
 
     if (alreadyInside) {
       res.status(409).json({ error: 'Vous êtes déjà enregistré dans le FabLab.' });
