@@ -3,6 +3,7 @@ import { useApp, SCREENS } from '../../context/AppContext';
 import { validateEmail, validatePhone } from '../../utils/validation';
 import { ensureUserIdentity } from '../../utils/userIdentity';
 import { api } from '../../services/api';
+import { ensureApiSession } from '../../services/session';
 
 export default function RoleRegistrationScreen() {
   const { navigateTo, pendingRole, goToCharte, setCurrentUser, showLogin, registrationDraft, setRegistrationDraft, showNotification } = useApp();
@@ -35,6 +36,7 @@ export default function RoleRegistrationScreen() {
       return;
     }
     try {
+      await ensureApiSession();
       const user = await api.register({
         ...form,
         role: (pendingRole || 'visiteur').toLowerCase(),

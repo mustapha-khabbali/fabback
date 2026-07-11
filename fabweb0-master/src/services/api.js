@@ -31,7 +31,10 @@ async function request(path, options = {}) {
   const body = text ? JSON.parse(text) : null;
 
   if (!response.ok) {
-    if (response.status === 401) {
+    // Only drop the stored token when this 401 is about the token we actually
+    // sent — a late 401 from a request made with an older token must not wipe
+    // a session established in the meantime.
+    if (response.status === 401 && token && getUserToken() === token) {
       setUserToken(null);
     }
     throw new Error(body?.error || 'API request failed');

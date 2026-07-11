@@ -4,6 +4,7 @@ import { poleOptions, niveauOptions, yearOptions, getFiliereOptions, getOptionCh
 import { validateEmail, validatePhone } from '../../utils/validation';
 import { ensureUserIdentity } from '../../utils/userIdentity';
 import { api } from '../../services/api';
+import { ensureApiSession } from '../../services/session';
 
 export default function StagiaireScreen() {
   const { navigateTo, goToCharte, setCurrentUser, showLogin, registrationDraft, setRegistrationDraft, showNotification } = useApp();
@@ -59,6 +60,7 @@ export default function StagiaireScreen() {
     }
 
     try {
+      await ensureApiSession();
       const user = await api.register({
         ...form,
         role: 'stagiaire',
