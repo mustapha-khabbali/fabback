@@ -12,6 +12,22 @@ import { useFirebase } from './FirebaseContext';
 
 const AppContext = createContext(null);
 
+// The bin is synced as a whole list and the server re-keys every entry on
+// each sync (originalId keeps the true identity). A stale optimistic copy and
+// the re-keyed copy of the same deleted object can therefore coexist — keep
+// only one entry per deleted object.
+function dedupeRecycleBin(bin) {
+  const seen = new Set();
+  return (Array.isArray(bin) ? bin : []).filter((item) => {
+    const identity = item?.originalId || item?.id;
+    if (!identity) return true;
+    const key = `${item?.type || ''}:${identity}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 // All possible screens in the app
 export const SCREENS = {
   HOME: 'home',
@@ -214,7 +230,7 @@ export function AppProvider({ children }) {
     }
   }, [activeTab]);
   const [recycleBin, setRecycleBin] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('recycle_bin') || '[]'); } catch { return []; }
+    try { return dedupeRecycleBin(JSON.parse(localStorage.getItem('recycle_bin') || '[]')); } catch { return []; }
   });
   const [currentProjectId, setCurrentProjectId] = useState(null);
 
@@ -236,8 +252,9 @@ export function AppProvider({ children }) {
         if (cancelledRef.current) return;
         setUserProjects(projects);
         localStorage.setItem('user_projects', JSON.stringify(projects));
-        setRecycleBin(bin);
-        localStorage.setItem('recycle_bin', JSON.stringify(bin));
+        const dedupedBin = dedupeRecycleBin(bin);
+        setRecycleBin(dedupedBin);
+        localStorage.setItem('recycle_bin', JSON.stringify(dedupedBin));
       })
       .catch(() => {});
   }, []);
@@ -484,12 +501,14 @@ export function AppProvider({ children }) {
   }, []);
 
   const saveRecycleBin = useCallback((bin) => {
-    setRecycleBin(bin);
-    localStorage.setItem('recycle_bin', JSON.stringify(bin));
-    api.syncRecycleBin(bin)
+    const deduped = dedupeRecycleBin(bin);
+    setRecycleBin(deduped);
+    localStorage.setItem('recycle_bin', JSON.stringify(deduped));
+    api.syncRecycleBin(deduped)
       .then((savedBin) => {
-        setRecycleBin(savedBin);
-        localStorage.setItem('recycle_bin', JSON.stringify(savedBin));
+        const savedDeduped = dedupeRecycleBin(savedBin);
+        setRecycleBin(savedDeduped);
+        localStorage.setItem('recycle_bin', JSON.stringify(savedDeduped));
       })
       .catch(() => {});
   }, []);

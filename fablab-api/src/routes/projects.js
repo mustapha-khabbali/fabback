@@ -444,12 +444,23 @@ projectsRouter.put('/recycle-bin', async (req, res, next) => {
       } else {
         await client.query('delete from recycle_bin where owner_id = $1', [req.user.id]);
       }
+      const seenEntries = new Set();
       for (const item of parsed.data.recycleBin) {
         // Always let the DB generate a fresh, unique id for each bin entry. Re-using
         // the original object id caused primary-key collisions, which made "delete
         // one from the bin" fail and wipe every entry sharing that id. The original
-        // id is preserved inside the payload as `originalId`.
-        const { id: originalId, ownerId, type, deletedAt, ...rest } = item;
+        // id is preserved inside the payload as `originalId` — and kept stable across
+        // re-syncs (round-tripped entries carry the DB id in `id`, not the original).
+        const { id, ownerId, type, deletedAt, ...rest } = item;
+        const originalId = rest.originalId || id;
+        // Clients sync their whole local bin, so a stale optimistic copy and the
+        // re-keyed server copy of the same object can both be in the list — insert
+        // each deleted object only once.
+        if (originalId) {
+          const dedupeKey = `${type}:${originalId}`;
+          if (seenEntries.has(dedupeKey)) continue;
+          seenEntries.add(dedupeKey);
+        }
         const payload = { ...rest, originalId };
         await client.query(
           'insert into recycle_bin (owner_id, type, payload, deleted_at) values ($1,$2,$3::jsonb,$4)',
