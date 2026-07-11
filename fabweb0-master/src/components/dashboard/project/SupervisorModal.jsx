@@ -24,7 +24,8 @@ function roleLabel(role) {
 }
 
 function subtitle(user) {
-  return `${roleLabel(user?.role)}${user?.bio ? ` · ${user.bio}` : ''}`;
+  const role = roleLabel(user?.role);
+  return user?.bio ? `${user.bio} · ${role}` : role;
 }
 
 function uniqueById(users) {

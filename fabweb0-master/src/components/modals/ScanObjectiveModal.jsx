@@ -63,7 +63,8 @@ function roleLabel(role) {
 }
 
 function supervisorSubtitle(user) {
-  return `${roleLabel(user?.role)}${user?.bio ? ` · ${user.bio}` : ''}`;
+  const role = roleLabel(user?.role);
+  return user?.bio ? `${user.bio} · ${role}` : role;
 }
 
 function uniqueById(items) {

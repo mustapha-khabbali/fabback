@@ -19,7 +19,8 @@ function supervisorRoleLabel(role) {
 }
 
 function supervisorSubtitle(user) {
-  return `${supervisorRoleLabel(user?.role)}${user?.bio ? ` · ${user.bio}` : ''}`;
+  const role = supervisorRoleLabel(user?.role);
+  return user?.bio ? `${user.bio} · ${role}` : role;
 }
 
 const ALL_SDGS = Array.from({ length: 17 }, (_, i) => ({

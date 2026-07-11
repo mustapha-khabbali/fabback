@@ -235,6 +235,10 @@ export default function AdminOverviewView({ onNavigate }) {
   const [selectedDate, setSelectedDate] = useState(currentLabISODate);
   const [workingHoursStart, setWorkingHoursStart] = useState('08:30');
   const [workingHoursEnd, setWorkingHoursEnd] = useState('18:30');
+  // Custom-period analysis filter times: independent from the enforcement
+  // hours above (which follow the server and drive the open/closed badge).
+  const [periodTimeStart, setPeriodTimeStart] = useState('08:30');
+  const [periodTimeEnd, setPeriodTimeEnd] = useState('18:30');
   // Minute ticker so the Ouvert/Fermé badge flips at closing time without a reload
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
@@ -389,11 +393,11 @@ export default function AdminOverviewView({ onNavigate }) {
         showToast("Please don't select a holiday, the FabLab is closed.");
         return;
       }
-      if (workingHoursStart < '08:30' || workingHoursEnd > '18:30') {
+      if (periodTimeStart < '08:30' || periodTimeEnd > '18:30') {
         showToast("Please that time is out of range, which is from 8:30 to 18:30");
         return;
       }
-      if (workingHoursStart >= workingHoursEnd) {
+      if (periodTimeStart >= periodTimeEnd) {
         showToast("Please choose an end time after the start time.");
         return;
       }
@@ -564,7 +568,7 @@ export default function AdminOverviewView({ onNavigate }) {
 
     const rows = attendanceRows
       .map(normalizeDashboardJournalRow)
-      .filter((row) => rowMatchesPeriod(row, customDateMode, selectedDate, dateFrom, dateTo, workingHoursStart, workingHoursEnd));
+      .filter((row) => rowMatchesPeriod(row, customDateMode, selectedDate, dateFrom, dateTo, periodTimeStart, periodTimeEnd));
 
     const total = rows.length;
     const exits = rows.filter(h => h.timeOut).length;
@@ -623,7 +627,7 @@ export default function AdminOverviewView({ onNavigate }) {
   const periodButtonLabel = periodMode === 'now'
     ? 'Maintenant'
     : customDateMode === 'single'
-      ? `${formatDateString(selectedDate)} (${workingHoursStart} - ${workingHoursEnd})`
+      ? `${formatDateString(selectedDate)} (${periodTimeStart} - ${periodTimeEnd})`
       : `${formatDateString(dateFrom)} - ${formatDateString(dateTo)}`;
   const tableTitle = periodMode === 'now' ? 'Utilisateurs Présents' : 'journal';
   const tableEmptyMessage = periodMode === 'now'
@@ -745,8 +749,8 @@ export default function AdminOverviewView({ onNavigate }) {
                           <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest block mb-2">Heure début</label>
                           <input
                             type="time"
-                            value={workingHoursStart}
-                            onChange={(e) => handleTimeChange(e.target.value, setWorkingHoursStart, workingHoursStart, '08:30')}
+                            value={periodTimeStart}
+                            onChange={(e) => handleTimeChange(e.target.value, setPeriodTimeStart, periodTimeStart, '08:30')}
                             className="w-full bg-[#060B28] border border-white/10 text-white text-[13px] font-medium rounded-xl px-4 py-3 outline-none focus:border-accent-blue/50 transition-colors"
                           />
                         </div>
@@ -754,8 +758,8 @@ export default function AdminOverviewView({ onNavigate }) {
                           <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest block mb-2">Heure fin</label>
                           <input
                             type="time"
-                            value={workingHoursEnd}
-                            onChange={(e) => handleTimeChange(e.target.value, setWorkingHoursEnd, workingHoursEnd, '18:30')}
+                            value={periodTimeEnd}
+                            onChange={(e) => handleTimeChange(e.target.value, setPeriodTimeEnd, periodTimeEnd, '18:30')}
                             className="w-full bg-[#060B28] border border-white/10 text-white text-[13px] font-medium rounded-xl px-4 py-3 outline-none focus:border-accent-blue/50 transition-colors"
                           />
                         </div>
@@ -967,7 +971,7 @@ export default function AdminOverviewView({ onNavigate }) {
               <div className="flex items-center space-x-2">
                 {periodMode === 'now' && <div className="w-2 h-2 bg-accent-green rounded-full live-dot" />}
                 <span className="text-[10px] font-bold text-accent-green uppercase tracking-[2px]">
-                  {periodMode === 'now' ? 'EN DIRECT' : `${workingHoursStart} - ${workingHoursEnd}`}
+                  {periodMode === 'now' ? 'EN DIRECT' : `${periodTimeStart} - ${periodTimeEnd}`}
                 </span>
               </div>
             </div>
