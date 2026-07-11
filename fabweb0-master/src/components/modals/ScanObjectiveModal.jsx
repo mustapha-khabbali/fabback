@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useApp, TABS } from '../../context/AppContext';
 import { getPrimaryUserId, isCurrentUserId } from '../../utils/userIdentity';
-import { getEventSpaces } from '../../utils/eventSpaces';
+import { getEventSpaces, isFabLabSpace } from '../../utils/eventSpaces';
 import { api } from '../../services/api';
 
 const SYSTEM_SUPERVISOR_IDS = ['user-sara', 'system-sara'];
@@ -122,6 +122,10 @@ export default function ScanObjectiveModal() {
   const [newType, setNewType] = useState('');
   const currentUserId = getPrimaryUserId(currentUser);
   const forcedOptionId = pendingScanPayload?.gate === 'EVENT' ? 'event' : scanObjectivePreset;
+  // A gate-in QR is physically inside the FabLab: when the chosen event runs
+  // there, the space is known and asking for it is noise. EVENT QRs (posted
+  // at venues) keep the picker.
+  const isGateInScan = pendingScanPayload?.gate !== 'EVENT';
 
   const allAvailableProjects = useMemo(() => {
     const localProjectIds = new Set((userProjects || []).map((project) => project.id));
@@ -587,8 +591,9 @@ export default function ScanObjectiveModal() {
                     const eventId = e.target.value;
                     const event = events.find((item) => item.id === eventId);
                     const spaces = getEventSpaces(event);
+                    const fabLabSpace = isGateInScan ? spaces.find(isFabLabSpace) : null;
                     setSelectedEventId(eventId);
-                    setSelectedEventSpace(spaces.length === 1 ? spaces[0] : '');
+                    setSelectedEventSpace(spaces.length === 1 ? spaces[0] : (fabLabSpace || ''));
                   }}
                   className="w-full p-4 bg-t-surface-alt border border-t-border-strong rounded-2xl outline-none focus:bg-t-surface glass-card focus:border-midnight-blue text-sm font-bold transition-all"
                 >
@@ -596,7 +601,7 @@ export default function ScanObjectiveModal() {
                   {events.map((event) => <option key={event.id} value={event.id}>{event.title}</option>)}
                 </select>
               </div>
-              {selectedEventSpaces.length > 0 && (
+              {selectedEventSpaces.length > 0 && !(isGateInScan && selectedEventSpaces.some(isFabLabSpace)) && (
                 <div className="space-y-1">
                   <label className="text-[10px] font-bold text-t-tertiary uppercase px-1">Espace</label>
                   <select

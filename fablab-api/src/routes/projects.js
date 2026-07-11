@@ -261,6 +261,98 @@ projectsRouter.get('/mine', async (req, res, next) => {
   }
 });
 
+// A PENDING contributor cannot pass canWriteProject, so accepting an
+// invitation through /sync was silently dropped and the banner reappeared.
+// This endpoint lets the invited person act on their own contributor row
+// only, mirroring the acceptance rules the app applies client-side.
+projectsRouter.post('/:id/invitation', async (req, res, next) => {
+  try {
+    const parsed = z.object({ action: z.enum(['accept', 'decline']) }).safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: 'Invalid request body', details: parsed.error.flatten() });
+      return;
+    }
+
+    const projectId = req.params.id;
+    const outcome = await withTransaction(async (client) => {
+      const projectResult = await client.query('select owner_id from projects where id = $1', [projectId]);
+      if (!projectResult.rows[0]) return { error: 'Projet introuvable', status: 404 };
+
+      const contributorsResult = await client.query(
+        'select * from project_contributors where project_id = $1',
+        [projectId]
+      );
+      const mine = contributorsResult.rows.find((row) => String(row.user_id) === String(req.user.id));
+      if (!mine) return { error: 'Invitation introuvable', status: 404 };
+
+      if (parsed.data.action === 'decline') {
+        if (!mine.pending_role) {
+          // Initial invitation declined: leave the project entirely.
+          await client.query(
+            'delete from project_contributors where project_id = $1 and user_id = $2',
+            [projectId, req.user.id]
+          );
+        } else {
+          // Role-change declined: stay a member with the previous role.
+          await client.query(
+            `
+              update project_contributors
+              set status = 'ACCEPTED', pending_role = null, pending_access_level = null,
+                  pending_is_admin = null, approvals = null, member_accepted = null
+              where project_id = $1 and user_id = $2
+            `,
+            [projectId, req.user.id]
+          );
+        }
+        return { accepted: false };
+      }
+
+      const activeAdminIds = [
+        projectResult.rows[0].owner_id,
+        ...contributorsResult.rows
+          .filter((row) => row.status === 'ACCEPTED' && (row.access_level === 'CO_FOUNDER' || row.is_admin))
+          .map((row) => row.user_id)
+      ];
+      const approvals = (Array.isArray(mine.approvals) ? mine.approvals : []).map(String);
+      const hasAllAdminApprovals = activeAdminIds.length <= 1
+        || activeAdminIds.every((id) => approvals.includes(String(id)));
+
+      if (hasAllAdminApprovals) {
+        await client.query(
+          `
+            update project_contributors
+            set role = coalesce(pending_role, role),
+                access_level = coalesce(pending_access_level, access_level),
+                is_admin = coalesce(pending_is_admin, is_admin),
+                status = 'ACCEPTED',
+                pending_role = null, pending_access_level = null, pending_is_admin = null,
+                approvals = null, member_accepted = null
+            where project_id = $1 and user_id = $2
+          `,
+          [projectId, req.user.id]
+        );
+      } else {
+        await client.query(
+          'update project_contributors set member_accepted = true where project_id = $1 and user_id = $2',
+          [projectId, req.user.id]
+        );
+      }
+      return { accepted: hasAllAdminApprovals };
+    });
+
+    if (outcome.error) {
+      res.status(outcome.status).json({ error: outcome.error });
+      return;
+    }
+
+    const projects = await withTransaction((client) => loadProjects(client, req.user));
+    emitRealtimeChange({ entity: 'projects', action: 'invitation', id: projectId });
+    res.json({ projects, accepted: outcome.accepted });
+  } catch (error) {
+    next(error);
+  }
+});
+
 projectsRouter.put('/sync', async (req, res, next) => {
   try {
     const parsed = z.object({ projects: z.array(projectSchema) }).safeParse(req.body);

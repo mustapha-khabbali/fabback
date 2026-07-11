@@ -241,6 +241,16 @@ export const api = {
     return body.projects || [];
   },
 
+  // Accept/decline my own contributor invitation. Goes through a dedicated
+  // endpoint because /projects/sync drops writes from PENDING contributors.
+  async respondProjectInvitation(projectId, action) {
+    const body = await request(`/projects/${projectId}/invitation`, {
+      method: 'POST',
+      body: JSON.stringify({ action })
+    });
+    return { projects: body.projects || [], accepted: Boolean(body.accepted) };
+  },
+
   async getRecycleBin() {
     const body = await request('/projects/recycle-bin');
     return body.recycleBin || [];

@@ -29,7 +29,7 @@ const ALL_SDGS = Array.from({ length: 17 }, (_, i) => ({
 }));
 
 export default function ProjectDetail({ onBack }) {
-  const { currentUser, userProjects, saveProjects, currentProjectId, recycleBin, saveRecycleBin, showNotification, setActiveTab, setSelectedUser, setNavigationHistory, usersList, setNotifications, recordPresenceActivity } = useApp();
+  const { currentUser, userProjects, saveProjects, applyServerProjects, currentProjectId, recycleBin, saveRecycleBin, showNotification, setActiveTab, setSelectedUser, setNavigationHistory, usersList, setNotifications, recordPresenceActivity } = useApp();
   const currentUserId = getPrimaryUserId(currentUser);
   const [menuOpen, setMenuOpen] = useState(false);
   const [showModify, setShowModify] = useState(false);
@@ -187,74 +187,30 @@ export default function ProjectDetail({ onBack }) {
     setApprovingMember(null);
   };
 
-  const handleMemberAccept = (contributor) => {
-    const updatedContributors = project.contributors.map(c => {
-      if (c.userId === contributor.userId) {
-        return {
-          ...c,
-          memberAccepted: true
-        };
-      }
-      return c;
-    });
-
-    const target = updatedContributors.find(item => item.userId === contributor.userId);
-    const hasAllAdminApprovals = activeAdmins.length <= 1 || activeAdmins.every(id => target.approvals && target.approvals.map(String).includes(String(id)));
-
-    let finalContributors = updatedContributors;
-    if (hasAllAdminApprovals) {
-      finalContributors = updatedContributors.map(c => 
-        c.userId === contributor.userId 
-          ? {
-              ...c,
-              role: c.pendingRole || c.role,
-              accessLevel: c.pendingAccessLevel || c.accessLevel,
-              isAdmin: c.pendingIsAdmin !== undefined ? c.pendingIsAdmin : c.isAdmin,
-              status: 'ACCEPTED',
-              pendingRole: null,
-              pendingAccessLevel: null,
-              pendingIsAdmin: null,
-              approvals: null,
-              memberAccepted: null
-            }
-          : c
-      );
-      showNotification("Invitation acceptée !");
-    } else {
-      showNotification("Invitation acceptée, en attente de la validation des administrateurs");
+  // Accept/decline go through a dedicated endpoint: a PENDING contributor is
+  // not allowed to write the project via /sync, so the previous local-update
+  // + saveProjects approach was silently discarded by the server and the
+  // invitation banner reappeared on the next refresh.
+  const handleMemberAccept = async () => {
+    try {
+      const { projects, accepted } = await api.respondProjectInvitation(project.id, 'accept');
+      applyServerProjects(projects);
+      showNotification(accepted
+        ? "Invitation acceptée !"
+        : "Invitation acceptée, en attente de la validation des administrateurs");
+    } catch (error) {
+      showNotification(error.message || "Réponse à l'invitation impossible.", 'error');
     }
-
-    const updatedProjects = userProjects.map(p => 
-      p.id === currentProjectId ? { ...p, contributors: finalContributors } : p
-    );
-    saveProjects(updatedProjects);
   };
 
-  const handleMemberDecline = (contributor) => {
-    let finalContributors;
-    if (!contributor.pendingRole) {
-      finalContributors = project.contributors.filter(c => c.userId !== contributor.userId);
-    } else {
-      finalContributors = project.contributors.map(c => 
-        c.userId === contributor.userId 
-          ? {
-              ...c,
-              status: 'ACCEPTED',
-              pendingRole: null,
-              pendingAccessLevel: null,
-              pendingIsAdmin: null,
-              approvals: null,
-              memberAccepted: null
-            }
-          : c
-      );
+  const handleMemberDecline = async () => {
+    try {
+      const { projects } = await api.respondProjectInvitation(project.id, 'decline');
+      applyServerProjects(projects);
+      showNotification("Invitation déclinée");
+    } catch (error) {
+      showNotification(error.message || "Réponse à l'invitation impossible.", 'error');
     }
-
-    const updatedProjects = userProjects.map(p => 
-      p.id === currentProjectId ? { ...p, contributors: finalContributors } : p
-    );
-    saveProjects(updatedProjects);
-    showNotification("Invitation déclinée");
   };
 
   const activeAdmins = [

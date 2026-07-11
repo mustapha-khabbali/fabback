@@ -475,6 +475,14 @@ export function AppProvider({ children }) {
       .catch(() => {});
   }, []);
 
+  // Adopt a server-returned projects list as-is (no /sync round-trip): used
+  // by flows where the server already persisted the change, e.g. responding
+  // to a contributor invitation.
+  const applyServerProjects = useCallback((projects) => {
+    setUserProjects(projects);
+    localStorage.setItem('user_projects', JSON.stringify(projects));
+  }, []);
+
   const saveRecycleBin = useCallback((bin) => {
     setRecycleBin(bin);
     localStorage.setItem('recycle_bin', JSON.stringify(bin));
@@ -562,6 +570,7 @@ export function AppProvider({ children }) {
     // Projects
     userProjects,
     saveProjects,
+    applyServerProjects,
     allProjects: userProjects,
     recycleBin,
     saveRecycleBin,
