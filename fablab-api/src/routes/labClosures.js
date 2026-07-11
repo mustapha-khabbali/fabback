@@ -74,7 +74,11 @@ labClosuresRouter.get('/', async (_req, res, next) => {
     );
     res.json({
       closures: result.rows.map(mapClosure),
-      openOverrideDates: config.labOpenOverrideDates
+      openOverrideDates: config.labOpenOverrideDates,
+      // The admin dashboard's open/closed badge must follow the hours the
+      // gate actually enforces, not a hardcoded client-side copy.
+      openTime: config.labOpenTime,
+      closeTime: config.labCloseTime
     });
   } catch (error) {
     next(error);

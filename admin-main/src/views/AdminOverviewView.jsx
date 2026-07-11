@@ -300,6 +300,8 @@ export default function AdminOverviewView({ onNavigate }) {
         if (!cancelledRef.current) {
           setCustomExceptions(data.closures || []);
           setLabOpenOverrideDates(data.openOverrideDates || []);
+          if (data.openTime) setWorkingHoursStart(data.openTime);
+          if (data.closeTime) setWorkingHoursEnd(data.closeTime);
         }
       })
       .catch(() => {
