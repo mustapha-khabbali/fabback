@@ -198,6 +198,51 @@ test('EVENT scan in a configured outside space stays completed and does not coun
   assert.equal(open.body.attendance, null);
 });
 
+test('EVENT scan rejects the same event space twice but accepts a different space', async () => {
+  const eventId = await insertEvent({ title: 'Multi-space event', spaces: ['FabLab', 'Amphithéâtre 1'] });
+
+  const first = await api(baseUrl, '/attendance/check-in', {
+    method: 'POST',
+    token: stagiaire(),
+    body: checkInBody({
+      qr: { gate: 'EVENT', id: QR.EVENT },
+      objective: 'Event',
+      eventId,
+      eventTitle: 'Multi-space event',
+      eventSpace: 'FabLab'
+    })
+  });
+  assert.equal(first.status, 201);
+
+  const duplicate = await api(baseUrl, '/attendance/check-in', {
+    method: 'POST',
+    token: stagiaire(),
+    body: checkInBody({
+      qr: { gate: 'EVENT', id: QR.EVENT },
+      objective: 'Event',
+      eventId,
+      eventTitle: 'Multi-space event',
+      eventSpace: 'FabLab'
+    })
+  });
+  assert.equal(duplicate.status, 409);
+  assert.match(duplicate.body.error, /déjà scanné/i);
+
+  const differentSpace = await api(baseUrl, '/attendance/check-in', {
+    method: 'POST',
+    token: stagiaire(),
+    body: checkInBody({
+      qr: { gate: 'EVENT', id: QR.EVENT },
+      objective: 'Event',
+      eventId,
+      eventTitle: 'Multi-space event',
+      eventSpace: 'Amphithéâtre 1'
+    })
+  });
+  assert.equal(differentSpace.status, 201);
+  assert.equal(differentSpace.body.attendance.eventSpace, 'Amphithéâtre 1');
+});
+
 test('EVENT scan cannot use a space that is not configured on the selected event', async () => {
   const eventId = await insertEvent({ title: 'Outside only event', spaces: ['Espace Coworking'] });
 

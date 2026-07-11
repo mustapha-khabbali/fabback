@@ -247,6 +247,41 @@ async function resolveEventSpace(client, eventId, selectedSpace) {
   };
 }
 
+async function hasScannedEventSpace(client, userId, data, eventSpace) {
+  if (!data.eventId && !data.eventTitle) return false;
+  const parsedEventId = uuidOrNull(data.eventId);
+  const eventSpaceValue = eventSpace?.label || null;
+
+  if (parsedEventId) {
+    const result = await client.query(
+      `
+        select 1
+        from attendance
+        where user_id = $1
+          and event_id = $2
+          and coalesce(event_space, '') = coalesce($3::text, '')
+        limit 1
+      `,
+      [userId, parsedEventId, eventSpaceValue]
+    );
+    return Boolean(result.rows[0]);
+  }
+
+  const result = await client.query(
+    `
+      select 1
+      from attendance
+      where user_id = $1
+        and event_id is null
+        and event_title = $2
+        and coalesce(event_space, '') = coalesce($3::text, '')
+      limit 1
+    `,
+    [userId, data.eventTitle || null, eventSpaceValue]
+  );
+  return Boolean(result.rows[0]);
+}
+
 async function readGateAvailability() {
   const result = await query(
     `
@@ -365,7 +400,11 @@ attendanceRouter.post('/check-in', async (req, res, next) => {
       if (refuseIfGateClosed(status, res)) return;
     }
 
-    const { attendance, autoClosed, alreadyInside } = await withTransaction(async (client) => {
+    const { attendance, autoClosed, alreadyInside, alreadyScannedEventSpace } = await withTransaction(async (client) => {
+      if (isEventCheckIn && await hasScannedEventSpace(client, req.user.id, data, eventSpace)) {
+        return { attendance: null, autoClosed: null, alreadyInside: false, alreadyScannedEventSpace: true };
+      }
+
       const open = await findLatestOpenAttendance(client, req.user.id);
       const activeOpen = open && isOpenAttendanceActive(open);
       const eventOpensFabLabPresence = isEventCheckIn && eventSpace.isFabLab && !activeOpen;
@@ -402,9 +441,15 @@ attendanceRouter.post('/check-in', async (req, res, next) => {
 
       return {
         attendance: await joinAttendance(client, result.rows[0].id),
-        autoClosed: closed ? await joinAttendance(client, closed.id) : null
+        autoClosed: closed ? await joinAttendance(client, closed.id) : null,
+        alreadyScannedEventSpace: false
       };
     });
+
+    if (alreadyScannedEventSpace) {
+      res.status(409).json({ error: 'Vous avez déjà scanné cet event pour cet espace.' });
+      return;
+    }
 
     if (alreadyInside) {
       res.status(409).json({ error: 'Vous êtes déjà enregistré dans le FabLab.' });
