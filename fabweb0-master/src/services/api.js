@@ -31,6 +31,9 @@ async function request(path, options = {}) {
   const body = text ? JSON.parse(text) : null;
 
   if (!response.ok) {
+    if (response.status === 401) {
+      setUserToken(null);
+    }
     throw new Error(body?.error || 'API request failed');
   }
 

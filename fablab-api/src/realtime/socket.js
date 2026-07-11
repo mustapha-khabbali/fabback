@@ -6,6 +6,14 @@ import { authenticateStreamToken, shouldDeliver } from '../routes/stream.js';
 const REALTIME_WS_PATH = '/api/events/ws';
 const HEARTBEAT_INTERVAL_MS = 25000;
 
+function connectedSyncChange() {
+  return {
+    entity: 'sync',
+    action: 'reconnect',
+    ts: new Date().toISOString()
+  };
+}
+
 function closeUnauthorized(ws, reason, code = 1008) {
   if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
     ws.close(code, reason);
@@ -50,6 +58,7 @@ export function attachRealtimeSocket(server) {
     }
 
     console.log(`[ws] connected user=${user.id}`);
+    sendChange(ws, connectedSyncChange());
 
     ws.isAlive = true;
     ws.on('pong', () => {

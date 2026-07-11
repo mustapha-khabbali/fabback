@@ -29,8 +29,7 @@ export function createApp() {
     limit: config.globalRateLimitMax,
     standardHeaders: 'draft-7',
     legacyHeaders: false,
-    keyGenerator: clientKey,
-    validate: { keyGeneratorIpFallback: false }
+    keyGenerator: clientKey
   });
   const authLimiter = rateLimit({
     windowMs: config.authRateLimitWindowMs,
@@ -38,8 +37,7 @@ export function createApp() {
     standardHeaders: 'draft-7',
     legacyHeaders: false,
     skipSuccessfulRequests: true,
-    keyGenerator: clientKey,
-    validate: { keyGeneratorIpFallback: false }
+    keyGenerator: clientKey
   });
 
   // Request logging: one line per request with a short id so errors can be

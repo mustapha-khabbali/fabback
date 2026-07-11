@@ -1,12 +1,15 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useApp, TABS } from '../../../context/AppContext';
 import { useQrScanner } from '../../../hooks/useQrScanner';
 import { api, getUserToken } from '../../../services/api';
+
+const SCAN_DEBOUNCE_MS = 8000;
 
 export default function ScanTab() {
   const { activeTab, isUserInLab, currentUser, setShowScanObjectiveModal, setShowRoleScanObjectiveModal, setShowFeedbackModal, setPendingScanPayload, setScanObjectivePreset, showNotification } = useApp();
   const [cameraStarted, setCameraStarted] = useState(false);
   const [cameraError, setCameraError] = useState('');
+  const scanDebounceRef = useRef({ text: '', until: 0 });
 
   const isActive = activeTab === TABS.SCAN;
   const effectiveIsUserInLab = import.meta.env.DEV && new URLSearchParams(window.location.search).get('devInside') === '1'
@@ -67,6 +70,10 @@ export default function ScanTab() {
   }, [effectiveIsUserInLab, currentUser, setPendingScanPayload, setScanObjectivePreset, setShowScanObjectiveModal, setShowRoleScanObjectiveModal, setShowFeedbackModal, showNotification]);
 
   const onScanSuccess = useCallback((decodedText) => {
+    const now = Date.now();
+    const lastScan = scanDebounceRef.current;
+    if (lastScan.text === decodedText && now < lastScan.until) return;
+    scanDebounceRef.current = { text: decodedText, until: now + SCAN_DEBOUNCE_MS };
     handleDecodedScan(decodedText);
   }, [handleDecodedScan]);
 

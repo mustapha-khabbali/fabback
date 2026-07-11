@@ -2,10 +2,14 @@ import { API_BASE_URL, getAdminToken } from './api';
 
 const listeners = new Set();
 let socket = null;
+let socketToken = null;
 let reconnectTimer = null;
 let reconnectDelay = 1000;
+let stableSyncTimer = null;
 let stopped = true;
 let visibilityListenerAttached = false;
+
+const STABLE_CONNECTION_MS = 2000;
 
 function notify(change) {
   listeners.forEach((listener) => {
@@ -42,10 +46,16 @@ function clearReconnectTimer() {
   }
 }
 
+function clearStableSyncTimer() {
+  if (stableSyncTimer) {
+    window.clearTimeout(stableSyncTimer);
+    stableSyncTimer = null;
+  }
+}
+
 function reconnectNow() {
   if (stopped) return;
   clearReconnectTimer();
-  reconnectDelay = 1000;
   openRealtime();
 }
 
@@ -73,27 +83,52 @@ function openRealtime() {
   const token = getAdminToken();
   if (!token) return;
 
+  if (
+    socketToken === token
+    && socket
+    && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)
+  ) {
+    return;
+  }
+
   if (socket) socket.close();
   const nextSocket = new WebSocket(socketUrl(token));
   socket = nextSocket;
+  socketToken = token;
 
   nextSocket.addEventListener('open', () => {
-    reconnectDelay = 1000;
     console.info('[realtime] connected');
-    notify({ entity: 'sync', action: 'reconnect', ts: new Date().toISOString() });
   });
 
   nextSocket.addEventListener('message', (event) => {
     try {
-      notify(JSON.parse(event.data));
+      const change = JSON.parse(event.data);
+      if (change.entity === 'sync' && change.action === 'reconnect') {
+        clearStableSyncTimer();
+        stableSyncTimer = window.setTimeout(() => {
+          if (socket === nextSocket && nextSocket.readyState === WebSocket.OPEN) {
+            reconnectDelay = 1000;
+            notify(change);
+          }
+        }, STABLE_CONNECTION_MS);
+        return;
+      }
+      notify(change);
     } catch {
       // Ignore malformed realtime messages.
     }
   });
 
-  nextSocket.addEventListener('close', () => {
-    if (socket === nextSocket) {
-      socket = null;
+  nextSocket.addEventListener('close', (event) => {
+    if (socket !== nextSocket) return;
+
+    clearStableSyncTimer();
+    socket = null;
+    socketToken = null;
+    if (event.code === 1008) {
+      stopped = true;
+      clearReconnectTimer();
+      return;
     }
     scheduleReconnect();
   });
@@ -112,10 +147,12 @@ export function startRealtime() {
 export function stopRealtime() {
   stopped = true;
   clearReconnectTimer();
+  clearStableSyncTimer();
   if (socket) {
     socket.close();
     socket = null;
   }
+  socketToken = null;
 }
 
 export function subscribeRealtime(listener) {
