@@ -25,6 +25,7 @@ export const config = {
   // so tests can control the clock.
   labOpenTime: process.env.LAB_OPEN_TIME || '08:30',
   labCloseTime: process.env.LAB_CLOSE_TIME || '18:30',
+  labDateOverride: process.env.LAB_DATE_OVERRIDE || '',
   // Gate presence enforcement: check-in/out are accepted only from the school's
   // public network. All API traffic arrives via Cloudflare, so we match the
   // caller's real IP (CF-Connecting-IP) against this allowlist — every device

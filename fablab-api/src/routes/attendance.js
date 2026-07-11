@@ -33,6 +33,28 @@ const checkOutSchema = z.object({
 });
 
 const LAB_TIME_ZONE = 'Africa/Casablanca';
+const MOROCCAN_HOLIDAYS_2026 = [
+  { name: 'Nouvel An', date: '2026-01-01' },
+  { name: "Manifeste de l'Indépendance", date: '2026-01-11' },
+  { name: 'Fête du Travail', date: '2026-05-01' },
+  { name: 'Fête du Trône', date: '2026-07-30' },
+  { name: 'Oued Ed-Dahab', date: '2026-08-14' },
+  { name: 'Révolution du Roi et du Peuple', date: '2026-08-20' },
+  { name: 'Fête de la Jeunesse', date: '2026-08-21' },
+  { name: 'Marche Verte', date: '2026-11-06' },
+  { name: "Fête de l'Indépendance", date: '2026-11-18' },
+  { name: 'Aïd al-Fitr (Est.)', date: '2026-03-20' },
+  { name: 'Aïd al-Adha (Est.)', date: '2026-05-27' },
+  { name: '1er Moharram (Est.)', date: '2026-06-16' }
+];
+const HOLIDAY_DATES = MOROCCAN_HOLIDAYS_2026.map((holiday) => holiday.date);
+
+function holidayName(dateValue) {
+  const date = typeof dateValue === 'string'
+    ? dateValue
+    : dateValue?.toISOString?.().slice(0, 10);
+  return MOROCCAN_HOLIDAYS_2026.find((holiday) => holiday.date === date)?.name || '';
+}
 
 async function assertPermanentQr(gate, qr, res) {
   const column = gate === 'GATE_IN'
@@ -223,11 +245,33 @@ attendanceRouter.post('/check-in', async (req, res, next) => {
     // EVENT scans are exempt — events may legitimately run outside lab hours.
     // Check-out is never hour-gated: leaving must always be possible.
     if (!isEventCheckIn) {
-      const hours = await query(
-        `select ((now() at time zone $1)::time >= $2::time and (now() at time zone $1)::time < $3::time) as is_open`,
-        [LAB_TIME_ZONE, config.labOpenTime, config.labCloseTime]
+      const availability = await query(
+        `
+          with lab_now as (
+            select
+              coalesce($5::date, (now() at time zone $1)::date) as lab_date,
+              (now() at time zone $1)::time as lab_time
+          )
+          select
+            lab_date,
+            extract(isodow from lab_date)::int in (6, 7) as is_weekend,
+            lab_date = any($4::date[]) as is_holiday,
+            (lab_time >= $2::time and lab_time < $3::time) as is_within_hours
+          from lab_now
+        `,
+        [LAB_TIME_ZONE, config.labOpenTime, config.labCloseTime, HOLIDAY_DATES, config.labDateOverride || null]
       );
-      if (!hours.rows[0]?.is_open) {
+      const status = availability.rows[0];
+      if (status?.is_weekend) {
+        res.status(403).json({ error: 'Le FabLab est fermé le weekend.' });
+        return;
+      }
+      if (status?.is_holiday) {
+        const name = holidayName(status.lab_date);
+        res.status(403).json({ error: `Le FabLab est fermé${name ? ` (Férié: ${name})` : ' (jour férié)'}.` });
+        return;
+      }
+      if (!status?.is_within_hours) {
         res.status(403).json({ error: `Le FabLab est fermé (ouvert ${config.labOpenTime}–${config.labCloseTime}).` });
         return;
       }

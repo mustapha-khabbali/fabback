@@ -147,6 +147,10 @@ function toLabISODate(dateValue) {
   return `${partByType.year}-${partByType.month}-${partByType.day}`;
 }
 
+function currentLabISODate() {
+  return toLabISODate(new Date());
+}
+
 // Lab events always display in lab time, whatever the viewer's device is set to.
 function formatTime(dateValue) {
   if (!dateValue) return '';
@@ -227,7 +231,7 @@ function readCurrentPresenceRows(attendanceRows) {
 }
 
 export default function AdminOverviewView({ onNavigate }) {
-  const [selectedDate, setSelectedDate] = useState('2026-07-01');
+  const [selectedDate, setSelectedDate] = useState(currentLabISODate);
   const [workingHoursStart, setWorkingHoursStart] = useState('08:30');
   const [workingHoursEnd, setWorkingHoursEnd] = useState('18:30');
   // Minute ticker so the Ouvert/Fermé badge flips at closing time without a reload
@@ -238,8 +242,8 @@ export default function AdminOverviewView({ onNavigate }) {
   }, []);
   const [periodMode, setPeriodMode] = useState('now');
   const [customDateMode, setCustomDateMode] = useState('single');
-  const [dateFrom, setDateFrom] = useState('2026-07-01');
-  const [dateTo, setDateTo] = useState('2026-07-01');
+  const [dateFrom, setDateFrom] = useState(currentLabISODate);
+  const [dateTo, setDateTo] = useState(currentLabISODate);
   const [revealedProjects, setRevealedProjects] = useState({});
   const [dashboardRoleFilter, setDashboardRoleFilter] = useState('all');
   const [dashboardPresenceFilter, setDashboardPresenceFilter] = useState('all');

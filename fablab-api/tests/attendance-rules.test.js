@@ -17,6 +17,7 @@ import { config } from '../src/config.js';
 
 let baseUrl;
 const stagiaire = () => tokenFor(USERS.stagiaire);
+const DEFAULT_TEST_LAB_DATE = '2026-07-13'; // Monday
 
 function checkInBody(extra = {}) {
   return { qr: { gate: 'GATE_IN', id: QR.GATE_IN }, objective: 'Projet en cours', ...extra };
@@ -31,6 +32,7 @@ before(async () => {
 });
 
 beforeEach(async () => {
+  config.labDateOverride = DEFAULT_TEST_LAB_DATE;
   await resetDb();
 });
 
@@ -97,6 +99,24 @@ test('Gate-IN while already inside is rejected with 409 (no second open row)', a
   const mine = await api(baseUrl, '/attendance/mine', { token: stagiaire() });
   const open = mine.body.attendance.filter((a) => a.type === 'in');
   assert.equal(open.length, 1, 'exactly one open attendance row must exist');
+});
+
+test('Gate-IN with Event objective still opens lab presence and counts as present now', async () => {
+  const res = await api(baseUrl, '/attendance/check-in', {
+    method: 'POST',
+    token: stagiaire(),
+    body: checkInBody({ objective: 'Event', eventTitle: 'Demo inside FabLab' })
+  });
+
+  assert.equal(res.status, 201);
+  assert.equal(res.body.attendance.objective, 'Event');
+  assert.equal(res.body.attendance.eventTitle, 'Demo inside FabLab');
+  assert.equal(res.body.attendance.type, 'in');
+  assert.equal(res.body.attendance.timestampOut, null);
+
+  const open = await api(baseUrl, '/attendance/open', { token: stagiaire() });
+  assert.equal(open.status, 200);
+  assert.equal(open.body.attendance.id, res.body.attendance.id);
 });
 
 test('EVENT scan while already inside records the event without opening lab presence', async () => {
@@ -250,6 +270,36 @@ test('Gate-IN while the lab is closed is refused with 403 and a French message',
   assert.match(res.body.error, /fermé/i);
 });
 
+test('Gate-IN is refused on weekends even during opening hours', async (t) => {
+  const saved = config.labDateOverride;
+  t.after(() => { config.labDateOverride = saved; });
+  config.labDateOverride = '2026-07-11'; // Saturday
+
+  const res = await api(baseUrl, '/attendance/check-in', {
+    method: 'POST',
+    token: stagiaire(),
+    body: checkInBody()
+  });
+
+  assert.equal(res.status, 403);
+  assert.match(res.body.error, /weekend/i);
+});
+
+test('Gate-IN is refused on Moroccan holidays', async (t) => {
+  const saved = config.labDateOverride;
+  t.after(() => { config.labDateOverride = saved; });
+  config.labDateOverride = '2026-07-30'; // Fête du Trône
+
+  const res = await api(baseUrl, '/attendance/check-in', {
+    method: 'POST',
+    token: stagiaire(),
+    body: checkInBody()
+  });
+
+  assert.equal(res.status, 403);
+  assert.match(res.body.error, /Férié|fermé/i);
+});
+
 test('EVENT check-in stays allowed outside lab hours (evening events)', async (t) => {
   const saved = { open: config.labOpenTime, close: config.labCloseTime };
   t.after(() => { config.labOpenTime = saved.open; config.labCloseTime = saved.close; });
@@ -264,6 +314,21 @@ test('EVENT check-in stays allowed outside lab hours (evening events)', async (t
 
   assert.equal(res.status, 201);
   assert.ok(res.body.attendance.timestampOut, 'event attendance must not leave an open lab presence');
+});
+
+test('EVENT check-in stays allowed on weekends', async (t) => {
+  const saved = config.labDateOverride;
+  t.after(() => { config.labDateOverride = saved; });
+  config.labDateOverride = '2026-07-11'; // Saturday
+
+  const res = await api(baseUrl, '/attendance/check-in', {
+    method: 'POST',
+    token: stagiaire(),
+    body: checkInBody({ qr: { gate: 'EVENT', id: QR.EVENT }, objective: 'Event', eventTitle: 'Weekend event' })
+  });
+
+  assert.equal(res.status, 201);
+  assert.ok(res.body.attendance.timestampOut, 'weekend event attendance must not leave an open lab presence');
 });
 
 test('admin history includes auto-closed rows flagged as autoClosed', async () => {
