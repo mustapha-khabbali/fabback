@@ -2,6 +2,13 @@ upstream fablab_api {
   server fablab-api:4000;
 }
 
+# Per-IP request budgets. Normal use stays well under these; a storming
+# client (old cached bundle, reconnect loop, QR hammering) gets 429s here
+# and never reaches the API or the database.
+limit_req_zone $binary_remote_addr zone=api_limit:10m rate=10r/s;
+limit_req_zone $binary_remote_addr zone=ws_limit:10m rate=1r/s;
+limit_req_status 429;
+
 server {
   listen 80;
   server_name ${API_DOMAIN};
@@ -24,6 +31,7 @@ server {
   ssl_certificate_key /etc/letsencrypt/live/${API_DOMAIN}/privkey.pem;
 
   location /api/ {
+    limit_req zone=api_limit burst=30 nodelay;
     proxy_pass http://fablab_api;
     proxy_http_version 1.1;
     proxy_set_header Host $host;
@@ -33,6 +41,7 @@ server {
   }
 
   location /api/events/stream {
+    limit_req zone=ws_limit burst=10 nodelay;
     proxy_pass http://fablab_api;
     proxy_http_version 1.1;
     proxy_buffering off;
@@ -45,6 +54,7 @@ server {
   }
 
   location /api/events/ws {
+    limit_req zone=ws_limit burst=10 nodelay;
     proxy_pass http://fablab_api;
     proxy_http_version 1.1;
     proxy_set_header Upgrade $http_upgrade;

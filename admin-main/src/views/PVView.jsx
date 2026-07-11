@@ -339,9 +339,29 @@ export default function PVView() {
     });
   }, [allRows, dateMode, singleDate, dateFrom, dateTo, timeFrom, timeTo, roleFilter, selectedPresenceOption, eventFilter]);
 
+  // The PV attests who was present, not each coming-and-going: within the
+  // selected period one row per person per type of presence (lab objective,
+  // or event+espace), keeping the earliest. Movement history stays intact in
+  // the database; only this report collapses repeats.
+  const reportRows = useMemo(() => {
+    const earliestIds = new Map();
+    const byTimeAsc = [...filteredRows].sort(
+      (a, b) => new Date(a.timestampIn || 0) - new Date(b.timestampIn || 0)
+    );
+    for (const row of byTimeAsc) {
+      const typeKey = row.presenceType === 'Event'
+        ? `event:${row.eventId || row.eventTitle}|${row.eventSpace}`
+        : `type:${row.presenceType}`;
+      const key = `${row.userId || row.userName}|${typeKey}`;
+      if (!earliestIds.has(key)) earliestIds.set(key, row.id);
+    }
+    const keep = new Set(earliestIds.values());
+    return filteredRows.filter((row) => keep.has(row.id));
+  }, [filteredRows]);
+
   const handleGenerate = () => {
     if (!validatePvFilters()) return;
-    const rows = filteredRows;
+    const rows = reportRows;
     const days = new Set(rows.map((row) => row.date)).size;
     const ratedRows = rows.filter((row) => row.rating > 0);
     const avgRating = ratedRows.length
@@ -353,7 +373,7 @@ export default function PVView() {
 
   const handleExportExcel = async () => {
     const { default: ExcelJS } = await import('exceljs');
-    const rows = report?.rows || filteredRows;
+    const rows = report?.rows || reportRows;
     const workbook = new ExcelJS.Workbook();
     workbook.creator = 'FabLab Admin';
     workbook.created = new Date();

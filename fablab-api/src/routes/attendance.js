@@ -252,34 +252,61 @@ async function hasScannedEventSpace(client, userId, data, eventSpace) {
   const parsedEventId = uuidOrNull(data.eventId);
   const eventSpaceValue = eventSpace?.label || null;
 
-  if (parsedEventId) {
+  // FabLab-espace scans are door entries: after a Gate-OUT (explicit or
+  // implicit) the user may re-scan the same event to re-enter, so only a
+  // still-open presence is a duplicate.
+  if (eventSpace?.isFabLab) {
+    if (parsedEventId) {
+      const result = await client.query(
+        `
+          select 1
+          from attendance
+          where user_id = $1
+            and event_id = $2
+            and coalesce(event_space, '') = coalesce($3::text, '')
+            and timestamp_out is null
+          limit 1
+        `,
+        [userId, parsedEventId, eventSpaceValue]
+      );
+      return Boolean(result.rows[0]);
+    }
     const result = await client.query(
       `
         select 1
         from attendance
         where user_id = $1
-          and event_id = $2
+          and event_id is null
+          and event_title = $2
           and coalesce(event_space, '') = coalesce($3::text, '')
+          and timestamp_out is null
         limit 1
       `,
-      [userId, parsedEventId, eventSpaceValue]
+      [userId, data.eventTitle || null, eventSpaceValue]
     );
     return Boolean(result.rows[0]);
   }
 
-  const result = await client.query(
+  // Outside espaces track movement between locations: only a consecutive
+  // repeat of the same event+espace is a duplicate. If the user's latest
+  // attendance row is anything else (another espace, a Gate-IN, another
+  // event), they physically moved, so the scan is a legitimate return.
+  const latest = await client.query(
     `
-      select 1
+      select event_id, event_title, coalesce(event_space, '') as event_space
       from attendance
       where user_id = $1
-        and event_id is null
-        and event_title = $2
-        and coalesce(event_space, '') = coalesce($3::text, '')
+      order by timestamp_in desc
       limit 1
     `,
-    [userId, data.eventTitle || null, eventSpaceValue]
+    [userId]
   );
-  return Boolean(result.rows[0]);
+  const row = latest.rows[0];
+  if (!row) return false;
+  const sameEvent = parsedEventId
+    ? row.event_id === parsedEventId
+    : (!row.event_id && row.event_title === (data.eventTitle || null));
+  return sameEvent && row.event_space === (eventSpaceValue || '');
 }
 
 async function readGateAvailability() {
@@ -414,7 +441,19 @@ attendanceRouter.post('/check-in', async (req, res, next) => {
       if (!isEventCheckIn && activeOpen) {
         return { attendance: null, autoClosed: null, alreadyInside: true };
       }
-      const closed = open && !isOpenAttendanceActive(open) ? await autoCloseAttendance(client, open.id) : null;
+      let closed = open && !isOpenAttendanceActive(open) ? await autoCloseAttendance(client, open.id) : null;
+      // An outside-espace EVENT scan while inside means the user physically
+      // left the lab: close their presence like a Gate-OUT (no rating), so
+      // "Présents maintenant" stays truthful and a later FabLab-espace
+      // re-scan can open a fresh presence. Only a scan with an explicit
+      // outside espace proves the user left; espace-less scans keep presence.
+      if (isEventCheckIn && eventSpace.label && !eventSpace.isFabLab && activeOpen) {
+        const implicitOut = await client.query(
+          'update attendance set timestamp_out = now() where id = $1 and timestamp_out is null returning *',
+          [open.id]
+        );
+        closed = implicitOut.rows[0] || closed;
+      }
       const result = await client.query(
         `
           insert into attendance (

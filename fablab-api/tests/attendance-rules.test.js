@@ -243,6 +243,149 @@ test('EVENT scan rejects the same event space twice but accepts a different spac
   assert.equal(differentSpace.body.attendance.eventSpace, 'Amphithéâtre 1');
 });
 
+test('EVENT scan in FabLab space allows re-entry after Gate-OUT, outside space stays one-shot', async () => {
+  const eventId = await insertEvent({ title: 'Re-entry event', spaces: ['FabLab', 'Amphithéâtre 1'] });
+  const fabLabScan = () => api(baseUrl, '/attendance/check-in', {
+    method: 'POST',
+    token: stagiaire(),
+    body: checkInBody({
+      qr: { gate: 'EVENT', id: QR.EVENT },
+      objective: 'Event',
+      eventId,
+      eventTitle: 'Re-entry event',
+      eventSpace: 'FabLab'
+    })
+  });
+
+  const first = await fabLabScan();
+  assert.equal(first.status, 201);
+  assert.equal(first.body.attendance.timestampOut, null);
+
+  const out = await api(baseUrl, '/attendance/check-out', {
+    method: 'POST',
+    token: stagiaire(),
+    body: checkOutBody()
+  });
+  assert.equal(out.status, 200);
+
+  // Door entry semantics: once checked out, the same event+space re-opens presence.
+  const reEntry = await fabLabScan();
+  assert.equal(reEntry.status, 201, 're-scan after Gate-OUT must be accepted');
+  assert.equal(reEntry.body.attendance.timestampOut, null, 're-entry must open a new lab presence');
+  assert.notEqual(reEntry.body.attendance.id, first.body.attendance.id);
+
+  const open = await api(baseUrl, '/attendance/open', { token: stagiaire() });
+  assert.equal(open.body.attendance.id, reEntry.body.attendance.id);
+
+  // Outside spaces are completed on insert; a second scan stays a duplicate.
+  const outsideScan = () => api(baseUrl, '/attendance/check-in', {
+    method: 'POST',
+    token: stagiaire(),
+    body: checkInBody({
+      qr: { gate: 'EVENT', id: QR.EVENT },
+      objective: 'Event',
+      eventId,
+      eventTitle: 'Re-entry event',
+      eventSpace: 'Amphithéâtre 1'
+    })
+  });
+  const outsideFirst = await outsideScan();
+  assert.equal(outsideFirst.status, 201);
+  const outsideDuplicate = await outsideScan();
+  assert.equal(outsideDuplicate.status, 409);
+  assert.match(outsideDuplicate.body.error, /déjà scanné/i);
+});
+
+test('outside-espace EVENT scan while inside closes lab presence, FabLab re-scan re-opens it', async () => {
+  const eventId = await insertEvent({ title: 'Implicit out event', spaces: ['FabLab', 'Amphithéâtre 1'] });
+
+  const gateIn = await api(baseUrl, '/attendance/check-in', {
+    method: 'POST',
+    token: stagiaire(),
+    body: checkInBody()
+  });
+  assert.equal(gateIn.status, 201);
+  assert.equal(gateIn.body.attendance.timestampOut, null);
+
+  // Attending an event outside the lab means the user physically left:
+  // presence must close automatically (implicit Gate-OUT).
+  const outside = await api(baseUrl, '/attendance/check-in', {
+    method: 'POST',
+    token: stagiaire(),
+    body: checkInBody({
+      qr: { gate: 'EVENT', id: QR.EVENT },
+      objective: 'Event',
+      eventId,
+      eventTitle: 'Implicit out event',
+      eventSpace: 'Amphithéâtre 1'
+    })
+  });
+  assert.equal(outside.status, 201);
+  assert.ok(outside.body.attendance.timestampOut, 'outside event row completes immediately');
+
+  const openAfterOutside = await api(baseUrl, '/attendance/open', { token: stagiaire() });
+  assert.equal(openAfterOutside.body.attendance, null, 'lab presence must be closed by the outside event scan');
+
+  const gateInRow = await getAttendanceRow(gateIn.body.attendance.id);
+  assert.ok(gateInRow.timestamp_out, 'the original Gate-IN row must be checked out');
+
+  // Coming back through the FabLab-espace scan of the same event re-opens presence.
+  const back = await api(baseUrl, '/attendance/check-in', {
+    method: 'POST',
+    token: stagiaire(),
+    body: checkInBody({
+      qr: { gate: 'EVENT', id: QR.EVENT },
+      objective: 'Event',
+      eventId,
+      eventTitle: 'Implicit out event',
+      eventSpace: 'FabLab'
+    })
+  });
+  assert.equal(back.status, 201, 'FabLab re-scan after implicit out must be accepted');
+  assert.equal(back.body.attendance.timestampOut, null, 're-entry opens a new lab presence');
+
+  const openAfterBack = await api(baseUrl, '/attendance/open', { token: stagiaire() });
+  assert.equal(openAfterBack.body.attendance.id, back.body.attendance.id);
+});
+
+test('outside espace re-scan is accepted after moving elsewhere, blocked only when consecutive', async () => {
+  const eventId = await insertEvent({ title: 'Movement event', spaces: ['FabLab', 'Incubateur'] });
+  const scan = (eventSpace) => api(baseUrl, '/attendance/check-in', {
+    method: 'POST',
+    token: stagiaire(),
+    body: checkInBody({
+      qr: { gate: 'EVENT', id: QR.EVENT },
+      objective: 'Event',
+      eventId,
+      eventTitle: 'Movement event',
+      eventSpace
+    })
+  });
+
+  // Incubateur → Incubateur: consecutive repeat, blocked.
+  const incubateur = await scan('Incubateur');
+  assert.equal(incubateur.status, 201);
+  const consecutive = await scan('Incubateur');
+  assert.equal(consecutive.status, 409);
+  assert.match(consecutive.body.error, /déjà scanné/i);
+
+  // Incubateur → FabLab: movement, presence opens.
+  const fabLab = await scan('FabLab');
+  assert.equal(fabLab.status, 201);
+  assert.equal(fabLab.body.attendance.timestampOut, null);
+
+  // FabLab → Incubateur: movement back, accepted, lab presence closes.
+  const backOutside = await scan('Incubateur');
+  assert.equal(backOutside.status, 201, 'return to Incubateur after FabLab must be accepted');
+  const openAfter = await api(baseUrl, '/attendance/open', { token: stagiaire() });
+  assert.equal(openAfter.body.attendance, null, 'FabLab presence must close when moving outside');
+
+  // Incubateur → FabLab again: movement, new presence opens.
+  const backInside = await scan('FabLab');
+  assert.equal(backInside.status, 201);
+  assert.equal(backInside.body.attendance.timestampOut, null);
+});
+
 test('EVENT scan cannot use a space that is not configured on the selected event', async () => {
   const eventId = await insertEvent({ title: 'Outside only event', spaces: ['Espace Coworking'] });
 
