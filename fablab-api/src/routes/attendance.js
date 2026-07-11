@@ -50,10 +50,14 @@ const MOROCCAN_HOLIDAYS_2026 = [
 ];
 const HOLIDAY_DATES = MOROCCAN_HOLIDAYS_2026.map((holiday) => holiday.date);
 
+function toISODate(value) {
+  if (!value) return '';
+  if (typeof value === 'string') return value.slice(0, 10);
+  return value.toISOString().slice(0, 10);
+}
+
 function holidayName(dateValue) {
-  const date = typeof dateValue === 'string'
-    ? dateValue
-    : dateValue?.toISOString?.().slice(0, 10);
+  const date = toISODate(dateValue);
   return MOROCCAN_HOLIDAYS_2026.find((holiday) => holiday.date === date)?.name || '';
 }
 
@@ -243,6 +247,67 @@ async function resolveEventSpace(client, eventId, selectedSpace) {
   };
 }
 
+async function readGateAvailability() {
+  const result = await query(
+    `
+      with lab_now as (
+        select
+          coalesce($5::date, (now() at time zone $1)::date) as lab_date,
+          (now() at time zone $1)::time as lab_time
+      )
+      select
+        lab_date,
+        extract(isodow from lab_date)::int in (6, 7) as is_weekend,
+        lab_date = any($4::date[]) as is_holiday,
+        lab_date = any($6::date[]) as is_open_override,
+        (lab_time >= $2::time and lab_time < $3::time) as is_within_hours,
+        (
+          select c.label
+          from lab_closures c
+          where c.date = lab_date
+            and (
+              c.time_from is null
+              or c.time_to is null
+              or (lab_time >= c.time_from and lab_time < c.time_to)
+            )
+          order by c.time_from nulls first, c.created_at desc
+          limit 1
+        ) as closure_label
+      from lab_now
+    `,
+    [
+      LAB_TIME_ZONE,
+      config.labOpenTime,
+      config.labCloseTime,
+      HOLIDAY_DATES,
+      config.labDateOverride || null,
+      config.labOpenOverrideDates
+    ]
+  );
+  return result.rows[0] || {};
+}
+
+function refuseIfGateClosed(status, res) {
+  if (status?.closure_label) {
+    res.status(403).json({ error: `Le FabLab est fermé (${status.closure_label}).` });
+    return true;
+  }
+  if (!status?.is_open_override && status?.is_weekend) {
+    res.status(403).json({ error: 'Le FabLab est fermé le weekend.' });
+    return true;
+  }
+  if (!status?.is_open_override && status?.is_holiday) {
+    const name = holidayName(status.lab_date);
+    res.status(403).json({ error: `Le FabLab est fermé${name ? ` (Férié: ${name})` : ' (jour férié)'}.` });
+    return true;
+  }
+  if (!status?.is_within_hours) {
+    res.status(403).json({ error: `Le FabLab est fermé (ouvert ${config.labOpenTime}–${config.labCloseTime}).` });
+    return true;
+  }
+  return false;
+}
+
 attendanceRouter.use(requireAuth);
 
 attendanceRouter.get('/open', async (req, res, next) => {
@@ -283,50 +348,24 @@ attendanceRouter.post('/check-in', async (req, res, next) => {
       return;
     }
     if (!(await assertPermanentQr(data.qr?.gate || 'GATE_IN', data.qr, res))) return;
-
-    // Gate-IN outside opening hours is refused: without this, an evening scan
-    // creates a row that is born expired and auto-closes with zero duration.
-    // EVENT scans are exempt — events may legitimately run outside lab hours.
-    // Check-out is never hour-gated: leaving must always be possible.
-    if (!isEventCheckIn) {
-      const availability = await query(
-        `
-          with lab_now as (
-            select
-              coalesce($5::date, (now() at time zone $1)::date) as lab_date,
-              (now() at time zone $1)::time as lab_time
-          )
-          select
-            lab_date,
-            extract(isodow from lab_date)::int in (6, 7) as is_weekend,
-            lab_date = any($4::date[]) as is_holiday,
-            (lab_time >= $2::time and lab_time < $3::time) as is_within_hours
-          from lab_now
-        `,
-        [LAB_TIME_ZONE, config.labOpenTime, config.labCloseTime, HOLIDAY_DATES, config.labDateOverride || null]
-      );
-      const status = availability.rows[0];
-      if (status?.is_weekend) {
-        res.status(403).json({ error: 'Le FabLab est fermé le weekend.' });
-        return;
-      }
-      if (status?.is_holiday) {
-        const name = holidayName(status.lab_date);
-        res.status(403).json({ error: `Le FabLab est fermé${name ? ` (Férié: ${name})` : ' (jour férié)'}.` });
-        return;
-      }
-      if (!status?.is_within_hours) {
-        res.status(403).json({ error: `Le FabLab est fermé (ouvert ${config.labOpenTime}–${config.labCloseTime}).` });
-        return;
-      }
+    const eventSpace = isEventCheckIn
+      ? await resolveEventSpace({ query }, data.eventId, data.eventSpace)
+      : { label: null, isConfigured: true, isFabLab: false };
+    if (isEventCheckIn && data.eventSpace && !eventSpace.isConfigured) {
+      res.status(400).json({ error: 'Espace événement invalide.' });
+      return;
     }
 
-    const { attendance, autoClosed, alreadyInside, invalidEventSpace } = await withTransaction(async (client) => {
-      const eventSpace = await resolveEventSpace(client, data.eventId, data.eventSpace);
-      if (isEventCheckIn && data.eventSpace && !eventSpace.isConfigured) {
-        return { attendance: null, autoClosed: null, alreadyInside: false, invalidEventSpace: true };
-      }
+    // Lab presence outside opening hours is refused: without this, an evening
+    // scan creates a row that is born expired and auto-closes with zero
+    // duration. Outside EVENT scans stay exempt; FabLab-space events count as
+    // lab presence and therefore use the same availability rules.
+    if (!isEventCheckIn || eventSpace.isFabLab) {
+      const status = await readGateAvailability();
+      if (refuseIfGateClosed(status, res)) return;
+    }
 
+    const { attendance, autoClosed, alreadyInside } = await withTransaction(async (client) => {
       const open = await findLatestOpenAttendance(client, req.user.id);
       const activeOpen = open && isOpenAttendanceActive(open);
       const eventOpensFabLabPresence = isEventCheckIn && eventSpace.isFabLab && !activeOpen;
@@ -366,11 +405,6 @@ attendanceRouter.post('/check-in', async (req, res, next) => {
         autoClosed: closed ? await joinAttendance(client, closed.id) : null
       };
     });
-
-    if (invalidEventSpace) {
-      res.status(400).json({ error: 'Espace événement invalide.' });
-      return;
-    }
 
     if (alreadyInside) {
       res.status(409).json({ error: 'Vous êtes déjà enregistré dans le FabLab.' });

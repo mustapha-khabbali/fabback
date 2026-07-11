@@ -168,6 +168,22 @@ export const api = {
     return body.attendance || [];
   },
 
+  async getLabClosures() {
+    return request('/lab-closures');
+  },
+
+  async createLabClosure(closure) {
+    const body = await request('/lab-closures', {
+      method: 'POST',
+      body: JSON.stringify(closure)
+    });
+    return body.closure;
+  },
+
+  async deleteLabClosure(id) {
+    await request(`/lab-closures/${id}`, { method: 'DELETE' });
+  },
+
   async getProjects() {
     const body = await request('/projects');
     return body.projects || [];

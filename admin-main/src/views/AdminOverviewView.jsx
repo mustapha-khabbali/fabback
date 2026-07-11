@@ -254,6 +254,13 @@ export default function AdminOverviewView({ onNavigate }) {
   const [attendanceRows, setAttendanceRows] = useState([]);
   const [attendanceStale, setAttendanceStale] = useState(false);
   const attendanceStaleRef = useRef(false);
+  const [showPeriodModal, setShowPeriodModal] = useState(false);
+  const [showAvailabilityModal, setShowAvailabilityModal] = useState(false);
+  const [customExceptions, setCustomExceptions] = useState([]);
+  const [labOpenOverrideDates, setLabOpenOverrideDates] = useState([]);
+  const [newExceptionLabel, setNewExceptionLabel] = useState('');
+  const [newExceptionFrom, setNewExceptionFrom] = useState('');
+  const [newExceptionTo, setNewExceptionTo] = useState('');
 
   // Toast state for validation errors
   const [toast, setToast] = useState({ show: false, message: '' });
@@ -287,23 +294,46 @@ export default function AdminOverviewView({ onNavigate }) {
       });
   }, [showToast]);
 
+  const loadLabClosures = useCallback((cancelledRef = { current: false }) => {
+    api.getLabClosures()
+      .then((data) => {
+        if (!cancelledRef.current) {
+          setCustomExceptions(data.closures || []);
+          setLabOpenOverrideDates(data.openOverrideDates || []);
+        }
+      })
+      .catch(() => {
+        if (!cancelledRef.current) {
+          showToast("Fermetures indisponibles — vérifiez la connexion API.");
+        }
+      });
+  }, [showToast]);
+
+  const isOpenOverrideDate = useCallback((date) => (
+    labOpenOverrideDates.includes(date)
+  ), [labOpenOverrideDates]);
+
   useEffect(() => {
     const cancelledRef = { current: false };
 
     loadAttendance(cancelledRef);
+    loadLabClosures(cancelledRef);
     const intervalId = periodMode === 'now' ? setInterval(() => loadAttendance(cancelledRef), 10000) : null;
 
     return () => {
       cancelledRef.current = true;
       if (intervalId) clearInterval(intervalId);
     };
-  }, [loadAttendance, periodMode]);
+  }, [loadAttendance, loadLabClosures, periodMode]);
 
   useEffect(() => subscribeRealtime((change) => {
     if (change.entity === 'sync' || (periodMode === 'now' && change.entity === 'attendance')) {
       loadAttendance();
     }
-  }), [loadAttendance, periodMode]);
+    if (change.entity === 'sync' || change.entity === 'lab-closures') {
+      loadLabClosures();
+    }
+  }), [loadAttendance, loadLabClosures, periodMode]);
 
   const handleTimeChange = (value, setter, previousValue, defaultValue) => {
     if (!value) {
@@ -319,11 +349,11 @@ export default function AdminOverviewView({ onNavigate }) {
   };
 
   const handleSelectedDateChange = (value) => {
-    if (isWeekend(value)) {
+    if (!isOpenOverrideDate(value) && isWeekend(value)) {
       showToast("Please don't select Saturday or Sunday, they are days off.");
       return;
     }
-    if (isHoliday(value)) {
+    if (!isOpenOverrideDate(value) && isHoliday(value)) {
       showToast("Please don't select a holiday, the FabLab is closed.");
       return;
     }
@@ -331,11 +361,11 @@ export default function AdminOverviewView({ onNavigate }) {
   };
 
   const handleDateChange = (value, setter) => {
-    if (isWeekend(value)) {
+    if (!isOpenOverrideDate(value) && isWeekend(value)) {
       showToast("Please don't select Saturday or Sunday, they are days off.");
       return;
     }
-    if (isHoliday(value)) {
+    if (!isOpenOverrideDate(value) && isHoliday(value)) {
       showToast("Please don't select a holiday, the FabLab is closed.");
       return;
     }
@@ -349,11 +379,11 @@ export default function AdminOverviewView({ onNavigate }) {
     }
 
     if (customDateMode === 'single') {
-      if (isWeekend(selectedDate)) {
+      if (!isOpenOverrideDate(selectedDate) && isWeekend(selectedDate)) {
         showToast("Please don't select Saturday or Sunday, they are days off.");
         return;
       }
-      if (isHoliday(selectedDate)) {
+      if (!isOpenOverrideDate(selectedDate) && isHoliday(selectedDate)) {
         showToast("Please don't select a holiday, the FabLab is closed.");
         return;
       }
@@ -371,11 +401,11 @@ export default function AdminOverviewView({ onNavigate }) {
         showToast("Please choose a valid date range.");
         return;
       }
-      if (dates.some(isWeekend)) {
+      if (dates.some((date) => !isOpenOverrideDate(date) && isWeekend(date))) {
         showToast("Please don't include Saturday or Sunday, they are days off.");
         return;
       }
-      if (dates.some(isHoliday)) {
+      if (dates.some((date) => !isOpenOverrideDate(date) && isHoliday(date))) {
         showToast("Please don't include a holiday, the FabLab is closed.");
         return;
       }
@@ -398,20 +428,6 @@ export default function AdminOverviewView({ onNavigate }) {
     setOpenPresenceMenu((current) => current === menu ? null : menu);
   };
 
-  // Modals visibility state
-  const [showPeriodModal, setShowPeriodModal] = useState(false);
-  const [showAvailabilityModal, setShowAvailabilityModal] = useState(false);
-
-  // Custom exceptions list
-  const [customExceptions, setCustomExceptions] = useState([
-    { id: 'c1', label: 'Maintenance Assemblage', date: '2026-07-05', timeFrom: '14:00', timeTo: '17:00', isCustom: true }
-  ]);
-
-  // New exception form fields
-  const [newExceptionLabel, setNewExceptionLabel] = useState('');
-  const [newExceptionFrom, setNewExceptionFrom] = useState('');
-  const [newExceptionTo, setNewExceptionTo] = useState('');
-
   // Outlook sync simulation state (Commented out for later work)
   /*
   const [isOutlookConnected, setIsOutlookConnected] = useState(false);
@@ -427,50 +443,53 @@ export default function AdminOverviewView({ onNavigate }) {
   */
   const isOutlookConnected = false;
 
-  const handleAddException = () => {
+  const handleAddException = async () => {
     if (!newExceptionLabel.trim()) {
       alert("Veuillez saisir un motif pour la fermeture.");
+      return;
+    }
+    if (Boolean(newExceptionFrom) !== Boolean(newExceptionTo)) {
+      alert("Veuillez saisir l'heure de début et l'heure de fin, ou laisser les deux vides.");
       return;
     }
     if (newExceptionFrom && newExceptionTo && newExceptionFrom >= newExceptionTo) {
       alert("L'heure de début doit être antérieure à l'heure de fin.");
       return;
     }
-    const newExc = {
-      id: `custom-${Date.now()}`,
-      label: newExceptionLabel,
-      date: selectedDate,
-      timeFrom: newExceptionFrom,
-      timeTo: newExceptionTo,
-      isCustom: true
-    };
-    setCustomExceptions([...customExceptions, newExc]);
-    setNewExceptionLabel('');
-    setNewExceptionFrom('');
-    setNewExceptionTo('');
+    try {
+      const newExc = await api.createLabClosure({
+        label: newExceptionLabel.trim(),
+        date: selectedDate,
+        timeFrom: newExceptionFrom || null,
+        timeTo: newExceptionTo || null
+      });
+      setCustomExceptions((current) => [newExc, ...current]);
+      setNewExceptionLabel('');
+      setNewExceptionFrom('');
+      setNewExceptionTo('');
+    } catch {
+      showToast("Fermeture impossible à enregistrer.");
+    }
   };
 
-  const handleDeleteException = (id) => {
-    setCustomExceptions(customExceptions.filter(exc => exc.id !== id));
+  const handleDeleteException = async (id) => {
+    try {
+      await api.deleteLabClosure(id);
+      setCustomExceptions((current) => current.filter(exc => exc.id !== id));
+    } catch {
+      showToast("Suppression de la fermeture impossible.");
+    }
   };
 
   // Get active exceptions list for selectedDate (holidays and manual exceptions)
-  const selectedDateHoliday = isOutlookConnected && MOROCCAN_HOLIDAYS_2026.find(h => h.date === selectedDate);
+  const selectedDateHoliday = MOROCCAN_HOLIDAYS_2026.find(h => h.date === selectedDate);
   const selectedDateExceptions = customExceptions.filter(exc => exc.date === selectedDate);
 
   let labStatusText = 'Ouvert';
   let labStatusColor = 'text-accent-green bg-accent-green/10 border border-accent-green/20';
   let isLabOpen = true;
 
-  if (isWeekend(selectedDate)) {
-    labStatusText = 'Fermé (Weekend)';
-    labStatusColor = 'text-accent-red bg-accent-red/10 border border-accent-red/20';
-    isLabOpen = false;
-  } else if (selectedDateHoliday) {
-    labStatusText = `Fermé (Férié: ${selectedDateHoliday.name})`;
-    labStatusColor = 'text-accent-red bg-accent-red/10 border border-accent-red/20';
-    isLabOpen = false;
-  } else if (selectedDateExceptions.length > 0) {
+  if (selectedDateExceptions.length > 0) {
     const wholeDayException = selectedDateExceptions.find(e => !e.timeFrom || (e.timeFrom === workingHoursStart && e.timeTo === workingHoursEnd));
     if (wholeDayException) {
       labStatusText = `Fermé (${wholeDayException.label})`;
@@ -482,6 +501,14 @@ export default function AdminOverviewView({ onNavigate }) {
       labStatusColor = 'text-accent-amber bg-accent-amber/10 border border-accent-amber/20';
       isLabOpen = false; // Flag as closed/restricted during active slots
     }
+  } else if (!isOpenOverrideDate(selectedDate) && isWeekend(selectedDate)) {
+    labStatusText = 'Fermé (Weekend)';
+    labStatusColor = 'text-accent-red bg-accent-red/10 border border-accent-red/20';
+    isLabOpen = false;
+  } else if (!isOpenOverrideDate(selectedDate) && selectedDateHoliday) {
+    labStatusText = `Fermé (Férié: ${selectedDateHoliday.name})`;
+    labStatusColor = 'text-accent-red bg-accent-red/10 border border-accent-red/20';
+    isLabOpen = false;
   } else if (periodMode === 'now' || selectedDate === toLabISODate(now)) {
     // Outside working hours today: the calendar says open, the clock says closed
     const nowHHMM = new Intl.DateTimeFormat('fr-FR', {

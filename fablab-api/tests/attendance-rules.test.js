@@ -10,6 +10,7 @@ import {
   tokenFor,
   insertAttendance,
   insertEvent,
+  insertLabClosure,
   getAttendanceRow,
   USERS,
   QR
@@ -34,6 +35,7 @@ before(async () => {
 
 beforeEach(async () => {
   config.labDateOverride = DEFAULT_TEST_LAB_DATE;
+  config.labOpenOverrideDates = [];
   await resetDb();
 });
 
@@ -367,6 +369,58 @@ test('Gate-IN is refused on Moroccan holidays', async (t) => {
 
   assert.equal(res.status, 403);
   assert.match(res.body.error, /Férié|fermé/i);
+});
+
+test('Gate-IN is refused during an exceptional closure saved by admin', async () => {
+  await insertLabClosure({
+    label: 'Maintenance imprimantes',
+    date: DEFAULT_TEST_LAB_DATE
+  });
+
+  const res = await api(baseUrl, '/attendance/check-in', {
+    method: 'POST',
+    token: stagiaire(),
+    body: checkInBody()
+  });
+
+  assert.equal(res.status, 403);
+  assert.match(res.body.error, /Maintenance imprimantes/);
+});
+
+test('temporary open override allows a weekend Gate-IN during normal hours', async (t) => {
+  const saved = config.labDateOverride;
+  t.after(() => { config.labDateOverride = saved; config.labOpenOverrideDates = []; });
+  config.labDateOverride = '2026-07-12'; // Sunday
+  config.labOpenOverrideDates = ['2026-07-12'];
+
+  const res = await api(baseUrl, '/attendance/check-in', {
+    method: 'POST',
+    token: stagiaire(),
+    body: checkInBody()
+  });
+
+  assert.equal(res.status, 201);
+  assert.equal(res.body.attendance.type, 'in');
+});
+
+test('exceptional closure still refuses Gate-IN on a temporary open weekend date', async (t) => {
+  const saved = config.labDateOverride;
+  t.after(() => { config.labDateOverride = saved; config.labOpenOverrideDates = []; });
+  config.labDateOverride = '2026-07-12'; // Sunday
+  config.labOpenOverrideDates = ['2026-07-12'];
+  await insertLabClosure({
+    label: 'Test fermeture',
+    date: '2026-07-12'
+  });
+
+  const res = await api(baseUrl, '/attendance/check-in', {
+    method: 'POST',
+    token: stagiaire(),
+    body: checkInBody()
+  });
+
+  assert.equal(res.status, 403);
+  assert.match(res.body.error, /Test fermeture/);
 });
 
 test('EVENT check-in stays allowed outside lab hours (evening events)', async (t) => {

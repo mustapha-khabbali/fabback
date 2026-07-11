@@ -30,6 +30,7 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS:-https://fablab-bmk.web.app,https://fablab-cmc.web.app}
       LAB_OPEN_TIME: ${LAB_OPEN_TIME:-08:30}
       LAB_CLOSE_TIME: ${LAB_CLOSE_TIME:-18:30}
+      LAB_OPEN_OVERRIDE_DATES: ${LAB_OPEN_OVERRIDE_DATES:-2026-07-11,2026-07-12}
       GATE_ALLOWED_IPS: ${GATE_ALLOWED_IPS:-}
     # Published on loopback only: cloudflared (host service) reaches the API
     # here; never exposed to the LAN or the internet directly.

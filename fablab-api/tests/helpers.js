@@ -38,6 +38,7 @@ export async function stopTestServer() {
 export async function resetDb() {
   await query('truncate attendance restart identity cascade');
   await query('truncate events restart identity cascade');
+  await query('truncate lab_closures restart identity cascade');
   await query('truncate recognitions restart identity cascade');
   await query('truncate reports restart identity cascade');
   await query('delete from gate_config');
@@ -108,6 +109,24 @@ export async function insertEvent({ title = 'Test event', spaces = ['FabLab'] } 
       returning id
     `,
     [title, JSON.stringify(spaces)]
+  );
+  return result.rows[0].id;
+}
+
+export async function insertLabClosure({
+  label = 'Maintenance',
+  date,
+  timeFrom = null,
+  timeTo = null,
+  createdBy = USERS.admin.id
+} = {}) {
+  const result = await query(
+    `
+      insert into lab_closures (label, date, time_from, time_to, created_by)
+      values ($1, $2::date, $3::time, $4::time, $5)
+      returning id
+    `,
+    [label, date, timeFrom, timeTo, createdBy]
   );
   return result.rows[0].id;
 }
