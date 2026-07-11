@@ -147,7 +147,9 @@ export default function RoleScanObjectiveModal() {
       attendance.unshift(saved || logEntry);
       localStorage.setItem('lab_attendance', JSON.stringify(attendance));
 
-      setIsUserInLab(true);
+      if (pendingScanPayload?.gate !== 'EVENT') {
+        setIsUserInLab(true);
+      }
       setPendingScanPayload(null);
       reset();
       setShowRoleScanObjectiveModal(false);

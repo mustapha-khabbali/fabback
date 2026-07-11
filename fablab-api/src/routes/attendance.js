@@ -208,9 +208,10 @@ attendanceRouter.post('/check-in', async (req, res, next) => {
     }
 
     const data = parsed.data;
+    const isEventCheckIn = data.qr?.gate === 'EVENT';
     // Presence: the gate QR is physically inside the lab; a check-in must come
     // from the school network, not from a photographed QR scanned at home.
-    if (!isOnLabNetwork(req)) {
+    if (!isEventCheckIn && !isOnLabNetwork(req)) {
       console.warn(`[req ${req.id}] gate network refused check-in ip=${getClientIp(req)} allow=${config.gateAllowedIps.join(',') || '(off)'}`);
       res.status(403).json({ error: 'Vous devez être au FabLab pour scanner (réseau de l\'école requis).' });
       return;
@@ -221,7 +222,7 @@ attendanceRouter.post('/check-in', async (req, res, next) => {
     // creates a row that is born expired and auto-closes with zero duration.
     // EVENT scans are exempt — events may legitimately run outside lab hours.
     // Check-out is never hour-gated: leaving must always be possible.
-    if (data.qr?.gate !== 'EVENT') {
+    if (!isEventCheckIn) {
       const hours = await query(
         `select ((now() at time zone $1)::time >= $2::time and (now() at time zone $1)::time < $3::time) as is_open`,
         [LAB_TIME_ZONE, config.labOpenTime, config.labCloseTime]
@@ -234,9 +235,10 @@ attendanceRouter.post('/check-in', async (req, res, next) => {
 
     const { attendance, autoClosed, alreadyInside } = await withTransaction(async (client) => {
       const open = await findLatestOpenAttendance(client, req.user.id);
-      // Server-side guard: the client UI already blocks Gate-IN while inside,
-      // but a forged request must not create a second open attendance row.
-      if (open && isOpenAttendanceActive(open)) {
+      // Server-side guard: Gate-IN must not create a second open lab presence
+      // row. EVENT scans are attendance records only and may happen while the
+      // user is already inside the lab or at an outside event.
+      if (!isEventCheckIn && open && isOpenAttendanceActive(open)) {
         return { attendance: null, autoClosed: null, alreadyInside: true };
       }
       const closed = open && !isOpenAttendanceActive(open) ? await autoCloseAttendance(client, open.id) : null;
@@ -244,9 +246,9 @@ attendanceRouter.post('/check-in', async (req, res, next) => {
         `
           insert into attendance (
             user_id, objective, comment, project_id, project_title,
-            supervisor_id, supervisor_name, event_id, event_title
+            supervisor_id, supervisor_name, event_id, event_title, timestamp_out
           )
-          values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          values ($1, $2, $3, $4, $5, $6, $7, $8, $9, case when $10::boolean then now() else null end)
           returning *
         `,
         [
@@ -258,7 +260,8 @@ attendanceRouter.post('/check-in', async (req, res, next) => {
           data.supervisorId || null,
           data.supervisorName || null,
           uuidOrNull(data.eventId),
-          data.eventTitle || null
+          data.eventTitle || null,
+          isEventCheckIn
         ]
       );
 

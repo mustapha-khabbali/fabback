@@ -38,7 +38,7 @@ export default function ScanTab() {
 
     setScanObjectivePreset('');
 
-    if (effectiveIsUserInLab && (isGateInScan || isEventScan)) {
+    if (effectiveIsUserInLab && isGateInScan) {
       showNotification('Vous êtes déjà dans le FabLab — scannez le QR Gate-OUT pour sortir.', 'error');
       return;
     }

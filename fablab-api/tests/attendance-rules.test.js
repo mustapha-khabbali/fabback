@@ -99,6 +99,33 @@ test('Gate-IN while already inside is rejected with 409 (no second open row)', a
   assert.equal(open.length, 1, 'exactly one open attendance row must exist');
 });
 
+test('EVENT scan while already inside records the event without opening lab presence', async () => {
+  const first = await api(baseUrl, '/attendance/check-in', {
+    method: 'POST',
+    token: stagiaire(),
+    body: checkInBody()
+  });
+  assert.equal(first.status, 201);
+
+  const event = await api(baseUrl, '/attendance/check-in', {
+    method: 'POST',
+    token: stagiaire(),
+    body: checkInBody({
+      qr: { gate: 'EVENT', id: QR.EVENT },
+      objective: 'Event',
+      eventTitle: 'Atelier hors FabLab'
+    })
+  });
+
+  assert.equal(event.status, 201);
+  assert.equal(event.body.attendance.eventTitle, 'Atelier hors FabLab');
+  assert.ok(event.body.attendance.timestampOut, 'event attendance must be completed immediately');
+
+  const mine = await api(baseUrl, '/attendance/mine', { token: stagiaire() });
+  const open = mine.body.attendance.filter((a) => a.type === 'in');
+  assert.equal(open.length, 1, 'the original Gate-IN row is the only open lab presence');
+});
+
 test('Gate-OUT closes the open attendance and stores the rating', async () => {
   await api(baseUrl, '/attendance/check-in', { method: 'POST', token: stagiaire(), body: checkInBody() });
 
@@ -185,6 +212,16 @@ test('check-in from outside the school network is refused (403), from inside all
     headers: { 'cf-connecting-ip': '10.34.94.15' }
   });
   assert.equal(lan.status, 201);
+
+  // Event QR can be outside the FabLab, so it is not network-gated.
+  const event = await api(baseUrl, '/attendance/check-in', {
+    method: 'POST',
+    token: tokenFor(USERS.peer),
+    body: checkInBody({ qr: { gate: 'EVENT', id: QR.EVENT }, objective: 'Event', eventTitle: 'Outside demo' }),
+    headers: { 'cf-connecting-ip': '41.92.10.10' }
+  });
+  assert.equal(event.status, 201);
+  assert.ok(event.body.attendance.timestampOut, 'outside event attendance must be completed immediately');
 });
 
 test('empty allowlist disables enforcement (dev/test default)', async (t) => {
@@ -226,6 +263,7 @@ test('EVENT check-in stays allowed outside lab hours (evening events)', async (t
   });
 
   assert.equal(res.status, 201);
+  assert.ok(res.body.attendance.timestampOut, 'event attendance must not leave an open lab presence');
 });
 
 test('admin history includes auto-closed rows flagged as autoClosed', async () => {
