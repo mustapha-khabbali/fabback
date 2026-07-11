@@ -7,7 +7,7 @@ import { createNotification, emitNotification, mapNotification } from '../servic
 export const notificationsRouter = express.Router();
 
 const notificationSchema = z.object({
-  type: z.enum(['contribution_request', 'help_request', 'help_feedback_request', 'review_request', 'CONTACT_REQUEST', 'project_invite', 'system', 'interaction_offer', 'interaction_approved']),
+  type: z.enum(['contribution_request', 'help_request', 'help_feedback_request', 'review_request', 'CONTACT_REQUEST', 'project_invite', 'system', 'interaction_offer', 'interaction_approved', 'contact_approved']),
   recipientId: z.string().optional().nullable(),
   targetId: z.string().optional().nullable(),
   helpedUserId: z.string().optional().nullable(),

@@ -1,10 +1,11 @@
 import express from 'express';
 import { z } from 'zod';
-import { query } from '../db/pool.js';
+import { query, withTransaction } from '../db/pool.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { toPublicUser } from '../models/user.js';
 import { attachInteractionsToUsers } from '../models/interactions.js';
 import { emitRealtimeChange } from '../realtime/bus.js';
+import { createNotification, emitNotification, mapNotification } from '../services/notificationDelivery.js';
 
 export const usersRouter = express.Router();
 
@@ -48,6 +49,8 @@ export const userProfileSchema = z.object({
   bio: optionalText,
   avatar: optionalText,
   programs: z.array(programSchema).optional(),
+  privacyMode: z.enum(['public', 'personalised', 'private']).optional(),
+  allowedUsers: z.array(z.string()).optional(),
   charteAccepted: z.boolean().optional(),
   reproductionAccepted: z.boolean().optional()
 });
@@ -92,8 +95,13 @@ const fieldMap = {
   bio: 'bio',
   avatar: 'avatar',
   programs: 'programs',
+  privacyMode: 'privacy_mode',
+  allowedUsers: 'allowed_contact_users',
   points: 'points'
 };
+
+// Fields stored as jsonb columns need ::jsonb casts and JSON.stringify values.
+const JSONB_FIELDS = new Set(['programs', 'allowedUsers']);
 
 export function buildUserPatch(data) {
   const normalized = {
@@ -106,9 +114,10 @@ export function buildUserPatch(data) {
 
   Object.entries(fieldMap).forEach(([key, column]) => {
     if (Object.prototype.hasOwnProperty.call(normalized, key)) {
-      values.push(key === 'programs' ? JSON.stringify(normalized[key] ?? []) : normalized[key] ?? null);
+      const isJsonb = JSONB_FIELDS.has(key);
+      values.push(isJsonb ? JSON.stringify(normalized[key] ?? []) : normalized[key] ?? null);
       params.push(values.length);
-      columns.push(`${column} = $${values.length}${key === 'programs' ? '::jsonb' : ''}`);
+      columns.push(`${column} = $${values.length}${isJsonb ? '::jsonb' : ''}`);
     }
   });
 
@@ -310,6 +319,89 @@ usersRouter.patch('/:id', async (req, res, next) => {
 
     emitRealtimeChange({ entity: 'users', action: 'patch', id: result.rows[0].id });
     res.json({ user: toPublicUser(result.rows[0]) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+const contactApprovalSchema = z.object({
+  requesterId: z.string().min(1),
+  notificationId: z.string().optional().nullable(),
+  approve: z.boolean()
+});
+
+// Respond to a contact request. Approving persists the requester into the
+// caller's allow-list (server-side, so it reaches the requester's device),
+// bumps a fully-private profile to 'personalised' so the allow-list takes
+// effect, and notifies the requester that the coordinates are now shared.
+usersRouter.post('/contact-approval', async (req, res, next) => {
+  try {
+    const parsed = contactApprovalSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: 'Invalid request body', details: parsed.error.flatten() });
+      return;
+    }
+    const { requesterId, notificationId, approve } = parsed.data;
+
+    const outcome = await withTransaction(async (client) => {
+      const meResult = await client.query('select * from users where id = $1', [req.user.id]);
+      const me = meResult.rows[0];
+      let updatedUser = me;
+      let approvedNotification = null;
+
+      if (approve) {
+        const allowed = Array.isArray(me.allowed_contact_users)
+          ? me.allowed_contact_users.map(String)
+          : [];
+        if (!allowed.includes(String(requesterId))) allowed.push(String(requesterId));
+        const nextMode = me.privacy_mode === 'private' ? 'personalised' : (me.privacy_mode || 'personalised');
+
+        const upd = await client.query(
+          `
+            update users
+            set allowed_contact_users = $1::jsonb, privacy_mode = $2, updated_at = now()
+            where id = $3
+            returning *
+          `,
+          [JSON.stringify(allowed), nextMode, req.user.id]
+        );
+        updatedUser = upd.rows[0];
+
+        approvedNotification = await createNotification(client, requesterId, req.user.id, 'contact_approved', {
+          title: 'Coordonnées partagées',
+          message: `${me.prenom} ${me.nom} a partagé ses coordonnées avec vous.`,
+          requesterId: req.user.id,
+          requesterName: `${me.prenom} ${me.nom}`,
+          targetId: req.user.id
+        });
+      }
+
+      let requestNotification = null;
+      if (notificationId) {
+        const nres = await client.query(
+          `
+            update notifications
+            set status = 'read', handled = true, approved = $1
+            where id = $2 and recipient_id = $3
+            returning *
+          `,
+          [approve, notificationId, req.user.id]
+        );
+        if (nres.rows[0]) requestNotification = mapNotification(nres.rows[0]);
+      }
+
+      return { updatedUser, approvedNotification, requestNotification };
+    });
+
+    if (outcome.approvedNotification) emitNotification(outcome.approvedNotification, 'create');
+    if (outcome.requestNotification) emitNotification(outcome.requestNotification, 'update');
+    emitRealtimeChange({ entity: 'users', action: 'patch', id: req.user.id });
+
+    res.json({
+      user: toPublicUser(outcome.updatedUser),
+      approvedNotification: outcome.approvedNotification,
+      requestNotification: outcome.requestNotification
+    });
   } catch (error) {
     next(error);
   }

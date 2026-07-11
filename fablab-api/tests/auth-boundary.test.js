@@ -147,3 +147,38 @@ test('renaming a user onto an existing prenom+nom is rejected', async () => {
   });
   assert.equal(res.status, 409);
 });
+
+test('approving a contact request shares coordinates and notifies the requester', async () => {
+  // stagiaire requests peer's contact; peer approves.
+  const approve = await api(baseUrl, '/users/contact-approval', {
+    method: 'POST',
+    token: tokenFor(USERS.peer),
+    body: { requesterId: USERS.stagiaire.id, approve: true }
+  });
+  assert.equal(approve.status, 200);
+  // A private profile is bumped to personalised so the allow-list takes effect.
+  assert.equal(approve.body.user.privacyMode, 'personalised');
+  assert.ok(approve.body.user.allowedUsers.includes(USERS.stagiaire.id));
+
+  // The requester received a contact_approved notification.
+  const inbox = await api(baseUrl, '/notifications', { token: tokenFor(USERS.stagiaire) });
+  assert.equal(inbox.status, 200);
+  assert.ok(inbox.body.notifications.some((n) => n.type === 'contact_approved' && String(n.targetId) === String(USERS.peer.id)));
+
+  // Peer now exposes the stagiaire in its allow-list via the public user object.
+  const peerView = await api(baseUrl, `/users/${USERS.peer.id}`, { token: tokenFor(USERS.stagiaire) });
+  assert.equal(peerView.body.user.privacyMode, 'personalised');
+  assert.ok(peerView.body.user.allowedUsers.map(String).includes(String(USERS.stagiaire.id)));
+});
+
+test('declining a contact request does not share coordinates', async () => {
+  // admin is an untouched approver here (peer was already approved above).
+  const decline = await api(baseUrl, '/users/contact-approval', {
+    method: 'POST',
+    token: tokenFor(USERS.admin),
+    body: { requesterId: USERS.peer.id, approve: false }
+  });
+  assert.equal(decline.status, 200);
+  assert.equal(decline.body.user.privacyMode, 'private');
+  assert.ok(!decline.body.user.allowedUsers.includes(USERS.peer.id));
+});

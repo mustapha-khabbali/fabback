@@ -185,6 +185,16 @@ export const api = {
     return body.user;
   },
 
+  // Approve/decline a contact request. On approval the server adds the
+  // requester to my allow-list, shares my coordinates, and notifies them.
+  async respondContactRequest({ requesterId, notificationId, approve }) {
+    const body = await request('/users/contact-approval', {
+      method: 'POST',
+      body: JSON.stringify({ requesterId, notificationId, approve })
+    });
+    return body;
+  },
+
   async getGateConfig() {
     return request('/gate/config');
   },

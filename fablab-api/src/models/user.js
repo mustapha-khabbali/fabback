@@ -27,6 +27,8 @@ export function toPublicUser(user) {
     isDeactivated: user.is_deactivated,
     charteAccepted: user.charte_accepted,
     reproductionAccepted: user.reproduction_accepted,
+    privacyMode: user.privacy_mode || 'private',
+    allowedUsers: Array.isArray(user.allowed_contact_users) ? user.allowed_contact_users.map(String) : [],
     projects: [],
     recycleBin: [],
     interactions: {

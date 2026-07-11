@@ -150,24 +150,25 @@ export function AppProvider({ children }) {
   };
 
   const handleContactRequestResponse = (notifId, requesterId, approve) => {
-    if (approve) {
-      if (!allowedContactUsers.includes(requesterId)) {
-        setAllowedContactUsers([...allowedContactUsers, requesterId]);
-      }
-      showNotification("Demande approuvée !");
-    } else {
-      showNotification("Demande refusée.");
-    }
-    api.updateNotification(notifId, { status: 'read', handled: true, approved: approve })
-      .then((updated) => {
-        setNotifications(notifications.map(n =>
-          n.id === notifId ? updated : n
-        ));
+    // Persist server-side: approving writes the requester into my allow-list
+    // (so it reaches their device) and notifies them. localStorage-only
+    // approvals used to be invisible to the requester.
+    api.respondContactRequest({ requesterId, notificationId: notifId, approve })
+      .then(({ user, requestNotification }) => {
+        if (user) {
+          setCurrentUser(user);
+          if (Array.isArray(user.allowedUsers)) setAllowedContactUsers(user.allowedUsers.map(String));
+          if (user.privacyMode) setContactPrivacyMode(user.privacyMode);
+        }
+        setNotifications((prev) => prev.map((n) => (
+          n.id === notifId
+            ? (requestNotification || { ...n, status: 'read', handled: true, approved: approve })
+            : n
+        )));
+        showNotification(approve ? "Demande approuvée !" : "Demande refusée.");
       })
-      .catch(() => {
-        setNotifications(notifications.map(n =>
-          n.id === notifId ? { ...n, status: 'read', handled: true, approved: approve } : n
-        ));
+      .catch((error) => {
+        showNotification(error.message || "Action impossible.", 'error');
       });
   };
 
@@ -216,6 +217,34 @@ export function AppProvider({ children }) {
   useEffect(() => {
     localStorage.setItem('allowed-contact-users', JSON.stringify(allowedContactUsers));
   }, [allowedContactUsers]);
+
+  // Seed contact-privacy from the server copy of my profile so it survives a
+  // new device / cleared storage and reflects approvals made elsewhere.
+  useEffect(() => {
+    if (currentUser?.privacyMode) setContactPrivacyMode(currentUser.privacyMode);
+    if (Array.isArray(currentUser?.allowedUsers)) setAllowedContactUsers(currentUser.allowedUsers.map(String));
+  }, [currentUser?.id, currentUser?.privacyMode, currentUser?.allowedUsers]);
+
+  const persistContactPrivacy = useCallback((patch) => {
+    const uid = getPrimaryUserId(currentUserRef.current);
+    if (!uid) return;
+    api.updateUser(uid, patch)
+      .then((updated) => { if (updated) setCurrentUser(updated); })
+      .catch(() => {});
+  }, [setCurrentUser]);
+
+  const changeContactPrivacyMode = useCallback((mode) => {
+    setContactPrivacyMode(mode);
+    persistContactPrivacy({ privacyMode: mode });
+  }, [persistContactPrivacy]);
+
+  const changeAllowedContactUsers = useCallback((next) => {
+    setAllowedContactUsers((prev) => {
+      const resolved = typeof next === 'function' ? next(prev) : next;
+      persistContactPrivacy({ allowedUsers: resolved.map(String) });
+      return resolved;
+    });
+  }, [persistContactPrivacy]);
 
   useEffect(() => {
     localStorage.setItem('app-language', language);
@@ -633,9 +662,9 @@ export function AppProvider({ children }) {
     isContactPublic,
     setIsContactPublic,
     contactPrivacyMode,
-    setContactPrivacyMode,
+    setContactPrivacyMode: changeContactPrivacyMode,
     allowedContactUsers,
-    setAllowedContactUsers,
+    setAllowedContactUsers: changeAllowedContactUsers,
     language,
     setLanguage
   };

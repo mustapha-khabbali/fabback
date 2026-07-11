@@ -178,6 +178,15 @@ export default function NotificationsTab() {
       return;
     }
 
+    if (notif.type === 'contact_approved') {
+      const sharer = (usersList || []).find((u) => String(u.id) === String(notif.targetId || notif.requesterId));
+      if (sharer) {
+        setSelectedUser(sharer);
+        setActiveTab(TABS.PROFILE);
+      }
+      return;
+    }
+
     if (ACTIONABLE_TYPES.includes(notif.type)) {
       setSelectedNotificationRequest(notif);
     }
