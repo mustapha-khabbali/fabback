@@ -112,7 +112,17 @@ export default function SupervisorModal({ project, onClose, onSave }) {
       if (match) {
         handleAdd(match.id);
       } else {
-        showNotification(`Aucun « ${preset.title} » trouvé.`, 'error');
+        // Distinguish "not in the list" from "already added" — presetMatches
+        // excludes already-selected people, which used to surface as a
+        // misleading "Aucun trouvé".
+        const alreadyAdded = eligibleSupervisors.some((u) =>
+          normalizeRole(u.role) === preset.role && (u.bio || '') === preset.title
+        );
+        if (alreadyAdded) {
+          showNotification(`« ${preset.title} » est déjà encadrant du projet.`);
+        } else {
+          showNotification(`Aucun « ${preset.title} » trouvé.`, 'error');
+        }
       }
       return;
     }

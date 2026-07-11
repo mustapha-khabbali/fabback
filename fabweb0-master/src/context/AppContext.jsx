@@ -6,7 +6,7 @@ import {
   PRESENCE_ACTIVITY_STORAGE_KEY
 } from '../utils/presenceActivity';
 import { ensureUserIdentity, isCompleteUserProfile, mergeUserByIdentity, getPrimaryUserId } from '../utils/userIdentity';
-import { api, getUserToken } from '../services/api';
+import { api, getUserToken, USER_SESSION_EXPIRED_EVENT } from '../services/api';
 import { startRealtime, stopRealtime, subscribeRealtime } from '../services/realtime';
 import { useFirebase } from './FirebaseContext';
 
@@ -331,6 +331,22 @@ export function AppProvider({ children }) {
     setTimeout(() => setNotification(null), 3000);
   }, []);
 
+  useEffect(() => {
+    const handleSessionExpired = () => {
+      api.logout();
+      stopRealtime();
+      setCurrentUser({});
+      setIsUserInLab(false);
+      showNotification('Votre session a expiré. Veuillez vous reconnecter.', 'error');
+      if (location.pathname.startsWith('/login')) {
+        navigate('/', { replace: true });
+      }
+    };
+
+    window.addEventListener(USER_SESSION_EXPIRED_EVENT, handleSessionExpired);
+    return () => window.removeEventListener(USER_SESSION_EXPIRED_EVENT, handleSessionExpired);
+  }, [location.pathname, navigate, setCurrentUser, showNotification]);
+
   // Charte navigation memory
   const [charteReturnScreen, setCharteReturnScreen] = useState(SCREENS.STAGIAIRE);
   const [registrationDraft, setRegistrationDraft] = useState({});
@@ -510,6 +526,7 @@ export function AppProvider({ children }) {
     setSearchFilter,
     usersList,
     addCustomUser,
+    refreshUsers,
 
     // Lab state
     isUserInLab,

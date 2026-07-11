@@ -1,5 +1,6 @@
 export const API_BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:4000/api').replace(/\/$/, '');
 const ADMIN_TOKEN_KEY = 'admin_api_token';
+const PUBLIC_API_PATHS = new Set(['/auth/admin']);
 
 const ROLE_TO_UI = {
   stagiaire: 'Stagiaire',
@@ -49,17 +50,35 @@ export function setAdminToken(token) {
 // instead of leaving a zombie dashboard where every action 401s.
 export const SESSION_EXPIRED_EVENT = 'admin-session-expired';
 
+function pathWithoutQuery(path) {
+  return path.split('?')[0];
+}
+
+function isPublicPath(path) {
+  return PUBLIC_API_PATHS.has(pathWithoutQuery(path));
+}
+
+function notifySessionExpired() {
+  window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
+}
+
 async function request(path, options = {}) {
+  const { auth = true, ...fetchOptions } = options;
   const headers = new Headers(options.headers || {});
   headers.set('content-type', 'application/json');
 
   const token = getAdminToken();
+  if (auth && !isPublicPath(path) && !token) {
+    notifySessionExpired();
+    throw new Error('Votre session administrateur a expiré. Veuillez vous reconnecter.');
+  }
+
   if (token) {
     headers.set('authorization', `Bearer ${token}`);
   }
 
   const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
+    ...fetchOptions,
     headers
   });
 
@@ -88,7 +107,8 @@ export const api = {
   async adminLogin(email, password) {
     const body = await request('/auth/admin', {
       method: 'POST',
-      body: JSON.stringify({ email, password })
+      body: JSON.stringify({ email, password }),
+      auth: false
     });
     setAdminToken(body.token);
     return body;

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useApp, TABS } from '../../context/AppContext';
 import { getPrimaryUserId, isCurrentUserId } from '../../utils/userIdentity';
 import { getEventSpaces } from '../../utils/eventSpaces';
@@ -92,8 +92,16 @@ export default function ScanObjectiveModal() {
     setActiveTab,
     requestProjectCreate,
     scanObjectivePreset,
-    setScanObjectivePreset
+    setScanObjectivePreset,
+    refreshUsers
   } = useApp();
+
+  // The presets and the encadrant search read the in-memory user list; make
+  // sure it is fresh when the modal opens so people created elsewhere
+  // (admin, another device) are findable during the scan.
+  useEffect(() => {
+    if (showScanObjectiveModal) refreshUsers?.();
+  }, [showScanObjectiveModal, refreshUsers]);
 
   const config = useMemo(loadGateInConfig, [showScanObjectiveModal]);
   const events = useMemo(loadGateInEvents, [showScanObjectiveModal]);
@@ -107,6 +115,7 @@ export default function ScanObjectiveModal() {
   const [customText, setCustomText] = useState('');
   const [showNewSupervisor, setShowNewSupervisor] = useState(false);
   const [presetPick, setPresetPick] = useState(null);
+  const [supervisorSearch, setSupervisorSearch] = useState('');
   const [newPrenom, setNewPrenom] = useState('');
   const [newNom, setNewNom] = useState('');
   const [newRole, setNewRole] = useState('formateur');
@@ -153,6 +162,13 @@ export default function ScanObjectiveModal() {
     !projectSupervisorIds.includes(user.id)
   );
 
+  const supervisorSearchQuery = supervisorSearch.trim().toLowerCase();
+  const supervisorSearchMatches = !supervisorSearchQuery ? [] : eligibleSupervisors.filter((user) =>
+    !projectSupervisorIds.includes(user.id) &&
+    (`${user.prenom} ${user.nom}`.toLowerCase().includes(supervisorSearchQuery) ||
+      (user.email || '').toLowerCase().includes(supervisorSearchQuery))
+  );
+
   const reset = () => {
     setSelectedOptionId('');
     setSelectedProjectId('');
@@ -162,6 +178,7 @@ export default function ScanObjectiveModal() {
     setCustomText('');
     setShowNewSupervisor(false);
     setPresetPick(null);
+    setSupervisorSearch('');
     setNewPrenom('');
     setNewNom('');
     setNewRole('formateur');
@@ -221,6 +238,7 @@ export default function ScanObjectiveModal() {
     setSelectedSupervisorId(supervisorId);
     setShowNewSupervisor(false);
     setPresetPick(null);
+    setSupervisorSearch('');
     showNotification('Encadrant ajouté au projet.');
   };
 
@@ -235,7 +253,17 @@ export default function ScanObjectiveModal() {
       if (match) {
         attachSupervisorToProject(match.id);
       } else {
-        showNotification(`Aucun « ${preset.title} » trouvé.`, 'error');
+        // Distinguish "not in the list" from "already attached to this
+        // project" — presetMatches excludes already-attached people, which
+        // used to surface as a misleading "Aucun trouvé".
+        const alreadyAttached = eligibleSupervisors.some((user) =>
+          normalizeRole(user.role) === preset.role && (user.bio || '') === preset.title
+        );
+        if (alreadyAttached) {
+          showNotification(`« ${preset.title} » est déjà encadrant de ce projet.`);
+        } else {
+          showNotification(`Aucun « ${preset.title} » trouvé.`, 'error');
+        }
       }
       return;
     }
@@ -489,12 +517,45 @@ export default function ScanObjectiveModal() {
               )}
 
               {selectedProject && (
+                <div className="space-y-1.5 relative">
+                  <label className="text-[10px] font-bold text-t-tertiary uppercase px-1">Ajouter un encadrant existant</label>
+                  <input
+                    value={supervisorSearch}
+                    onChange={(e) => { setSupervisorSearch(e.target.value); setPresetPick(null); setShowNewSupervisor(false); }}
+                    type="text"
+                    placeholder="Rechercher par nom ou email..."
+                    className="w-full p-4 bg-t-surface-alt border border-t-border-strong rounded-2xl outline-none focus:bg-t-surface glass-card focus:border-midnight-blue text-sm font-bold transition-all"
+                  />
+                  {supervisorSearch.trim() && (
+                    <div className="border border-t-border bg-t-surface glass-card rounded-2xl max-h-36 overflow-y-auto custom-scrollbar p-2 space-y-1">
+                      {supervisorSearchMatches.length === 0 ? (
+                        <div className="p-3 text-center text-xs text-t-tertiary italic">Aucun encadrant trouvé</div>
+                      ) : supervisorSearchMatches.map((user) => (
+                        <button
+                          key={user.id}
+                          type="button"
+                          onClick={() => attachSupervisorToProject(user.id)}
+                          className="w-full flex items-center justify-between gap-3 p-3 hover:bg-t-surface-alt rounded-xl transition-all text-left text-t-primary font-bold"
+                        >
+                          <span className="min-w-0">
+                            <span className="block text-sm truncate">{user.prenom} {user.nom}</span>
+                            <span className="block text-[9px] text-t-primary/35 uppercase tracking-widest truncate">{supervisorSubtitle(user)}</span>
+                          </span>
+                          <span className="text-[10px] text-[#3B5FE6] uppercase tracking-wider shrink-0">+ Ajouter</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {selectedProject && (
                 <button
                   type="button"
                   onClick={() => { setShowNewSupervisor(!showNewSupervisor); setPresetPick(null); }}
                   className="w-full py-3 bg-t-surface-input hover:bg-gray-200 text-[#3B5FE6] font-bold rounded-2xl transition-all text-xs uppercase tracking-wider font-black border border-dashed border-t-border-strong"
                 >
-                  {showNewSupervisor ? 'Annuler ajout encadrant' : 'Ajouter un encadrant'}
+                  {showNewSupervisor ? 'Annuler ajout encadrant' : 'Créer un nouvel encadrant'}
                 </button>
               )}
 

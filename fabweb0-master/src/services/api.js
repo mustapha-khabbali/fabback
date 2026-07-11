@@ -1,5 +1,12 @@
+import { firebase } from '../context/FirebaseContext';
+
 export const API_BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:4000/api').replace(/\/$/, '');
 const USER_TOKEN_KEY = 'fablab_api_token';
+const PUBLIC_API_PATHS = new Set(['/auth/google']);
+
+export const USER_SESSION_EXPIRED_EVENT = 'user-session-expired';
+
+let sessionRefreshPromise = null;
 
 export function getUserToken() {
   return localStorage.getItem(USER_TOKEN_KEY);
@@ -13,17 +20,81 @@ export function setUserToken(token) {
   }
 }
 
-async function request(path, options = {}) {
+function pathWithoutQuery(path) {
+  return path.split('?')[0];
+}
+
+function isPublicPath(path) {
+  return PUBLIC_API_PATHS.has(pathWithoutQuery(path));
+}
+
+function notifySessionExpired() {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event(USER_SESSION_EXPIRED_EVENT));
+  }
+}
+
+export async function ensureUserToken({ interactive = false } = {}) {
+  const storedToken = getUserToken();
+  if (storedToken) return storedToken;
+
+  if (sessionRefreshPromise) return sessionRefreshPromise;
+
+  sessionRefreshPromise = (async () => {
+    await firebase.authPersistenceReady;
+    if (typeof firebase.auth.authStateReady === 'function') {
+      await firebase.auth.authStateReady();
+    }
+
+    let firebaseUser = firebase.auth.currentUser;
+    if (!firebaseUser && interactive) {
+      const credential = await firebase.signInWithPopup(firebase.auth, firebase.googleProvider);
+      firebaseUser = credential.user;
+    }
+
+    if (!firebaseUser) {
+      throw new Error('Votre session a expiré. Veuillez vous reconnecter.');
+    }
+
+    const idToken = await firebaseUser.getIdToken();
+    const body = await request('/auth/google', {
+      method: 'POST',
+      body: JSON.stringify({ idToken }),
+      auth: false
+    });
+    setUserToken(body.token);
+    return body.token;
+  })();
+
+  try {
+    return await sessionRefreshPromise;
+  } finally {
+    sessionRefreshPromise = null;
+  }
+}
+
+async function request(path, options = {}, attempt = 0) {
+  const { auth = true, ...fetchOptions } = options;
   const headers = new Headers(options.headers || {});
   headers.set('content-type', 'application/json');
 
-  const token = getUserToken();
+  const needsAuth = auth && !isPublicPath(path);
+  let token = getUserToken();
+  if (needsAuth && !token) {
+    try {
+      token = await ensureUserToken();
+    } catch (error) {
+      notifySessionExpired();
+      throw error;
+    }
+  }
+
   if (token) {
     headers.set('authorization', `Bearer ${token}`);
   }
 
   const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
+    ...fetchOptions,
     headers
   });
 
@@ -31,10 +102,25 @@ async function request(path, options = {}) {
   const body = text ? JSON.parse(text) : null;
 
   if (!response.ok) {
-    // Only drop the stored token when this 401 is about the token we actually
-    // sent — a late 401 from a request made with an older token must not wipe
-    // a session established in the meantime.
-    if (response.status === 401 && token && getUserToken() === token) {
+    if (response.status === 401 && needsAuth) {
+      // Only drop the stored token when this 401 is about the token we actually
+      // sent — a late 401 from a request made with an older token must not wipe
+      // a session established in the meantime.
+      if (token && getUserToken() === token) {
+        setUserToken(null);
+      }
+
+      if (attempt === 0) {
+        try {
+          await ensureUserToken();
+          return request(path, options, attempt + 1);
+        } catch {
+          // Fall through to the single app-level session-expired event below.
+        }
+      }
+
+      notifySessionExpired();
+    } else if (response.status === 401 && token && getUserToken() === token) {
       setUserToken(null);
     }
     throw new Error(body?.error || 'API request failed');
@@ -47,7 +133,8 @@ export const api = {
   async googleLogin(idToken) {
     const body = await request('/auth/google', {
       method: 'POST',
-      body: JSON.stringify({ idToken })
+      body: JSON.stringify({ idToken }),
+      auth: false
     });
     setUserToken(body.token);
     return body;
