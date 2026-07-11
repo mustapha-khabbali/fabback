@@ -2,7 +2,13 @@
 
 **Audience:** anyone who has to operate this system without its author.
 **Test:** if you can't perform a restart and a deploy using only this page, the page is broken — fix the page.
-**Last verified:** 2026-07-09
+**Last verified:** 2026-07-11
+
+> **Production moved on 2026-07-11.** The Mac demo rig and the Cloudflare tunnel are retired.
+> The backend now runs on an Oracle Cloud Always Free VM in Casablanca —
+> see **[ARCHITECTURE.md](ARCHITECTURE.md)** for the full production picture,
+> deploy commands, backups, and disaster recovery. Sections below about the
+> local rig remain valid for **development on the Mac only**.
 
 ---
 
@@ -12,21 +18,19 @@
 |---|---|---|
 | User app | React build | Firebase Hosting → https://fablab-bmk.web.app |
 | Admin app | React build | Firebase Hosting → https://fablab-cmc.web.app |
-| API | Node/Express (`fablab-api`) | **Demo rig:** this Mac, port 4000, exposed via Cloudflare tunnel. **Target:** school server behind HTTPS (not yet deployed) |
-| Database | PostgreSQL 16 | Docker container `fablab-postgres-1`, db `fablab_dev` |
+| API | Node/Express (`fablab-api`) | **Production:** Oracle Cloud VM `fablab-server` (84.8.219.72, Casablanca), Docker behind nginx + HTTPS at https://fablab-api.ofppt.me |
+| Database | PostgreSQL 16 | Docker on the same VM (db `fablab`); nightly backups pushed to private GitHub repo `fablab-backups` |
 | Realtime | WebSocket `/api/events/ws` | Same process as the API |
 
-Repo: `/Users/mac/Desktop/fablab` (git, branch `main`).
+Repo: `/Users/mac/Desktop/fablab` (git, branch `main`) → GitHub `mustapha-khabbali/fabback`.
 ⚠️ `/Users/mac/fablab` is a stale copy — never edit it.
 
 ## 2. Is it healthy? (run these first)
 
 ```bash
-curl -s http://localhost:4000/api/health        # {"ok":true}  → API process up
-curl -s http://localhost:4000/health            # {"ok":true,"db":...} → API + DB up
-docker ps | grep fablab-postgres                # postgres container running?
-grep -o "https://[a-z0-9-]*\.trycloudflare\.com" /tmp/cloudflared.log | head -1  # tunnel URL
-tail -20 /tmp/fablab-api.log                    # recent request/error log lines
+curl -s https://fablab-api.ofppt.me/api/health  # {"ok":true}  → API up (production)
+curl -s https://fablab-api.ofppt.me/health      # {"ok":true,"db":...} → API + DB up
+ssh ubuntu@84.8.219.72 'sudo docker ps'         # 4 containers: nginx, api, postgres, certbot
 ```
 
 Log format: `[req a1b2c3d4] POST /api/attendance/check-in 201 12.3ms`. Errors carry the same `[req ...]` id. WebSocket lines start with `[ws]`.
