@@ -6,7 +6,7 @@ import { signUserToken } from '../auth/jwt.js';
 import { query } from '../db/pool.js';
 import { requireAuth } from '../middleware/auth.js';
 import { isProfileComplete, toPublicUser } from '../models/user.js';
-import { userProfileSchema, buildUserPatch } from './users.js';
+import { userProfileSchema, buildUserPatch, findDuplicateNameUser, DUPLICATE_NAME_ERROR } from './users.js';
 import { emitRealtimeChange } from '../realtime/bus.js';
 
 export const authRouter = express.Router();
@@ -172,6 +172,11 @@ authRouter.post('/register', requireAuth, async (req, res, next) => {
     const parsed = userProfileSchema.safeParse(req.body);
     if (!parsed.success) {
       sendValidationError(res, parsed.error);
+      return;
+    }
+
+    if (await findDuplicateNameUser(parsed.data.prenom, parsed.data.nom, req.user.id)) {
+      res.status(409).json({ error: DUPLICATE_NAME_ERROR });
       return;
     }
 

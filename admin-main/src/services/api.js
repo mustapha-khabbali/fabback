@@ -45,6 +45,10 @@ export function setAdminToken(token) {
   }
 }
 
+// Lets App.jsx flip back to the login overlay the moment the session dies,
+// instead of leaving a zombie dashboard where every action 401s.
+export const SESSION_EXPIRED_EVENT = 'admin-session-expired';
+
 async function request(path, options = {}) {
   const headers = new Headers(options.headers || {});
   headers.set('content-type', 'application/json');
@@ -64,7 +68,15 @@ async function request(path, options = {}) {
 
   if (!response.ok) {
     if (response.status === 401) {
-      setAdminToken(null);
+      // Only drop the stored token when this 401 is about the token we
+      // actually sent — a late 401 from a request made with an older token
+      // must not wipe a session established in the meantime.
+      if (token && getAdminToken() === token) {
+        setAdminToken(null);
+      }
+      if (!getAdminToken()) {
+        window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
+      }
     }
     throw new Error(body?.error || 'API request failed');
   }

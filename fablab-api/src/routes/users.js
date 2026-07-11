@@ -137,6 +137,31 @@ function canMutateUser(req, targetId) {
   return req.user.role === 'administrateur' || req.user.id === targetId;
 }
 
+export const DUPLICATE_NAME_ERROR = 'Un compte existe déjà avec ce nom et prénom.';
+
+// One full name = one profile: prevents someone registering under another
+// person's name before the real person signs up.
+export async function findDuplicateNameUser(prenom, nom, excludeId = null) {
+  if (!String(prenom || '').trim() || !String(nom || '').trim()) return null;
+  const params = [String(prenom).trim().toLowerCase(), String(nom).trim().toLowerCase()];
+  let excludeClause = '';
+  if (excludeId) {
+    params.push(excludeId);
+    excludeClause = 'and id <> $3';
+  }
+  const result = await query(
+    `
+      select id from users
+      where lower(trim(prenom)) = $1
+        and lower(trim(nom)) = $2
+        ${excludeClause}
+      limit 1
+    `,
+    params
+  );
+  return result.rows[0] || null;
+}
+
 usersRouter.use(requireAuth);
 
 usersRouter.get('/', async (req, res, next) => {
@@ -193,6 +218,12 @@ usersRouter.post('/', async (req, res, next) => {
       reproductionAccepted: true,
       ...parsed.data
     };
+
+    if (await findDuplicateNameUser(data.prenom, data.nom)) {
+      res.status(409).json({ error: DUPLICATE_NAME_ERROR });
+      return;
+    }
+
     const { columns, values } = buildUserPatch(data);
     const columnNames = columns.map((assignment) => assignment.split(' = ')[0]);
     const placeholders = values.map((_, index) => `$${index + 1}`);
@@ -239,6 +270,20 @@ usersRouter.patch('/:id', async (req, res, next) => {
     if (!parsed.success) {
       res.status(400).json({ error: 'Invalid request body', details: parsed.error.flatten() });
       return;
+    }
+
+    if (parsed.data.prenom !== undefined || parsed.data.nom !== undefined) {
+      const current = await query('select prenom, nom from users where id = $1', [req.params.id]);
+      if (!current.rows[0]) {
+        res.status(404).json({ error: 'User not found' });
+        return;
+      }
+      const nextPrenom = parsed.data.prenom ?? current.rows[0].prenom;
+      const nextNom = parsed.data.nom ?? current.rows[0].nom;
+      if (await findDuplicateNameUser(nextPrenom, nextNom, req.params.id)) {
+        res.status(409).json({ error: DUPLICATE_NAME_ERROR });
+        return;
+      }
     }
 
     const { columns, values, params } = buildUserPatch(parsed.data);

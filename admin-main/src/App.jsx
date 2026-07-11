@@ -7,7 +7,7 @@ import PVView from './views/PVView';
 import UsersView from './views/UsersView';
 import SignalementsView from './views/SignalementsView';
 import AnalyseView from './views/AnalyseView';
-import { api } from './services/api';
+import { api, getAdminToken, SESSION_EXPIRED_EVENT } from './services/api';
 import { startRealtime, stopRealtime } from './services/realtime';
 
 const ADMIN_ACTIVE_VIEW_KEY = 'admin_active_view';
@@ -66,7 +66,10 @@ function readInitialNavigationState() {
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(
-    () => sessionStorage.getItem('admin_authenticated') === 'true'
+    // The UI flag alone is not enough: the API token can be gone (expired,
+    // wiped by a 401) while the flag still says 'true', which used to leave a
+    // zombie dashboard where every action failed with "Missing bearer token".
+    () => sessionStorage.getItem('admin_authenticated') === 'true' && Boolean(getAdminToken())
   );
   const [navigationState, setNavigationState] = useState(readInitialNavigationState);
   const { activeView, profileTarget: userProfileTarget } = navigationState;
@@ -103,6 +106,16 @@ export default function App() {
     stopRealtime();
     setIsAuthenticated(false);
   };
+
+  useEffect(() => {
+    const handleSessionExpired = () => {
+      sessionStorage.removeItem('admin_authenticated');
+      stopRealtime();
+      setIsAuthenticated(false);
+    };
+    window.addEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired);
+  }, []);
 
   useEffect(() => {
     if (!isAuthenticated) {

@@ -57,6 +57,14 @@ export default function UsersView({ profileTarget, onProfileOpened, onProfileClo
     selectedUserRef.current = selectedUser;
   }, [selectedUser]);
 
+  // Edit mode must never survive a profile switch: an abandoned "Modifier"
+  // session used to leak into the next profile opened, showing another
+  // user's unsaved form.
+  useEffect(() => {
+    setIsEditing(false);
+    setEditForm(null);
+  }, [selectedUser?.id]);
+
   const handleStartEdit = () => {
     setEditForm({ ...selectedUser });
     setIsEditing(true);
@@ -176,7 +184,7 @@ export default function UsersView({ profileTarget, onProfileOpened, onProfileClo
   const handleSaveEdit = async () => {
     if (!editForm.nom?.trim() || !editForm.prenom?.trim()) {
       alert("Le nom et le prénom ne peuvent pas être vides.");
-      return;
+      return false;
     }
     try {
       const updated = await api.updateUser(selectedUser.id, editForm);
@@ -185,14 +193,29 @@ export default function UsersView({ profileTarget, onProfileOpened, onProfileClo
       setSelectedUser(updated);
       setIsEditing(false);
       setEditForm(null);
+      return true;
     } catch (error) {
       alert(error.message);
+      return false;
     }
   };
 
   const handleCancelEdit = () => {
     setIsEditing(false);
     setEditForm(null);
+  };
+
+  const handleCloseProfile = async () => {
+    if (isEditing) {
+      if (window.confirm('Voulez-vous enregistrer les modifications ?')) {
+        const saved = await handleSaveEdit();
+        if (!saved) return;
+      } else {
+        handleCancelEdit();
+      }
+    }
+    setSelectedUser(null);
+    onProfileClosed?.();
   };
 
   const handleAvatarUpload = async (event) => {
@@ -389,10 +412,7 @@ export default function UsersView({ profileTarget, onProfileOpened, onProfileClo
         <div className="mb-7 mt-2 flex items-center justify-between">
           <div className="flex items-center space-x-4">
             <button
-              onClick={() => {
-                setSelectedUser(null);
-                onProfileClosed?.();
-              }}
+              onClick={handleCloseProfile}
               className="p-3 bg-white/5 hover:bg-white/10 text-white rounded-xl active:scale-95 transition-all cursor-pointer border border-white/5"
             >
               <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
@@ -453,7 +473,17 @@ export default function UsersView({ profileTarget, onProfileOpened, onProfileClo
               <h4 className="text-[11px] font-bold text-white uppercase tracking-[2px] mb-3">
                 À propos
               </h4>
-              <p className="text-[13px] leading-relaxed text-white/70 font-medium">{selectedUser.bio}</p>
+              {isEditing ? (
+                <textarea
+                  value={editForm?.bio || ''}
+                  onChange={(e) => setEditForm({ ...editForm, bio: e.target.value })}
+                  rows={4}
+                  placeholder="À propos de l'utilisateur"
+                  className="w-full bg-white/[0.05] border border-white/10 text-white text-[13px] leading-relaxed font-medium rounded-lg px-4 py-3 outline-none focus:border-accent-blue/50 resize-none"
+                />
+              ) : (
+                <p className="text-[13px] leading-relaxed text-white/70 font-medium">{selectedUser.bio}</p>
+              )}
             </div>
 
             {isStagiaire && (

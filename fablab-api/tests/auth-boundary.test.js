@@ -99,3 +99,51 @@ test('complete profiles rehydrate normally', async () => {
   assert.equal(res.body.user.id, USERS.stagiaire.id);
   assert.equal(res.body.user.role, 'stagiaire');
 });
+
+test('registering with an already-taken prenom+nom is rejected', async () => {
+  // USERS.peer is "Peer Test" — the stagiaire tries to take the same name
+  // (case/whitespace variations included).
+  const res = await api(baseUrl, '/auth/register', {
+    method: 'POST',
+    token: tokenFor(USERS.stagiaire),
+    body: {
+      prenom: '  peer ',
+      nom: 'TEST',
+      cin: 'X1',
+      tel: '0611111111',
+      email: 'dup@test.local',
+      role: 'formateur',
+      charteAccepted: true,
+      reproductionAccepted: true
+    }
+  });
+  assert.equal(res.status, 409);
+  assert.match(res.body.error, /existe déjà/);
+});
+
+test('registering keeps working when the name is your own (re-register)', async () => {
+  const res = await api(baseUrl, '/auth/register', {
+    method: 'POST',
+    token: tokenFor(USERS.stagiaire),
+    body: {
+      prenom: USERS.stagiaire.prenom,
+      nom: USERS.stagiaire.nom,
+      cin: 'X2',
+      tel: '0622222222',
+      email: USERS.stagiaire.email,
+      role: 'stagiaire',
+      charteAccepted: true,
+      reproductionAccepted: true
+    }
+  });
+  assert.equal(res.status, 200);
+});
+
+test('renaming a user onto an existing prenom+nom is rejected', async () => {
+  const res = await api(baseUrl, `/users/${USERS.stagiaire.id}`, {
+    method: 'PATCH',
+    token: tokenFor(USERS.admin),
+    body: { prenom: 'Peer', nom: 'Test' }
+  });
+  assert.equal(res.status, 409);
+});

@@ -98,7 +98,19 @@ export default function MyProfileTab() {
     };
   }, [currentUserId, isUserInLab, attendanceRefreshKey]);
 
-  const handleBack = () => {
+  // isProfileEditing is global app state; leaving this tab without saving
+  // must not leave the profile stuck in "Modifier" mode forever.
+  useEffect(() => () => setIsProfileEditing(false), [setIsProfileEditing]);
+
+  const handleBack = async () => {
+    if (isProfileEditing) {
+      if (window.confirm('Voulez-vous enregistrer les modifications ?')) {
+        const saved = await saveChanges();
+        if (!saved) return;
+      } else {
+        setIsProfileEditing(false);
+      }
+    }
     const history = navHistoryRef.current;
     if (history.length > 0) {
       const last = history[history.length - 1];
@@ -242,15 +254,15 @@ export default function MyProfileTab() {
   const saveChanges = async () => {
     if (!validateEmail(editForm.email)) {
       showNotification("Veuillez entrer une adresse email valide.", 'error');
-      return;
+      return false;
     }
     if (!validatePhone(editForm.tel)) {
       showNotification("Le numéro de téléphone doit commencer par 06 ou 07 et contenir 10 chiffres au total.", 'error');
-      return;
+      return false;
     }
     if (!currentUser?.id) {
       showNotification("Profil introuvable.", 'error');
-      return;
+      return false;
     }
 
     try {
@@ -267,8 +279,10 @@ export default function MyProfileTab() {
       setCurrentUser(updated);
       setIsProfileEditing(false);
       showNotification("Profil mis à jour avec succès !");
+      return true;
     } catch (error) {
       showNotification(error.message || "Profil impossible à mettre à jour.", 'error');
+      return false;
     }
   };
 
