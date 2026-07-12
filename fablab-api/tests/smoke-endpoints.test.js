@@ -152,6 +152,15 @@ test('notifications create / read / patch', async () => {
   const notifId = created.body.notifications[0].id;
   assert.equal((await api(baseUrl, '/notifications', { token: peer() })).status, 200);
   assert.equal((await api(baseUrl, `/notifications/${notifId}`, { method: 'PATCH', token: peer(), body: { status: 'read' } })).status, 200);
+
+  // The team-invite notification the invited member actually receives.
+  const invite = await api(baseUrl, '/notifications', {
+    method: 'POST', token: stag(),
+    body: { type: 'project_invite', recipientId: USERS.peer.id, title: 'Invitation projet', message: 'Rejoins mon projet', projectId: null }
+  });
+  assert.equal(invite.status, 201);
+  const peerInbox = await api(baseUrl, '/notifications', { token: peer() });
+  assert.ok(peerInbox.body.notifications.some((n) => n.type === 'project_invite'));
 });
 
 test('interactions full chain (offer -> approve -> complete -> rate) + reject', async () => {
@@ -180,6 +189,52 @@ test('interactions full chain (offer -> approve -> complete -> rate) + reject', 
   const offer2 = await api(baseUrl, `/interactions/requests/${reqRow2.rows[0].id}/offer`, { method: 'POST', token: peer(), body: {} });
   assert.equal(offer2.status, 201);
   assert.equal((await api(baseUrl, `/interactions/offers/${offer2.body.offer.id}/reject`, { method: 'POST', token: stag(), body: {} })).status, 200);
+});
+
+test('project team lifecycle: add co-founder/admin -> accept -> co-founder writes -> role change -> remove', async () => {
+  const findProj = async (token, id) => {
+    const r = await api(baseUrl, '/projects', { token });
+    return (r.body.projects || []).find((p) => p.id === id);
+  };
+
+  // Owner (stagiaire) creates the project.
+  const created = await api(baseUrl, '/projects', { method: 'POST', token: stag(), body: { title: 'Team Project', phase: 'MOC' } });
+  const pid = created.body.project.id;
+  const base = created.body.project;
+
+  // Owner adds peer as a CO_FOUNDER + admin, still PENDING (awaiting acceptance).
+  const withPeer = { ...base, contributors: [
+    { userId: USERS.peer.id, role: 'Co-fondateur', accessLevel: 'CO_FOUNDER', isAdmin: true, status: 'PENDING', approvals: [USERS.stagiaire.id], memberAccepted: false }
+  ]};
+  assert.equal((await api(baseUrl, '/projects/sync', { method: 'PUT', token: stag(), body: { projects: [withPeer] } })).status, 200);
+
+  // The role/admin flags persisted, and peer can see the project as a contributor.
+  const asPeer = await findProj(peer(), pid);
+  assert.ok(asPeer, 'peer sees the project');
+  const meAsContrib = asPeer.contributors.find((c) => String(c.userId) === String(USERS.peer.id));
+  assert.equal(meAsContrib.accessLevel, 'CO_FOUNDER');
+  assert.equal(meAsContrib.isAdmin, true);
+  assert.equal(meAsContrib.status, 'PENDING');
+
+  // Peer accepts the invitation.
+  const accept = await api(baseUrl, `/projects/${pid}/invitation`, { method: 'POST', token: peer(), body: { action: 'accept' } });
+  assert.equal(accept.status, 200);
+  assert.equal(accept.body.accepted, true);
+
+  // A now-ACCEPTED co-founder can WRITE the project (canWriteProject).
+  const peerProj = await findProj(peer(), pid);
+  assert.equal((await api(baseUrl, '/projects/sync', { method: 'PUT', token: peer(), body: { projects: [{ ...peerProj, title: 'Renamed by co-founder' }] } })).status, 200);
+  assert.equal((await findProj(stag(), pid)).title, 'Renamed by co-founder');
+
+  // Owner submits a role change (pending) for peer, then removes peer entirely.
+  const cur = await findProj(stag(), pid);
+  const roleChanged = { ...cur, contributors: cur.contributors.map((c) => String(c.userId) === String(USERS.peer.id) ? { ...c, pendingRole: 'Collaborateur', status: 'PENDING', approvals: [USERS.stagiaire.id] } : c) };
+  assert.equal((await api(baseUrl, '/projects/sync', { method: 'PUT', token: stag(), body: { projects: [roleChanged] } })).status, 200);
+  assert.equal((await findProj(stag(), pid)).contributors.find((c) => String(c.userId) === String(USERS.peer.id)).pendingRole, 'Collaborateur');
+
+  const removed = { ...cur, contributors: [] };
+  assert.equal((await api(baseUrl, '/projects/sync', { method: 'PUT', token: stag(), body: { projects: [removed] } })).status, 200);
+  assert.equal((await findProj(stag(), pid)).contributors.length, 0);
 });
 
 test('reviews create', async () => {
