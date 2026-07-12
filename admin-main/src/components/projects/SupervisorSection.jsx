@@ -24,7 +24,7 @@ export default function SupervisorSection({ supervisorIds, usersList, onSave, on
   (usersList || []).forEach((u) => { userById[u.id] = u; });
   const ids = (supervisorIds || []).filter((id) => id !== 'user-sara' && id !== 'system-sara');
   const initials = (u) => (u?.prenom?.[0] || '') + (u?.nom?.[0] || '') || '?';
-  const subtitle = (role, type) => `${role || 'Encadrant'}${type ? ` · ${type}` : ''}`;
+  const subtitle = (role, type) => type ? `${type} · ${role || 'Encadrant'}` : (role || 'Encadrant');
 
   const startEdit = () => {
     setDraft(ids.map((id) => {
@@ -136,7 +136,7 @@ export default function SupervisorSection({ supervisorIds, usersList, onSave, on
                   <div className="w-8 h-8 rounded-lg bg-white/[0.06] text-white/50 flex items-center justify-center text-[11px] font-black shrink-0 uppercase">{initials(u)}</div>
                   <div className="min-w-0">
                     <p className="text-[12px] font-bold text-white truncate">{u ? `${u.prenom} ${u.nom}` : 'Inconnu'}</p>
-                    <p className="text-[8px] font-black text-white/30 uppercase tracking-widest truncate">{subtitle(u?.role, u?.bio)}</p>
+                    <p className="text-[8px] font-black text-white/30 uppercase tracking-widest leading-snug break-words">{subtitle(u?.role, u?.bio)}</p>
                   </div>
                 </div>
               );
@@ -152,7 +152,7 @@ export default function SupervisorSection({ supervisorIds, usersList, onSave, on
                   <div className="w-8 h-8 rounded-lg bg-white/[0.06] text-white/50 flex items-center justify-center text-[11px] font-black shrink-0 uppercase">{(d.prenom?.[0] || '') + (d.nom?.[0] || '')}</div>
                   <div className="flex-1 min-w-0">
                     <p className="text-[12px] font-bold text-white truncate">{d.prenom} {d.nom}</p>
-                    <p className="text-[8px] font-black text-white/30 uppercase tracking-widest truncate">{d.isNew ? 'Nouveau · ' : ''}{subtitle(d.role, d.type)}</p>
+                    <p className="text-[8px] font-black text-white/30 uppercase tracking-widest leading-snug break-words">{d.isNew ? 'Nouveau · ' : ''}{subtitle(d.role, d.type)}</p>
                   </div>
                   <button onClick={() => remove(d.id)} className="p-1.5 text-white/40 hover:text-accent-red transition-colors cursor-pointer shrink-0">
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
@@ -192,7 +192,10 @@ export default function SupervisorSection({ supervisorIds, usersList, onSave, on
                   ) : list.map((u) => (
                     <button key={u.id} onClick={() => { addFromUser(u); setPresetPick(null); }} className="w-full flex items-center gap-2.5 p-2 hover:bg-white/[0.05] rounded-lg transition-colors text-left cursor-pointer">
                       <div className="w-7 h-7 rounded-lg bg-white/[0.06] text-white/50 flex items-center justify-center text-[10px] font-black shrink-0 uppercase">{initials(u)}</div>
-                      <span className="flex-1 min-w-0 text-[12px] font-bold text-white truncate">{u.prenom} {u.nom}</span>
+                      <span className="flex-1 min-w-0">
+                        <span className="block text-[12px] font-bold text-white truncate">{u.prenom} {u.nom}</span>
+                        <span className="block text-[8px] font-black text-white/30 uppercase tracking-widest leading-snug break-words">{subtitle(u.role, u.bio)}</span>
+                      </span>
                       <span className="text-[9px] font-bold text-accent-blue uppercase tracking-wider shrink-0">+ Ajouter</span>
                     </button>
                   ))}
@@ -218,7 +221,7 @@ export default function SupervisorSection({ supervisorIds, usersList, onSave, on
                     <div className="w-7 h-7 rounded-lg bg-white/[0.06] text-white/50 flex items-center justify-center text-[10px] font-black shrink-0 uppercase">{initials(u)}</div>
                     <div className="flex-1 min-w-0">
                       <span className="block text-[12px] font-bold text-white truncate">{u.prenom} {u.nom}</span>
-                      <span className="block text-[8px] font-black text-white/30 uppercase tracking-widest truncate">{subtitle(u.role, u.bio)}</span>
+                      <span className="block text-[8px] font-black text-white/30 uppercase tracking-widest leading-snug break-words">{subtitle(u.role, u.bio)}</span>
                     </div>
                     <span className="text-[9px] font-bold text-accent-blue uppercase tracking-wider shrink-0">+ Ajouter</span>
                   </button>

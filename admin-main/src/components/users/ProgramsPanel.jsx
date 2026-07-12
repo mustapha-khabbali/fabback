@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react';
+import AvatarCropModal from './AvatarCropModal';
+import { getCroppedImageDataUrl } from '../../utils/avatarCrop';
 
 const PROGRAM_TYPES = ['Hackathon', 'Event', 'Bootcamp', 'Workshop', 'Formation', 'Autre'];
 const PROGRAM_RESULTS = ['Win', 'Participation'];
@@ -22,24 +24,6 @@ const EMPTY_FORM = {
   result: '',
   image: null
 };
-
-function compressImageFile(file, maxSize = 512, quality = 0.82) {
-  return new Promise((resolve, reject) => {
-    const image = new Image();
-    image.onload = () => {
-      const scale = Math.min(1, maxSize / Math.max(image.width, image.height));
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.max(1, Math.round(image.width * scale));
-      canvas.height = Math.max(1, Math.round(image.height * scale));
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
-      URL.revokeObjectURL(image.src);
-      resolve(canvas.toDataURL('image/jpeg', quality));
-    };
-    image.onerror = () => reject(new Error('Image programme invalide.'));
-    image.src = URL.createObjectURL(file);
-  });
-}
 
 function countByType(programs) {
   return programs.reduce((acc, program) => {
@@ -83,6 +67,8 @@ export default function ProgramsPanel({ user, onUpdatePrograms }) {
   const [batch, setBatch] = useState([]);
   const [form, setForm] = useState(EMPTY_FORM);
   const [isSaving, setIsSaving] = useState(false);
+  const [programCropImage, setProgramCropImage] = useState(null);
+  const [isSavingProgramImage, setIsSavingProgramImage] = useState(false);
 
   const visiblePrograms = selectedType === 'Tous'
     ? programs
@@ -109,15 +95,32 @@ export default function ProgramsPanel({ user, onUpdatePrograms }) {
     return Boolean(form.dateFrom && form.dateTo && form.dateFrom <= form.dateTo);
   };
 
-  const handleImagePick = async (event) => {
+  const handleImagePick = (event) => {
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
+    setProgramCropImage(URL.createObjectURL(file));
+  };
+
+  const closeProgramCrop = () => {
+    if (programCropImage) {
+      URL.revokeObjectURL(programCropImage);
+    }
+    setProgramCropImage(null);
+  };
+
+  const saveProgramCrop = async (cropPixels) => {
+    if (!programCropImage) return;
+
     try {
-      const image = await compressImageFile(file);
+      setIsSavingProgramImage(true);
+      const image = await getCroppedImageDataUrl(programCropImage, cropPixels, 512, 0.82);
       setForm((prev) => ({ ...prev, image }));
+      closeProgramCrop();
     } catch (error) {
       alert(error.message);
+    } finally {
+      setIsSavingProgramImage(false);
     }
   };
 
@@ -168,6 +171,7 @@ export default function ProgramsPanel({ user, onUpdatePrograms }) {
 
   if (screen === 'add') {
     return (
+      <>
       <div className="section-card p-6 space-y-6">
         <div className="flex items-center justify-between gap-4 border-b border-white/10 pb-5">
           <div>
@@ -332,6 +336,18 @@ export default function ProgramsPanel({ user, onUpdatePrograms }) {
           </div>
         </div>
       </div>
+      {programCropImage && (
+        <AvatarCropModal
+          image={programCropImage}
+          isSaving={isSavingProgramImage}
+          cropShape="rect"
+          title="Recadrer l'image du programme"
+          saveLabel="Utiliser l'image"
+          onCancel={closeProgramCrop}
+          onSave={saveProgramCrop}
+        />
+      )}
+      </>
     );
   }
 

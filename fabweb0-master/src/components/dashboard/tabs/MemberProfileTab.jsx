@@ -26,6 +26,18 @@ function formatProgramDate(program) {
   return program.date || '';
 }
 
+function supervisorRoleLabel(role) {
+  const normalized = (role || '').toLowerCase();
+  if (normalized === 'formateur') return 'Formateur';
+  if (normalized === 'administrateur') return 'Administrateur';
+  return role || 'Encadrant';
+}
+
+function supervisorSubtitle(user) {
+  const role = supervisorRoleLabel(user?.role);
+  return user?.bio ? `${user.bio} · ${role}` : role;
+}
+
 export default function MemberProfileTab() {
   const { currentUser, setSelectedUser, selectedUser, setActiveTab, userProjects, showNotification, previousTab, currentProjectId, setCurrentProjectId, navigationHistory, setNavigationHistory, sendContactRequest, presenceActivityEvents, usersList, contactPrivacyMode, allowedContactUsers, isUserInLab, attendanceRefreshKey } = useApp();
 
@@ -766,7 +778,7 @@ export default function MemberProfileTab() {
                             </div>
                             <div className="min-w-0">
                               <h4 className="text-[11px] font-bold text-white truncate">{supervisor.prenom} {supervisor.nom}</h4>
-                              <p className="text-[7px] font-black text-white/70 uppercase tracking-widest truncate">{supervisor.role || 'Encadrant'}</p>
+                              <p className="text-[7px] font-black text-white/70 uppercase tracking-widest leading-snug break-words">{supervisorSubtitle(supervisor)}</p>
                             </div>
                           </button>
                         );

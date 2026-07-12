@@ -509,10 +509,13 @@ export default function ScanObjectiveModal() {
                             key={user.id}
                             type="button"
                             onClick={() => attachSupervisorToProject(user.id)}
-                            className="w-full flex items-center justify-between p-3 hover:bg-t-surface-alt rounded-xl transition-all text-left text-t-primary font-bold"
+                            className="w-full flex items-center justify-between gap-3 p-3 hover:bg-t-surface-alt rounded-xl transition-all text-left text-t-primary font-bold"
                           >
-                            <span className="text-sm truncate">{user.prenom} {user.nom}</span>
-                            <span className="text-[10px] text-[#3B5FE6] uppercase tracking-wider">+ Ajouter</span>
+                            <span className="min-w-0">
+                              <span className="block text-sm truncate">{user.prenom} {user.nom}</span>
+                              <span className="block text-[9px] text-t-primary/35 uppercase tracking-widest leading-snug break-words">{supervisorSubtitle(user)}</span>
+                            </span>
+                            <span className="text-[10px] text-[#3B5FE6] uppercase tracking-wider shrink-0">+ Ajouter</span>
                           </button>
                         ))}
                       </div>
@@ -544,7 +547,7 @@ export default function ScanObjectiveModal() {
                         >
                           <span className="min-w-0">
                             <span className="block text-sm truncate">{user.prenom} {user.nom}</span>
-                            <span className="block text-[9px] text-t-primary/35 uppercase tracking-widest truncate">{supervisorSubtitle(user)}</span>
+                            <span className="block text-[9px] text-t-primary/35 uppercase tracking-widest leading-snug break-words">{supervisorSubtitle(user)}</span>
                           </span>
                           <span className="text-[10px] text-[#3B5FE6] uppercase tracking-wider shrink-0">+ Ajouter</span>
                         </button>

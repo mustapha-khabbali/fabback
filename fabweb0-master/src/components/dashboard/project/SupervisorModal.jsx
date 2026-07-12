@@ -186,7 +186,7 @@ export default function SupervisorModal({ project, onClose, onSave }) {
             <div className="flex items-center justify-between p-3.5 bg-blue-50 border border-blue-100 rounded-2xl animate-in fade-in duration-200">
               <div className="min-w-0">
                 <span className="block text-xs font-bold text-t-primary truncate">Sara Ladouy</span>
-                <span className="block text-[9px] font-black text-[#3B5FE6] uppercase tracking-widest truncate">Responsable Fab Lab</span>
+                <span className="block text-[9px] font-black text-[#3B5FE6] uppercase tracking-widest leading-snug break-words">Responsable Fab Lab</span>
               </div>
               <span className="text-[9px] text-t-muted uppercase tracking-wider font-black shrink-0">Fixe</span>
             </div>
@@ -198,7 +198,7 @@ export default function SupervisorModal({ project, onClose, onSave }) {
                 <div key={svId} className="flex items-center justify-between p-3.5 bg-t-surface-alt border border-t-border/50 rounded-2xl animate-in fade-in duration-200">
                   <div className="min-w-0 mr-2">
                     <span className="block text-xs font-bold text-t-primary truncate">{sv.prenom} {sv.nom}</span>
-                    <span className="block text-[9px] font-black text-t-primary/35 uppercase tracking-widest truncate">{subtitle(sv)}</span>
+                    <span className="block text-[9px] font-black text-t-primary/35 uppercase tracking-widest leading-snug break-words">{subtitle(sv)}</span>
                   </div>
                   <button
                     onClick={() => handleRemove(svId)}
@@ -240,10 +240,13 @@ export default function SupervisorModal({ project, onClose, onSave }) {
                   <button
                     key={user.id}
                     onClick={() => handleAdd(user.id)}
-                    className="w-full flex items-center justify-between p-3 hover:bg-t-surface-alt rounded-xl transition-all text-left text-t-primary font-bold"
+                    className="w-full flex items-center justify-between gap-3 p-3 hover:bg-t-surface-alt rounded-xl transition-all text-left text-t-primary font-bold"
                   >
-                    <span className="text-sm truncate">{user.prenom} {user.nom}</span>
-                    <span className="text-[10px] text-[#3B5FE6] uppercase tracking-wider">+ Ajouter</span>
+                    <span className="min-w-0">
+                      <span className="block text-sm truncate">{user.prenom} {user.nom}</span>
+                      <span className="block text-[9px] text-t-primary/35 uppercase tracking-widest leading-snug break-words">{subtitle(user)}</span>
+                    </span>
+                    <span className="text-[10px] text-[#3B5FE6] uppercase tracking-wider shrink-0">+ Ajouter</span>
                   </button>
                 ))}
               </div>
@@ -275,7 +278,7 @@ export default function SupervisorModal({ project, onClose, onSave }) {
                     >
                       <span className="min-w-0">
                         <span className="block text-sm truncate">{user.prenom} {user.nom}</span>
-                        <span className="block text-[9px] text-t-primary/35 uppercase tracking-widest truncate">{subtitle(user)}</span>
+                        <span className="block text-[9px] text-t-primary/35 uppercase tracking-widest leading-snug break-words">{subtitle(user)}</span>
                       </span>
                       <span className="text-[10px] text-[#3B5FE6] uppercase tracking-wider shrink-0">+ Ajouter</span>
                     </button>

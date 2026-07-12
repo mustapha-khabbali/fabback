@@ -10,11 +10,11 @@ function createImage(imageSrc) {
   });
 }
 
-export async function getCroppedAvatarDataUrl(imageSrc, cropPixels) {
+export async function getCroppedImageDataUrl(imageSrc, cropPixels, size = AVATAR_SIZE, quality = 0.82) {
   const image = await createImage(imageSrc);
   const canvas = document.createElement('canvas');
-  canvas.width = AVATAR_SIZE;
-  canvas.height = AVATAR_SIZE;
+  canvas.width = size;
+  canvas.height = size;
   const context = canvas.getContext('2d');
 
   context.drawImage(
@@ -25,9 +25,13 @@ export async function getCroppedAvatarDataUrl(imageSrc, cropPixels) {
     cropPixels.height,
     0,
     0,
-    AVATAR_SIZE,
-    AVATAR_SIZE
+    size,
+    size
   );
 
-  return canvas.toDataURL('image/jpeg', 0.82);
+  return canvas.toDataURL('image/jpeg', quality);
+}
+
+export async function getCroppedAvatarDataUrl(imageSrc, cropPixels) {
+  return getCroppedImageDataUrl(imageSrc, cropPixels, AVATAR_SIZE, 0.82);
 }

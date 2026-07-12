@@ -838,7 +838,7 @@ export default function ProjectDetail({ onBack }) {
                     </div>
                     <div className="min-w-0 flex-1">
                       <h4 className="text-[11px] font-bold text-white truncate">{sv?.prenom} {sv?.nom}</h4>
-                      <p className="text-[7px] font-black text-white/70 uppercase tracking-widest mt-0.5 truncate">{supervisorSubtitle(sv)}</p>
+                      <p className="text-[7px] font-black text-white/70 uppercase tracking-widest mt-0.5 leading-snug break-words">{supervisorSubtitle(sv)}</p>
                     </div>
                   </button>
                 );
