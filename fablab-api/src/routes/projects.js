@@ -69,22 +69,8 @@ function toDateInput(value) {
   return `${year}-${month}-${day}`;
 }
 
-async function loadProjects(client, user) {
-  const projectResult = await client.query(
-    `
-      select p.*
-      from projects p
-      where $1 = 'administrateur'
-        or p.owner_id = $2
-        or exists (
-          select 1 from project_contributors pc
-          where pc.project_id = p.id and pc.user_id = $2
-        )
-      order by p.created_at desc
-    `,
-    [user.role, user.id]
-  );
-  const projectIds = projectResult.rows.map((row) => row.id);
+async function hydrateProjects(client, projects) {
+  const projectIds = projects.map((row) => row.id);
   if (!projectIds.length) return [];
 
   const contributors = await client.query('select * from project_contributors where project_id = any($1::uuid[]) order by added_at', [projectIds]);
@@ -92,7 +78,7 @@ async function loadProjects(client, user) {
   const sdgs = await client.query('select * from project_sdgs where project_id = any($1::uuid[])', [projectIds]);
   const journals = await client.query('select * from journals where project_id = any($1::uuid[]) order by created_at desc', [projectIds]);
 
-  return projectResult.rows.map((project) => ({
+  return projects.map((project) => ({
     id: project.id,
     userId: project.owner_id,
     ownerId: project.owner_id,
@@ -131,6 +117,41 @@ async function loadProjects(client, user) {
       })),
     createdAt: project.created_at
   }));
+}
+
+async function loadProjects(client, user) {
+  const projectResult = await client.query(
+    `
+      select p.*
+      from projects p
+      where $1 = 'administrateur'
+        or p.owner_id = $2
+        or exists (
+          select 1 from project_contributors pc
+          where pc.project_id = p.id and pc.user_id = $2
+        )
+      order by p.created_at desc
+    `,
+    [user.role, user.id]
+  );
+  return hydrateProjects(client, projectResult.rows);
+}
+
+async function loadProjectsForProfile(client, userId) {
+  const projectResult = await client.query(
+    `
+      select p.*
+      from projects p
+      where p.owner_id = $1
+        or exists (
+          select 1 from project_contributors pc
+          where pc.project_id = p.id and pc.user_id = $1
+        )
+      order by p.created_at desc
+    `,
+    [userId]
+  );
+  return hydrateProjects(client, projectResult.rows);
 }
 
 async function replaceProject(client, project, ownerId) {
@@ -255,6 +276,15 @@ projectsRouter.get('/', async (req, res, next) => {
 projectsRouter.get('/mine', async (req, res, next) => {
   try {
     const projects = await withTransaction((client) => loadProjects(client, req.user));
+    res.json({ projects });
+  } catch (error) {
+    next(error);
+  }
+});
+
+projectsRouter.get('/user/:userId', async (req, res, next) => {
+  try {
+    const projects = await withTransaction((client) => loadProjectsForProfile(client, req.params.userId));
     res.json({ projects });
   } catch (error) {
     next(error);

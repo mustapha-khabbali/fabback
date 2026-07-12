@@ -325,7 +325,7 @@ usersRouter.patch('/:id', async (req, res, next) => {
 });
 
 const contactApprovalSchema = z.object({
-  requesterId: z.string().min(1),
+  requesterId: z.string().min(1).optional().nullable(),
   notificationId: z.string().optional().nullable(),
   approve: z.boolean()
 });
@@ -341,13 +341,30 @@ usersRouter.post('/contact-approval', async (req, res, next) => {
       res.status(400).json({ error: 'Invalid request body', details: parsed.error.flatten() });
       return;
     }
-    const { requesterId, notificationId, approve } = parsed.data;
+    const { notificationId, approve } = parsed.data;
 
     const outcome = await withTransaction(async (client) => {
       const meResult = await client.query('select * from users where id = $1', [req.user.id]);
       const me = meResult.rows[0];
+      let requesterId = parsed.data.requesterId;
       let updatedUser = me;
       let approvedNotification = null;
+      let requestNotification = null;
+
+      if (notificationId) {
+        const currentNotification = await client.query(
+          'select * from notifications where id = $1 and recipient_id = $2',
+          [notificationId, req.user.id]
+        );
+        const notification = currentNotification.rows[0];
+        requesterId = requesterId || notification?.payload?.requesterId || notification?.sender_id;
+      }
+
+      if (!requesterId) {
+        const error = new Error('Requester not found');
+        error.status = 400;
+        throw error;
+      }
 
       if (approve) {
         const allowed = Array.isArray(me.allowed_contact_users)
@@ -376,7 +393,6 @@ usersRouter.post('/contact-approval', async (req, res, next) => {
         });
       }
 
-      let requestNotification = null;
       if (notificationId) {
         const nres = await client.query(
           `

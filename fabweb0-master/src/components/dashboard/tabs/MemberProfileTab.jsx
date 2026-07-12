@@ -27,10 +27,12 @@ function formatProgramDate(program) {
 }
 
 export default function MemberProfileTab() {
-  const { currentUser, setSelectedUser, selectedUser, setActiveTab, allProjects, userProjects, showNotification, previousTab, currentProjectId, setCurrentProjectId, navigationHistory, setNavigationHistory, sendContactRequest, presenceActivityEvents, usersList, contactPrivacyMode, allowedContactUsers, isUserInLab, attendanceRefreshKey } = useApp();
+  const { currentUser, setSelectedUser, selectedUser, setActiveTab, userProjects, showNotification, previousTab, currentProjectId, setCurrentProjectId, navigationHistory, setNavigationHistory, sendContactRequest, presenceActivityEvents, usersList, contactPrivacyMode, allowedContactUsers, isUserInLab, attendanceRefreshKey } = useApp();
 
   const [viewingProjects, setViewingProjects] = useState(false);
   const [viewingProjectDetailId, setViewingProjectDetailId] = useState(null);
+  const [profileProjects, setProfileProjects] = useState([]);
+  const [isLoadingProfileProjects, setIsLoadingProfileProjects] = useState(false);
   const [activeJournal, setActiveJournal] = useState(null);
   const [showJournalReader, setShowJournalReader] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -103,6 +105,34 @@ export default function MemberProfileTab() {
       setViewingProjectDetailId(currentProjectId);
     }
   }, [currentProjectId, selectedUser]);
+
+  useEffect(() => {
+    if (!viewingProjects || !displayUserId) {
+      setProfileProjects([]);
+      setIsLoadingProfileProjects(false);
+      return undefined;
+    }
+
+    let cancelled = false;
+    setIsLoadingProfileProjects(true);
+    api.getUserProjects(displayUserId)
+      .then((projects) => {
+        if (!cancelled) setProfileProjects(projects || []);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setProfileProjects([]);
+          showNotification("Impossible de charger les projets.", 'error');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingProfileProjects(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [displayUserId, showNotification, viewingProjects]);
 
   const handleBack = () => {
     const history = navHistoryRef.current;
@@ -535,7 +565,7 @@ export default function MemberProfileTab() {
       )}
 
       {viewingProjects && (() => {
-        const selectedProject = allProjects?.find(p => p.id === viewingProjectDetailId);
+        const selectedProject = profileProjects.find(p => p.id === viewingProjectDetailId);
         const groupedJournals = {};
         const phaseOrder = ['MOC', 'POC', 'MVP', 'READY_TO_MARKET'];
         if (selectedProject) {
@@ -814,10 +844,12 @@ export default function MemberProfileTab() {
                       Mes Dossiers
                     </h3>
                     <div className="grid grid-cols-3 gap-x-4 gap-y-6">
-                      {allProjects?.filter(p => p.userId === displayUserId || (p.contributors || []).some(c => c.userId === displayUserId)).length === 0 ? (
+                      {isLoadingProfileProjects ? (
+                        <div className="col-span-3 text-center py-10 text-t-muted italic text-sm">Chargement...</div>
+                      ) : profileProjects.length === 0 ? (
                         <div className="col-span-3 text-center py-10 text-t-muted italic text-sm">Aucun projet</div>
                       ) : (
-                        allProjects?.filter(p => p.userId === displayUserId || (p.contributors || []).some(c => c.userId === displayUserId)).map(p => (
+                        profileProjects.map(p => (
                           <button
                             key={p.id}
                             onClick={() => setViewingProjectDetailId(p.id)}

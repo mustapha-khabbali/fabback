@@ -90,7 +90,7 @@ export default function NotificationsTab() {
   const handleApprove = async (id) => {
     try {
       if (selectedNotificationRequest?.type === 'CONTACT_REQUEST') {
-        handleContactRequestResponse(id, selectedNotificationRequest.requesterId, true);
+        handleContactRequestResponse(id, selectedNotificationRequest.requesterId || selectedNotificationRequest.senderId, true);
         setSelectedNotificationRequest(null);
       } else if (selectedNotificationRequest?.type === 'help_request' || selectedNotificationRequest?.type === 'review_request') {
         if (!selectedNotificationRequest.interactionRequestId) throw new Error('Cette ancienne notification doit être renvoyée.');
@@ -132,7 +132,7 @@ export default function NotificationsTab() {
   const handleDeny = async (id) => {
     try {
       if (selectedNotificationRequest?.type === 'CONTACT_REQUEST') {
-        handleContactRequestResponse(id, selectedNotificationRequest.requesterId, false);
+        handleContactRequestResponse(id, selectedNotificationRequest.requesterId || selectedNotificationRequest.senderId, false);
       } else if (selectedNotificationRequest?.type === 'interaction_offer') {
         if (!selectedNotificationRequest.interactionOfferId) throw new Error('Offre introuvable.');
         await api.rejectInteractionOffer(selectedNotificationRequest.interactionOfferId, { notificationId: id });
@@ -179,10 +179,23 @@ export default function NotificationsTab() {
     }
 
     if (notif.type === 'contact_approved') {
-      const sharer = (usersList || []).find((u) => String(u.id) === String(notif.targetId || notif.requesterId));
-      if (sharer) {
-        setSelectedUser(sharer);
+      const sharerId = notif.targetId || notif.requesterId;
+      const cachedSharer = (usersList || []).find((u) => String(u.id) === String(sharerId));
+      if (cachedSharer) {
+        setSelectedUser(cachedSharer);
+        setPreviousTab(activeTab);
         setActiveTab(TABS.PROFILE);
+      }
+      if (sharerId) {
+        api.getUser(sharerId)
+          .then((freshSharer) => {
+            if (freshSharer) {
+              setSelectedUser(freshSharer);
+              setPreviousTab(activeTab);
+              setActiveTab(TABS.PROFILE);
+            }
+          })
+          .catch(() => {});
       }
       return;
     }

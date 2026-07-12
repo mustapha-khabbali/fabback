@@ -1,8 +1,9 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useApp, SCREENS, TABS } from '../../../context/AppContext';
 import { validateEmail, validatePhone } from '../../../utils/validation';
 import { buildPresenceHeatmapCells } from '../../../utils/presenceActivity';
 import { getPrimaryUserId } from '../../../utils/userIdentity';
+import { poleOptions, niveauOptions, yearOptions, getFiliereOptions, getOptionChoices } from '../../../data/trainingData';
 import SettingsView from './SettingsView';
 import { api } from '../../../services/api';
 import { stopRealtime } from '../../../services/realtime';
@@ -41,6 +42,24 @@ function formatProgramDate(program) {
     return '';
   }
   return program.date || '';
+}
+
+function makeProfileEditForm(user) {
+  return {
+    prenom: user?.prenom || '',
+    nom: user?.nom || '',
+    bio: user?.bio || '',
+    cin: user?.cin || '',
+    cef: user?.cef || '',
+    pole: user?.pole || '',
+    niveau: user?.niveau || '',
+    filiere: user?.filiere || '',
+    year: user?.year || user?.annee || '',
+    option: user?.option || '',
+    email: user?.email || '',
+    tel: user?.tel || '',
+    programs: user?.programs || [],
+  };
 }
 
 export default function MyProfileTab() {
@@ -151,18 +170,19 @@ export default function MyProfileTab() {
     };
   }, [isProfileEditing]);
 
-  const [editForm, setEditForm] = useState({
-    prenom: currentUser?.prenom || '',
-    nom: currentUser?.nom || '',
-    bio: currentUser?.bio || '',
-    cin: currentUser?.cin || '',
-    cef: currentUser?.cef || '',
-    email: currentUser?.email || '',
-    tel: currentUser?.tel || '',
-    programs: currentUser?.programs || [],
-  });
+  const [editForm, setEditForm] = useState(() => makeProfileEditForm(currentUser));
+  const editFiliereList = useMemo(
+    () => getFiliereOptions(editForm.pole, editForm.niveau),
+    [editForm.pole, editForm.niveau]
+  );
+  const editOptionList = useMemo(
+    () => getOptionChoices(editForm.pole, editForm.niveau, editForm.filiere, editForm.year),
+    [editForm.pole, editForm.niveau, editForm.filiere, editForm.year]
+  );
   const [selectedProgramType, setSelectedProgramType] = useState(null);
+  const [selectedProgramIndex, setSelectedProgramIndex] = useState(null);
   const [newProgForm, setNewProgForm] = useState(EMPTY_PROGRAM_FORM);
+  const [editingProgramIndex, setEditingProgramIndex] = useState(null);
 
   // Programs feature state
   const [showProgramsView, setShowProgramsView] = useState(false);
@@ -235,18 +255,76 @@ export default function MyProfileTab() {
 
   const updateEdit = (field, value) => setEditForm(prev => ({ ...prev, [field]: value }));
 
+  const updateAcademicField = (field, value) => {
+    setEditForm(prev => {
+      const next = { ...prev, [field]: value };
+      if (field === 'pole' || field === 'niveau') {
+        next.filiere = '';
+        next.option = '';
+      }
+      if (field === 'filiere' || field === 'year') {
+        next.option = '';
+      }
+      return next;
+    });
+  };
+
+  const resetProgramForm = () => {
+    setNewProgForm(EMPTY_PROGRAM_FORM);
+    setEditingProgramIndex(null);
+  };
+
+  const startProgramEdit = (program, index) => {
+    setNewProgForm({
+      ...EMPTY_PROGRAM_FORM,
+      ...program,
+      dateMode: program.dateMode || (program.dateFrom || program.dateTo ? 'range' : 'single'),
+      image: program.image || null
+    });
+    setEditingProgramIndex(index);
+  };
+
+  const startProgramEditFromDetail = () => {
+    if (selectedProgramIndex === null || !selectedProgramType) return;
+    setEditForm(makeProfileEditForm(currentUser));
+    startProgramEdit(selectedProgramType, selectedProgramIndex);
+    setIsProfileEditing(true);
+    setSelectedProgramType(null);
+    setSelectedProgramIndex(null);
+  };
+
+  const submitProgramForm = () => {
+    if (!newProgForm.name || !newProgForm.type || !newProgForm.result) {
+      showNotification("Champs manquants", 'error');
+      return;
+    }
+
+    const nextProgram = { ...newProgForm };
+    if (nextProgram.dateMode === 'single') {
+      nextProgram.dateFrom = '';
+      nextProgram.dateTo = '';
+    } else {
+      nextProgram.date = '';
+    }
+
+    if (editingProgramIndex !== null) {
+      updateEdit('programs', editForm.programs.map((program, index) => (
+        index === editingProgramIndex ? nextProgram : program
+      )));
+      resetProgramForm();
+      showNotification("Programme modifié !");
+      return;
+    }
+
+    updateEdit('programs', [...editForm.programs, nextProgram]);
+    resetProgramForm();
+    showNotification("Programme ajouté à la liste !");
+  };
+
   const toggleEdit = () => {
     if (!isProfileEditing) {
-      setEditForm({
-        prenom: currentUser?.prenom || '',
-        nom: currentUser?.nom || '',
-        bio: currentUser?.bio || '',
-        cin: currentUser?.cin || '',
-        cef: currentUser?.cef || '',
-        email: currentUser?.email || '',
-        tel: currentUser?.tel || '',
-        programs: currentUser?.programs || [],
-      });
+      setEditForm(makeProfileEditForm(currentUser));
+      resetProgramForm();
     }
     setIsProfileEditing(!isProfileEditing);
   };
@@ -272,6 +350,12 @@ export default function MyProfileTab() {
         bio: editForm.bio,
         cin: editForm.cin,
         cef: editForm.cef,
+        pole: editForm.pole,
+        niveau: editForm.niveau,
+        filiere: editForm.filiere,
+        annee: editForm.year,
+        year: editForm.year,
+        option: editForm.option,
         email: editForm.email,
         tel: editForm.tel,
         programs: editForm.programs
@@ -474,31 +558,91 @@ export default function MyProfileTab() {
                   <div className="text-[#3B5FE6]"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg></div>
                   <span className="text-[10px] font-bold text-t-tertiary uppercase">Pôle</span>
                 </div>
-                <div className="text-sm font-bold text-t-primary">{currentUser?.pole || '-'}</div>
+                {isProfileEditing ? (
+                  <select
+                    value={editForm.pole}
+                    onChange={e => updateAcademicField('pole', e.target.value)}
+                    className="max-w-[55%] text-right text-sm font-bold text-t-primary bg-blue-50/50 rounded-lg outline-none px-2 py-1 border border-transparent focus:border-midnight-blue"
+                  >
+                    <option value="">Sélectionner</option>
+                    {poleOptions.map(pole => <option key={pole} value={pole}>{pole}</option>)}
+                  </select>
+                ) : (
+                  <div className="text-sm font-bold text-t-primary">{currentUser?.pole || '-'}</div>
+                )}
               </div>
               <div className="bg-t-surface glass-card p-4 rounded-2xl shadow-sm border border-t-border-subtle flex items-center justify-between">
                 <div className="flex items-center space-x-3">
                   <div className="text-[#3B5FE6]"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg></div>
                   <span className="text-[10px] font-bold text-t-tertiary uppercase">Niveau</span>
                 </div>
-                <div className="text-sm font-bold text-t-primary">{currentUser?.niveau || '-'}</div>
+                {isProfileEditing ? (
+                  <select
+                    value={editForm.niveau}
+                    onChange={e => updateAcademicField('niveau', e.target.value)}
+                    className="max-w-[55%] text-right text-sm font-bold text-t-primary bg-blue-50/50 rounded-lg outline-none px-2 py-1 border border-transparent focus:border-midnight-blue"
+                  >
+                    <option value="">Sélectionner</option>
+                    {niveauOptions.map(niveau => <option key={niveau.value} value={niveau.value}>{niveau.label}</option>)}
+                  </select>
+                ) : (
+                  <div className="text-sm font-bold text-t-primary">{currentUser?.niveau || '-'}</div>
+                )}
               </div>
               <div className="bg-t-surface glass-card p-4 rounded-2xl shadow-sm border border-t-border-subtle group">
                 <div className="flex items-center space-x-3 mb-1">
                   <div className="text-[#3B5FE6]"><svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg></div>
                   <span className="text-[10px] font-bold text-t-tertiary uppercase tracking-widest">Filière</span>
                 </div>
-                <div className="text-sm font-bold text-t-primary leading-tight">{currentUser?.filiere || '-'}</div>
+                {isProfileEditing ? (
+                  <select
+                    value={editForm.filiere}
+                    onChange={e => updateAcademicField('filiere', e.target.value)}
+                    disabled={!editForm.pole || !editForm.niveau}
+                    className="w-full text-sm font-bold text-t-primary bg-blue-50/50 rounded-lg outline-none px-2 py-2 border border-transparent focus:border-midnight-blue disabled:opacity-50"
+                  >
+                    <option value="">Sélectionner</option>
+                    {editFiliereList.map(filiere => (
+                      <option key={filiere.name} value={filiere.name}>
+                        {filiere.name === 'N' ? 'Aucune filière disponible' : filiere.name}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="text-sm font-bold text-t-primary leading-tight">{currentUser?.filiere || '-'}</div>
+                )}
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-t-surface glass-card p-4 rounded-2xl shadow-sm border border-t-border">
                   <p className="text-[10px] font-bold text-t-tertiary uppercase">Année</p>
-                  <div className="text-sm font-bold text-t-primary mt-0.5">{currentUser?.year || '-'}</div>
+                  {isProfileEditing ? (
+                    <select
+                      value={editForm.year}
+                      onChange={e => updateAcademicField('year', e.target.value)}
+                      className="w-full mt-1 text-sm font-bold text-t-primary bg-blue-50/50 rounded-lg outline-none px-2 py-1 border border-transparent focus:border-midnight-blue"
+                    >
+                      <option value="">Sélectionner</option>
+                      {yearOptions.map(year => <option key={year.value} value={year.value}>{year.label}</option>)}
+                    </select>
+                  ) : (
+                    <div className="text-sm font-bold text-t-primary mt-0.5">{currentUser?.year || '-'}</div>
+                  )}
                 </div>
-                {currentUser?.option && currentUser.option !== 'N' && (
+                {((isProfileEditing && editOptionList.length > 0) || (currentUser?.option && currentUser.option !== 'N')) && (
                   <div className="bg-t-surface glass-card p-4 rounded-2xl shadow-sm border border-t-border">
                     <p className="text-[10px] font-bold text-t-tertiary uppercase">Option</p>
-                    <div className="text-sm font-bold text-t-primary mt-0.5">{currentUser.option}</div>
+                    {isProfileEditing ? (
+                      <select
+                        value={editForm.option}
+                        onChange={e => updateAcademicField('option', e.target.value)}
+                        className="w-full mt-1 text-sm font-bold text-t-primary bg-blue-50/50 rounded-lg outline-none px-2 py-1 border border-transparent focus:border-midnight-blue"
+                      >
+                        <option value="">Sélectionner</option>
+                        {editOptionList.map(option => <option key={option} value={option}>{option}</option>)}
+                      </select>
+                    ) : (
+                      <div className="text-sm font-bold text-t-primary mt-0.5">{currentUser.option}</div>
+                    )}
                   </div>
                 )}
               </div>
@@ -575,23 +719,47 @@ export default function MyProfileTab() {
                           <span className="text-[11px] font-black text-t-primary uppercase truncate">{prog.name}</span>
                           <span className="text-[10px] text-t-secondary truncate">{prog.type}</span>
                         </div>
-                        <button 
-                          onClick={() => {
-                            const newProgs = editForm.programs.filter((_, i) => i !== idx);
-                            updateEdit('programs', newProgs);
-                          }}
-                          className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-all"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                        </button>
+                        <div className="flex items-center gap-1">
+                          <button 
+                            onClick={() => startProgramEdit(prog, idx)}
+                            className={`p-2 rounded-lg transition-all ${editingProgramIndex === idx ? 'bg-[#3B5FE6] text-white' : 'text-[#3B5FE6] hover:bg-blue-50'}`}
+                            aria-label="Modifier le programme"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
+                          </button>
+                          <button 
+                            onClick={() => {
+                              const newProgs = editForm.programs.filter((_, i) => i !== idx);
+                              updateEdit('programs', newProgs);
+                              if (editingProgramIndex === idx) resetProgramForm();
+                              if (editingProgramIndex !== null && idx < editingProgramIndex) setEditingProgramIndex(editingProgramIndex - 1);
+                            }}
+                            className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                            aria-label="Supprimer le programme"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
 
-                  {/* Form to add new program */}
+                  {/* Form to add or edit a program */}
                   <div className="p-4 bg-[#F0F7FF] rounded-3xl space-y-4 border-2 border-dashed border-[#3B5FE6]/20">
                     <div className="space-y-2">
-                      <p className="text-[10px] font-black text-t-tertiary uppercase px-1">Nouveau Programme</p>
+                      <div className="flex items-center justify-between gap-3 px-1">
+                        <p className="text-[10px] font-black text-t-tertiary uppercase">
+                          {editingProgramIndex !== null ? 'Modifier Programme' : 'Nouveau Programme'}
+                        </p>
+                        {editingProgramIndex !== null && (
+                          <button
+                            onClick={resetProgramForm}
+                            className="text-[10px] font-black text-[#3B5FE6] uppercase"
+                          >
+                            Annuler
+                          </button>
+                        )}
+                      </div>
                       <input 
                         value={newProgForm.name}
                         onChange={(e) => setNewProgForm(prev => ({ ...prev, name: e.target.value }))}
@@ -701,19 +869,10 @@ export default function MyProfileTab() {
                       </button>
                     </div>
                     <button 
-                      onClick={() => {
-                        if (!newProgForm.name || !newProgForm.type || !newProgForm.result) {
-                          showNotification("Champs manquants", 'error');
-                          return;
-                        }
-
-                        updateEdit('programs', [...editForm.programs, { ...newProgForm }]);
-                        setNewProgForm(EMPTY_PROGRAM_FORM);
-                        showNotification("Programme ajouté à la liste !");
-                      }}
+                      onClick={submitProgramForm}
                       className="w-full py-4 bg-midnight-blue text-white text-[11px] font-black rounded-2xl shadow-xl active:scale-95 transition-all uppercase tracking-widest"
                     >
-                      Valider & Ajouter un autre
+                      {editingProgramIndex !== null ? 'Enregistrer le programme' : 'Valider & Ajouter un autre'}
                     </button>
                   </div>
                 </div>
@@ -723,7 +882,10 @@ export default function MyProfileTab() {
                     currentUser.programs.map((program, idx) => (
                       <button 
                         key={idx} 
-                        onClick={() => setSelectedProgramType(program)}
+                        onClick={() => {
+                          setSelectedProgramType(program);
+                          setSelectedProgramIndex(idx);
+                        }}
                         className={`inline-flex max-w-full px-4 py-2 rounded-xl text-[10px] font-black uppercase border transition-all active:scale-95 ${getProgramColor(idx + 1)} shadow-sm`}
                       >
                         <span className="truncate">{program.name}</span>
@@ -744,7 +906,10 @@ export default function MyProfileTab() {
             <div className="bg-t-surface glass-card w-full max-w-sm rounded-[40px] shadow-2xl overflow-hidden animate-in zoom-in-95 slide-in-from-bottom-10 duration-500 flex flex-col max-h-[80vh]">
               <div className="relative p-8 pt-12 text-center space-y-4 shrink-0">
                 <button 
-                  onClick={() => setSelectedProgramType(null)}
+                  onClick={() => {
+                    setSelectedProgramType(null);
+                    setSelectedProgramIndex(null);
+                  }}
                   className="absolute top-6 right-6 p-2 bg-t-surface-alt rounded-full text-t-muted hover:text-t-primary transition-colors"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
@@ -781,7 +946,16 @@ export default function MyProfileTab() {
 
               <div className="p-8 pt-0 shrink-0">
                 <button 
-                  onClick={() => setSelectedProgramType(null)}
+                  onClick={startProgramEditFromDetail}
+                  className="mb-3 w-full py-4 bg-[#3B5FE6] text-white font-black rounded-2xl shadow-xl active:scale-95 transition-all uppercase tracking-widest text-sm"
+                >
+                  Modifier
+                </button>
+                <button 
+                  onClick={() => {
+                    setSelectedProgramType(null);
+                    setSelectedProgramIndex(null);
+                  }}
                   className="w-full py-4 bg-midnight-blue text-white font-black rounded-2xl shadow-xl active:scale-95 transition-all uppercase tracking-widest text-sm"
                 >
                   Fermer

@@ -182,3 +182,34 @@ test('declining a contact request does not share coordinates', async () => {
   assert.equal(decline.body.user.privacyMode, 'private');
   assert.ok(!decline.body.user.allowedUsers.includes(USERS.peer.id));
 });
+
+test('contact approval derives requester from the original notification sender', async () => {
+  const created = await api(baseUrl, '/notifications', {
+    method: 'POST',
+    token: tokenFor(USERS.peer),
+    body: {
+      type: 'CONTACT_REQUEST',
+      targetId: USERS.admin.id,
+      title: 'Demande de contact',
+      message: 'Peer Test souhaite voir vos coordonnées.'
+    }
+  });
+  assert.equal(created.status, 201);
+  const requestNotification = created.body.notifications[0];
+  assert.equal(requestNotification.recipientId, USERS.admin.id);
+  assert.equal(requestNotification.senderId, USERS.peer.id);
+
+  const approve = await api(baseUrl, '/users/contact-approval', {
+    method: 'POST',
+    token: tokenFor(USERS.admin),
+    body: { notificationId: requestNotification.id, approve: true }
+  });
+  assert.equal(approve.status, 200);
+  assert.ok(approve.body.user.allowedUsers.includes(USERS.peer.id));
+
+  const requesterInbox = await api(baseUrl, '/notifications', { token: tokenFor(USERS.peer) });
+  assert.equal(requesterInbox.status, 200);
+  assert.ok(requesterInbox.body.notifications.some((n) => (
+    n.type === 'contact_approved' && String(n.targetId) === String(USERS.admin.id)
+  )));
+});

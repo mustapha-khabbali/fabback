@@ -235,6 +235,11 @@ export const api = {
     return body.projects || [];
   },
 
+  async getUserProjects(userId) {
+    const body = await request(`/projects/user/${encodeURIComponent(userId)}`);
+    return body.projects || [];
+  },
+
   async createProject(project) {
     const body = await request('/projects', {
       method: 'POST',
