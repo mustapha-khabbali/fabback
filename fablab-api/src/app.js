@@ -125,6 +125,16 @@ export function createApp() {
       return;
     }
 
+    // Malformed client input that only Postgres can reject (a non-UUID path
+    // param, an impossible date like 2026-13-45, a bad number/enum cast) must
+    // be a clean 400, not a 500 crash.
+    // 22P02 invalid_text_representation, 22007/22008 datetime field errors,
+    // 22003 numeric out of range.
+    if (['22P02', '22007', '22008', '22003'].includes(error.code)) {
+      res.status(400).json({ error: 'Requête invalide.' });
+      return;
+    }
+
     const status = error.status || 500;
     // Server errors are always logged (production included) with the request
     // id so they can be matched against the request log line.

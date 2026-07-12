@@ -7,7 +7,12 @@ import { config } from '../config.js';
 
 export const labClosuresRouter = express.Router();
 
-const dateSchema = z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/);
+const dateSchema = z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/).refine((value) => {
+  // The regex admits impossible dates (2026-13-45); reject them before the DB does.
+  const [y, m, d] = value.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
+}, { message: 'Invalid calendar date' });
 const timeSchema = z.preprocess(
   (value) => value === '' ? null : value,
   z.string().trim().regex(/^\d{2}:\d{2}$/).nullable().optional()
