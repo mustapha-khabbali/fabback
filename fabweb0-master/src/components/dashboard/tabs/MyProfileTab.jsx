@@ -9,30 +9,12 @@ import { api } from '../../../services/api';
 import { stopRealtime } from '../../../services/realtime';
 import AvatarCropModal from '../../common/AvatarCropModal';
 import ImageLightbox from '../../common/ImageLightbox';
-import { getCroppedAvatarDataUrl } from '../../../utils/avatarCrop';
+import { getCroppedAvatarDataUrl, getCroppedImageDataUrl } from '../../../utils/avatarCrop';
 import { useFirebase } from '../../../context/FirebaseContext';
 
 const SHOW_PROFILE_LEVEL_BADGE = false;
 const PROGRAM_TYPES = ['Hackathon', 'Event', 'Bootcamp', 'Workshop', 'Formation', 'Autre'];
 const EMPTY_PROGRAM_FORM = { name: '', description: '', dateMode: 'single', date: '', dateFrom: '', dateTo: '', type: '', result: '', image: null };
-
-function compressImageFile(file, maxSize = 512, quality = 0.82) {
-  return new Promise((resolve, reject) => {
-    const image = new Image();
-    image.onload = () => {
-      const scale = Math.min(1, maxSize / Math.max(image.width, image.height));
-      const canvas = document.createElement('canvas');
-      canvas.width = Math.max(1, Math.round(image.width * scale));
-      canvas.height = Math.max(1, Math.round(image.height * scale));
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
-      URL.revokeObjectURL(image.src);
-      resolve(canvas.toDataURL('image/jpeg', quality));
-    };
-    image.onerror = () => reject(new Error("Image programme invalide."));
-    image.src = URL.createObjectURL(file);
-  });
-}
 
 function formatProgramDate(program) {
   if (program.dateMode === 'range') {
@@ -152,6 +134,8 @@ export default function MyProfileTab() {
   const [showSettings, setShowSettings] = useState(false);
   const [avatarCropImage, setAvatarCropImage] = useState(null);
   const [isSavingAvatar, setIsSavingAvatar] = useState(false);
+  const [programCropImage, setProgramCropImage] = useState(null);
+  const [isSavingProgramImage, setIsSavingProgramImage] = useState(false);
   const [lightboxImage, setLightboxImage] = useState(null);
 
   useEffect(() => {
@@ -241,15 +225,32 @@ export default function MyProfileTab() {
     return 'bg-emerald-50 text-emerald-600 border-emerald-200 shadow-emerald-100/50'; // 5+
   };
 
-  const handleProgramImagePick = async (event) => {
+  const handleProgramImagePick = (event) => {
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
+    setProgramCropImage(URL.createObjectURL(file));
+  };
+
+  const closeProgramCrop = () => {
+    if (programCropImage) {
+      URL.revokeObjectURL(programCropImage);
+    }
+    setProgramCropImage(null);
+  };
+
+  const saveProgramCrop = async (cropPixels) => {
+    if (!programCropImage) return;
+
     try {
-      const image = await compressImageFile(file);
+      setIsSavingProgramImage(true);
+      const image = await getCroppedImageDataUrl(programCropImage, cropPixels, 512, 0.82);
       setNewProgForm(prev => ({ ...prev, image }));
+      closeProgramCrop();
     } catch (error) {
       showNotification(error.message || "Image programme invalide.", 'error');
+    } finally {
+      setIsSavingProgramImage(false);
     }
   };
 
@@ -1263,8 +1264,21 @@ export default function MyProfileTab() {
         <AvatarCropModal
           image={avatarCropImage}
           isSaving={isSavingAvatar}
+          cropShape="round"
+          title="Ajuster la photo"
           onCancel={closeAvatarCrop}
           onSave={saveAvatarCrop}
+        />
+      )}
+      {programCropImage && (
+        <AvatarCropModal
+          image={programCropImage}
+          isSaving={isSavingProgramImage}
+          cropShape="rect"
+          title="Recadrer l'image du programme"
+          saveLabel="Utiliser l'image"
+          onCancel={closeProgramCrop}
+          onSave={saveProgramCrop}
         />
       )}
       <ImageLightbox

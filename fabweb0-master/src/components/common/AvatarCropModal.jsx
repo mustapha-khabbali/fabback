@@ -1,7 +1,15 @@
 import { useState } from 'react';
 import Cropper from 'react-easy-crop';
 
-export default function AvatarCropModal({ image, isSaving, onCancel, onSave }) {
+export default function AvatarCropModal({
+  image,
+  isSaving,
+  onCancel,
+  onSave,
+  cropShape = 'round',
+  title = 'Ajuster la photo',
+  saveLabel = 'Enregistrer'
+}) {
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
@@ -15,13 +23,16 @@ export default function AvatarCropModal({ image, isSaving, onCancel, onSave }) {
   return (
     <div className="fixed inset-0 z-[300] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-4">
       <div className="w-full max-w-md bg-t-surface rounded-[32px] shadow-2xl overflow-hidden border border-t-border animate-in slide-in-from-bottom-4 fade-in duration-200">
+        <div className="px-6 py-4 border-b border-t-border">
+          <h3 className="text-sm font-black text-t-primary uppercase tracking-widest">{title}</h3>
+        </div>
         <div className="relative h-[360px] bg-black">
           <Cropper
             image={image}
             crop={crop}
             zoom={zoom}
             aspect={1}
-            cropShape="round"
+            cropShape={cropShape}
             showGrid={false}
             onCropChange={setCrop}
             onZoomChange={setZoom}
@@ -56,7 +67,7 @@ export default function AvatarCropModal({ image, isSaving, onCancel, onSave }) {
               disabled={isSaving || !croppedAreaPixels}
               className="flex-1 py-3 rounded-2xl bg-[#3B5FE6] text-white font-bold shadow-lg active:scale-95 transition-all disabled:opacity-50"
             >
-              Enregistrer
+              {saveLabel}
             </button>
           </div>
         </div>

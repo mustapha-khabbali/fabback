@@ -1,6 +1,14 @@
 import { useState, useMemo } from 'react';
 import { useApp, TABS } from '../../../context/AppContext';
 
+function normalizeSearchText(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
 export default function SearchTab() {
   const {
     setSelectedUser,
@@ -14,15 +22,21 @@ export default function SearchTab() {
   const [isFilterOpen, setIsFilterOpen] = useState(false);
 
   const filteredUsers = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
+    const query = normalizeSearchText(searchQuery);
     if (!query) return [];
 
     return usersList.filter(user => {
-      const matchesSearch =
-        (user.prenom || '').toLowerCase().startsWith(query) ||
-        (user.nom || '').toLowerCase().startsWith(query);
+      const searchableName = normalizeSearchText([
+        user.prenom,
+        user.nom,
+        `${user.prenom || ''} ${user.nom || ''}`,
+        `${user.nom || ''} ${user.prenom || ''}`,
+        user.email,
+        user.cin
+      ].filter(Boolean).join(' '));
+      const matchesSearch = searchableName.includes(query);
 
-      const matchesRole = searchFilter === 'ALL' || user.role.toUpperCase() === searchFilter.toUpperCase();
+      const matchesRole = searchFilter === 'ALL' || String(user.role || '').toUpperCase() === searchFilter.toUpperCase();
 
       return matchesSearch && matchesRole;
     });
