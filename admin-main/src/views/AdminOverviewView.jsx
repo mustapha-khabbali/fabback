@@ -263,6 +263,7 @@ export default function AdminOverviewView({ onNavigate }) {
   const [customExceptions, setCustomExceptions] = useState([]);
   const [labOpenOverrideDates, setLabOpenOverrideDates] = useState([]);
   const [newExceptionLabel, setNewExceptionLabel] = useState('');
+  const [newExceptionDate, setNewExceptionDate] = useState('');
   const [newExceptionFrom, setNewExceptionFrom] = useState('');
   const [newExceptionTo, setNewExceptionTo] = useState('');
 
@@ -454,6 +455,11 @@ export default function AdminOverviewView({ onNavigate }) {
       alert("Veuillez saisir un motif pour la fermeture.");
       return;
     }
+    const closureDate = newExceptionDate || selectedDate;
+    if (!closureDate) {
+      alert("Veuillez choisir une date pour la fermeture.");
+      return;
+    }
     if (Boolean(newExceptionFrom) !== Boolean(newExceptionTo)) {
       alert("Veuillez saisir l'heure de début et l'heure de fin, ou laisser les deux vides.");
       return;
@@ -465,12 +471,13 @@ export default function AdminOverviewView({ onNavigate }) {
     try {
       const newExc = await api.createLabClosure({
         label: newExceptionLabel.trim(),
-        date: selectedDate,
+        date: closureDate,
         timeFrom: newExceptionFrom || null,
         timeTo: newExceptionTo || null
       });
       setCustomExceptions((current) => [newExc, ...current]);
       setNewExceptionLabel('');
+      setNewExceptionDate('');
       setNewExceptionFrom('');
       setNewExceptionTo('');
     } catch {
@@ -899,33 +906,45 @@ export default function AdminOverviewView({ onNavigate }) {
             {/* Quick add exception form */}
             <div className="pt-4 border-t border-white/[0.04]">
               <p className="text-[9px] font-bold text-white/40 uppercase tracking-widest mb-2.5">Ajouter une fermeture exceptionnelle</p>
-              <div className="flex space-x-2">
-                <input
-                  type="text"
-                  placeholder="Motif (ex: Pause)"
-                  value={newExceptionLabel}
-                  onChange={(e) => setNewExceptionLabel(e.target.value)}
-                  className="flex-1 bg-[#060B28] border border-white/10 text-white text-[11.5px] font-medium rounded-lg px-2.5 py-2.5 outline-none focus:border-accent-blue/50 placeholder:text-white/20"
-                />
-                <input
-                  type="time"
-                  value={newExceptionFrom}
-                  onChange={(e) => handleTimeChange(e.target.value, setNewExceptionFrom, newExceptionFrom, '')}
-                  className="w-[66px] bg-[#060B28] border border-white/10 text-white text-[11.5px] font-medium rounded-lg px-1 py-2.5 outline-none focus:border-accent-blue/50"
-                />
-                <span className="text-white/30 self-center text-[10px]">-</span>
-                <input
-                  type="time"
-                  value={newExceptionTo}
-                  onChange={(e) => handleTimeChange(e.target.value, setNewExceptionTo, newExceptionTo, '')}
-                  className="w-[66px] bg-[#060B28] border border-white/10 text-white text-[11.5px] font-medium rounded-lg px-1 py-2.5 outline-none focus:border-accent-blue/50"
-                />
-                <button
-                  onClick={handleAddException}
-                  className="px-4.5 bg-accent-green hover:bg-accent-green/80 text-white rounded-lg text-[12px] font-bold cursor-pointer transition-colors"
-                >
-                  +
-                </button>
+              <div className="flex flex-col space-y-2">
+                <div className="flex space-x-2">
+                  <input
+                    type="text"
+                    placeholder="Motif (ex: Pause)"
+                    value={newExceptionLabel}
+                    onChange={(e) => setNewExceptionLabel(e.target.value)}
+                    className="flex-1 bg-[#060B28] border border-white/10 text-white text-[11.5px] font-medium rounded-lg px-2.5 py-2.5 outline-none focus:border-accent-blue/50 placeholder:text-white/20"
+                  />
+                  <input
+                    type="date"
+                    value={newExceptionDate || selectedDate}
+                    onChange={(e) => setNewExceptionDate(e.target.value)}
+                    className="bg-[#060B28] border border-white/10 text-white text-[11.5px] font-medium rounded-lg px-2 py-2.5 outline-none focus:border-accent-blue/50"
+                  />
+                </div>
+                <div className="flex space-x-2">
+                  <span className="text-white/40 self-center text-[10px] uppercase tracking-widest font-bold">Horaire</span>
+                  <input
+                    type="time"
+                    value={newExceptionFrom}
+                    onChange={(e) => handleTimeChange(e.target.value, setNewExceptionFrom, newExceptionFrom, '')}
+                    className="w-[76px] bg-[#060B28] border border-white/10 text-white text-[11.5px] font-medium rounded-lg px-1 py-2.5 outline-none focus:border-accent-blue/50"
+                  />
+                  <span className="text-white/30 self-center text-[10px]">-</span>
+                  <input
+                    type="time"
+                    value={newExceptionTo}
+                    onChange={(e) => handleTimeChange(e.target.value, setNewExceptionTo, newExceptionTo, '')}
+                    className="w-[76px] bg-[#060B28] border border-white/10 text-white text-[11.5px] font-medium rounded-lg px-1 py-2.5 outline-none focus:border-accent-blue/50"
+                  />
+                  <span className="text-white/20 self-center text-[9px] italic flex-1">Vide = toute la journée</span>
+                  <button
+                    onClick={handleAddException}
+                    className="px-4.5 bg-accent-green hover:bg-accent-green/80 text-white rounded-lg text-[12px] font-bold cursor-pointer transition-colors"
+                  >
+                    +
+                  </button>
+                </div>
               </div>
             </div>
           </div>
