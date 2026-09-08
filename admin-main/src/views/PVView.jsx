@@ -193,59 +193,7 @@ function getPresenceOptions(roleFilter) {
   return PRESENCE_TYPES_BY_ROLE[roleFilter] || PRESENCE_TYPES_BY_ROLE.all;
 }
 
-function requestedDatesForPeriod(dateMode, singleDate, dateFrom, dateTo) {
-  if (dateMode === 'single') return singleDate ? [singleDate] : [];
-  return eachDateInRange(dateFrom, dateTo);
-}
-
-function makeEmptyDateRow(date) {
-  return {
-    id: `empty-${date}`,
-    isEmptyDate: true,
-    userId: '',
-    userName: '',
-    nom: '',
-    prenom: '',
-    role: '',
-    cin: '',
-    tel: '',
-    email: '',
-    presenceType: '',
-    detail: '',
-    eventId: '',
-    eventTitle: '',
-    eventSpace: '',
-    projectId: '',
-    projectTitle: '',
-    timestampIn: null,
-    timestampOut: null,
-    date,
-    timeIn: '',
-    timeOut: '',
-    rating: 0,
-    feedbackComment: ''
-  };
-}
-
-function fillEmptyDates(rows, dates) {
-  const rowsByDate = new Map();
-  rows.forEach((row) => {
-    const date = row.date || '';
-    if (!date) return;
-    if (!rowsByDate.has(date)) rowsByDate.set(date, []);
-    rowsByDate.get(date).push(row);
-  });
-
-  return dates.flatMap((date) => {
-    const dayRows = [...(rowsByDate.get(date) || [])].sort(
-      (a, b) => new Date(a.timestampIn || 0) - new Date(b.timestampIn || 0)
-    );
-    return dayRows.length ? dayRows : [makeEmptyDateRow(date)];
-  });
-}
-
 function cellValue(row, value) {
-  if (row?.isEmptyDate) return '';
   return value || '—';
 }
 
@@ -285,10 +233,6 @@ export default function PVView() {
     presenceOptions.find((option) => option.value === presenceType) || presenceOptions[0]
   ), [presenceOptions, presenceType]);
   const eventOptions = useMemo(() => readAdminEvents(allRows), [allRows]);
-  const requestedDates = useMemo(
-    () => requestedDatesForPeriod(dateMode, singleDate, dateFrom, dateTo),
-    [dateMode, singleDate, dateFrom, dateTo]
-  );
 
   useEffect(() => {
     setPresenceType('all');
@@ -351,46 +295,29 @@ export default function PVView() {
     });
   }, [allRows, dateMode, singleDate, dateFrom, dateTo, timeFrom, timeTo, roleFilter, selectedPresenceOption, eventFilter]);
 
-  // The PV attests who was present, not each coming-and-going: within the
-  // selected period one row per person per type of presence (lab objective,
-  // or event+espace), keeping the earliest. Movement history stays intact in
-  // the database; only this report collapses repeats.
   const reportRows = useMemo(() => {
-    const earliestIds = new Map();
-    const byTimeAsc = [...filteredRows].sort(
-      (a, b) => new Date(a.timestampIn || 0) - new Date(b.timestampIn || 0)
-    );
-    for (const row of byTimeAsc) {
-      const typeKey = row.presenceType === 'Event'
-        ? `event:${row.eventId || row.eventTitle}|${row.eventSpace}`
-        : `type:${row.presenceType}`;
-      const key = `${row.userId || row.userName}|${typeKey}`;
-      if (!earliestIds.has(key)) earliestIds.set(key, row.id);
-    }
-    const keep = new Set(earliestIds.values());
-    return filteredRows.filter((row) => keep.has(row.id));
+    return [...filteredRows].sort((a, b) => {
+      const dateCompare = (a.date || '').localeCompare(b.date || '');
+      if (dateCompare !== 0) return dateCompare;
+      return new Date(a.timestampIn || 0) - new Date(b.timestampIn || 0);
+    });
   }, [filteredRows]);
-  const reportRowsWithEmptyDates = useMemo(
-    () => fillEmptyDates(reportRows, requestedDates),
-    [reportRows, requestedDates]
-  );
 
   const handleGenerate = () => {
     if (!validatePvFilters()) return;
     const rows = reportRows;
-    const days = requestedDates.length;
+    const days = new Set(rows.map((row) => row.date).filter(Boolean)).size;
     const ratedRows = rows.filter((row) => row.rating > 0);
     const avgRating = ratedRows.length
       ? (ratedRows.reduce((sum, row) => sum + row.rating, 0) / ratedRows.length).toFixed(1)
       : '0.0';
 
-    setReport({ entries: rows.length, days, avgRating, rows: reportRowsWithEmptyDates });
+    setReport({ entries: rows.length, days, avgRating, rows });
   };
 
   const handleExportExcel = async () => {
     const { default: ExcelJS } = await import('exceljs');
-    const rows = report?.rows || reportRowsWithEmptyDates;
-    const entryCount = rows.filter((row) => !row.isEmptyDate).length;
+    const rows = report?.rows || reportRows;
     const workbook = new ExcelJS.Workbook();
     workbook.creator = 'FabLab Admin';
     workbook.created = new Date();
@@ -414,7 +341,7 @@ export default function PVView() {
     worksheet.getRow(1).height = 30;
 
     worksheet.mergeCells('A2:J2');
-    worksheet.getCell('A2').value = `${entryCount} enregistrement(s) - Généré le ${new Date().toLocaleDateString('fr-FR')}`;
+    worksheet.getCell('A2').value = `${rows.length} enregistrement(s) - Généré le ${new Date().toLocaleDateString('fr-FR')}`;
     worksheet.getCell('A2').fill = panelFill;
     worksheet.getCell('A2').font = { name: 'Arial', size: 10, color: { argb: 'FFCBD5E1' } };
     worksheet.getCell('A2').alignment = { vertical: 'middle', horizontal: 'left' };
@@ -434,14 +361,14 @@ export default function PVView() {
       const excelRow = worksheet.addRow([
         cellValue(row, row.prenom),
         cellValue(row, row.nom),
-        row.isEmptyDate ? '' : roleLabel(row.role),
+        roleLabel(row.role),
         cellValue(row, row.cin),
         cellValue(row, row.tel),
         cellValue(row, row.email),
         row.date || '',
         cellValue(row, row.timeIn),
         cellValue(row, row.timeOut),
-        row.isEmptyDate ? '' : presenceTypeLabel(row)
+        presenceTypeLabel(row)
       ]);
 
       excelRow.height = 23;
@@ -686,7 +613,7 @@ export default function PVView() {
                       <p className="text-[12px] font-semibold text-white whitespace-nowrap">{cellValue(row, row.prenom)}</p>
                     </td>
                     <td className="px-5 py-3.5 text-[12px] text-white/60 font-medium whitespace-nowrap">{cellValue(row, row.nom)}</td>
-                    <td className="px-5 py-3.5 text-[12px] text-white/50 font-medium whitespace-nowrap">{row.isEmptyDate ? '' : roleLabel(row.role)}</td>
+                    <td className="px-5 py-3.5 text-[12px] text-white/50 font-medium whitespace-nowrap">{roleLabel(row.role)}</td>
                     <td className="px-5 py-3.5 text-[12px] text-white/50 font-medium whitespace-nowrap">{cellValue(row, row.cin)}</td>
                     <td className="px-5 py-3.5 text-[12px] text-white/50 font-medium whitespace-nowrap">{cellValue(row, row.tel)}</td>
                     <td className="px-5 py-3.5 text-[12px] text-white/50 font-medium whitespace-nowrap">{cellValue(row, row.email)}</td>
@@ -694,9 +621,7 @@ export default function PVView() {
                     <td className="px-5 py-3.5 text-[12px] text-white/50 font-medium whitespace-nowrap">{cellValue(row, row.timeIn)}</td>
                     <td className="px-5 py-3.5 text-[12px] text-white/50 font-medium whitespace-nowrap">{cellValue(row, row.timeOut)}</td>
                     <td className="px-5 py-3.5">
-                      {row.isEmptyDate ? '' : (
-                        <span className="text-[11px] font-bold text-accent-blue bg-accent-blue/10 px-2.5 py-1 rounded-lg whitespace-nowrap">{presenceTypeLabel(row)}</span>
-                      )}
+                      <span className="text-[11px] font-bold text-accent-blue bg-accent-blue/10 px-2.5 py-1 rounded-lg whitespace-nowrap">{presenceTypeLabel(row)}</span>
                     </td>
                   </tr>
                 ))
