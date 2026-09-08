@@ -9,21 +9,6 @@ const ROLE_OPTIONS = [
   { value: 'visiteur', label: 'Visiteur' }
 ];
 
-const MOROCCAN_HOLIDAYS_2026 = [
-  { id: 'h1', name: 'Nouvel An', date: '2026-01-01' },
-  { id: 'h2', name: 'Manifeste de l\'Indépendance', date: '2026-01-11' },
-  { id: 'h3', name: 'Fête du Travail', date: '2026-05-01' },
-  { id: 'h4', name: 'Fête du Trône', date: '2026-07-30' },
-  { id: 'h5', name: 'Oued Ed-Dahab', date: '2026-08-14' },
-  { id: 'h6', name: 'Révolution du Roi et du Peuple', date: '2026-08-20' },
-  { id: 'h7', name: 'Fête de la Jeunesse', date: '2026-08-21' },
-  { id: 'h8', name: 'Marche Verte', date: '2026-11-06' },
-  { id: 'h9', name: 'Fête de l\'Indépendance', date: '2026-11-18' },
-  { id: 'h10', name: 'Aïd al-Fitr (Est.)', date: '2026-03-20' },
-  { id: 'h11', name: 'Aïd al-Adha (Est.)', date: '2026-05-27' },
-  { id: 'h12', name: '1er Moharram (Est.)', date: '2026-06-16' },
-];
-
 const DEFAULT_TIME_FROM = '08:30';
 const DEFAULT_TIME_TO = '18:30';
 
@@ -87,17 +72,6 @@ function toLabISODate(dateValue) {
 function safeDate(dateValue) {
   const date = new Date(dateValue);
   return Number.isNaN(date.getTime()) ? null : date;
-}
-
-function isWeekend(dateStr) {
-  // 'T00:00:00' forces local-time parsing (bare dates parse as UTC midnight)
-  const date = new Date(`${dateStr}T00:00:00`);
-  const day = date.getDay();
-  return day === 0 || day === 6;
-}
-
-function isHoliday(dateStr) {
-  return MOROCCAN_HOLIDAYS_2026.some((holiday) => holiday.date === dateStr);
 }
 
 function eachDateInRange(dateFrom, dateTo) {
@@ -219,6 +193,60 @@ function getPresenceOptions(roleFilter) {
   return PRESENCE_TYPES_BY_ROLE[roleFilter] || PRESENCE_TYPES_BY_ROLE.all;
 }
 
+function requestedDatesForPeriod(dateMode, singleDate, dateFrom, dateTo) {
+  if (dateMode === 'single') return singleDate ? [singleDate] : [];
+  return eachDateInRange(dateFrom, dateTo).reverse();
+}
+
+function makeEmptyDateRow(date) {
+  return {
+    id: `empty-${date}`,
+    isEmptyDate: true,
+    userId: '',
+    userName: '',
+    nom: '',
+    prenom: '',
+    role: '',
+    cin: '',
+    tel: '',
+    email: '',
+    presenceType: '',
+    detail: '',
+    eventId: '',
+    eventTitle: '',
+    eventSpace: '',
+    projectId: '',
+    projectTitle: '',
+    timestampIn: null,
+    timestampOut: null,
+    date,
+    timeIn: '',
+    timeOut: '',
+    rating: 0,
+    feedbackComment: ''
+  };
+}
+
+function fillEmptyDates(rows, dates) {
+  const rowsByDate = new Map();
+  rows.forEach((row) => {
+    const date = row.date || '';
+    if (!date) return;
+    if (!rowsByDate.has(date)) rowsByDate.set(date, []);
+    rowsByDate.get(date).push(row);
+  });
+
+  return dates.flatMap((date) => {
+    const dayRows = rowsByDate.get(date) || [];
+    return dayRows.length ? dayRows : [makeEmptyDateRow(date)];
+  });
+}
+
+function cellValue(row, value) {
+  if (row?.isEmptyDate) return '';
+  return value || '—';
+}
+
 export default function PVView() {
   const today = toISODate(new Date());
   const [dateMode, setDateMode] = useState('single');
@@ -255,6 +283,10 @@ export default function PVView() {
     presenceOptions.find((option) => option.value === presenceType) || presenceOptions[0]
   ), [presenceOptions, presenceType]);
   const eventOptions = useMemo(() => readAdminEvents(allRows), [allRows]);
+  const requestedDates = useMemo(
+    () => requestedDatesForPeriod(dateMode, singleDate, dateFrom, dateTo),
+    [dateMode, singleDate, dateFrom, dateTo]
+  );
 
   useEffect(() => {
     setPresenceType('all');
@@ -274,20 +306,7 @@ export default function PVView() {
     setToastTimeoutId(id);
   };
 
-  const validateDate = (value) => {
-    if (isWeekend(value)) {
-      showToast("Please don't select Saturday or Sunday, they are days off.");
-      return false;
-    }
-    if (isHoliday(value)) {
-      showToast("Please don't select a holiday, the FabLab is closed.");
-      return false;
-    }
-    return true;
-  };
-
   const handleDateChange = (value, setter) => {
-    if (!validateDate(value)) return;
     setter(value);
   };
 
@@ -301,7 +320,6 @@ export default function PVView() {
 
   const validatePvFilters = () => {
     if (dateMode === 'single') {
-      if (!validateDate(singleDate)) return false;
       const startTime = timeFrom || DEFAULT_TIME_FROM;
       const endTime = timeTo || DEFAULT_TIME_TO;
       if (startTime >= endTime) {
@@ -312,14 +330,6 @@ export default function PVView() {
       const dates = eachDateInRange(dateFrom, dateTo);
       if (dates.length === 0) {
         showToast("Please choose a valid date range.");
-        return false;
-      }
-      if (dates.some(isWeekend)) {
-        showToast("Please don't include Saturday or Sunday, they are days off.");
-        return false;
-      }
-      if (dates.some(isHoliday)) {
-        showToast("Please don't include a holiday, the FabLab is closed.");
         return false;
       }
     }
@@ -358,22 +368,27 @@ export default function PVView() {
     const keep = new Set(earliestIds.values());
     return filteredRows.filter((row) => keep.has(row.id));
   }, [filteredRows]);
+  const reportRowsWithEmptyDates = useMemo(
+    () => fillEmptyDates(reportRows, requestedDates),
+    [reportRows, requestedDates]
+  );
 
   const handleGenerate = () => {
     if (!validatePvFilters()) return;
     const rows = reportRows;
-    const days = new Set(rows.map((row) => row.date)).size;
+    const days = requestedDates.length;
     const ratedRows = rows.filter((row) => row.rating > 0);
     const avgRating = ratedRows.length
       ? (ratedRows.reduce((sum, row) => sum + row.rating, 0) / ratedRows.length).toFixed(1)
       : '0.0';
 
-    setReport({ entries: rows.length, days, avgRating, rows });
+    setReport({ entries: rows.length, days, avgRating, rows: reportRowsWithEmptyDates });
   };
 
   const handleExportExcel = async () => {
     const { default: ExcelJS } = await import('exceljs');
-    const rows = report?.rows || reportRows;
+    const rows = report?.rows || reportRowsWithEmptyDates;
+    const entryCount = rows.filter((row) => !row.isEmptyDate).length;
     const workbook = new ExcelJS.Workbook();
     workbook.creator = 'FabLab Admin';
     workbook.created = new Date();
@@ -383,21 +398,21 @@ export default function PVView() {
       views: [{ state: 'frozen', ySplit: 4 }]
     });
 
-    const headers = ['Prénom', 'Nom', 'Role', 'CIN', 'Num', 'Email', 'Type de présence'];
+    const headers = ['Prénom', 'Nom', 'Role', 'CIN', 'Num', 'Email', 'Date', 'Heure d’entrée', 'Heure de sortie', 'Type de présence'];
     const headerFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF111827' } };
     const panelFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0B1220' } };
     const accentFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEFF6FF' } };
     const border = { style: 'thin', color: { argb: 'FFE5E7EB' } };
 
-    worksheet.mergeCells('A1:G1');
+    worksheet.mergeCells('A1:J1');
     worksheet.getCell('A1').value = 'Historique de présence';
     worksheet.getCell('A1').fill = panelFill;
     worksheet.getCell('A1').font = { name: 'Arial', size: 18, bold: true, color: { argb: 'FFFFFFFF' } };
     worksheet.getCell('A1').alignment = { vertical: 'middle', horizontal: 'left' };
     worksheet.getRow(1).height = 30;
 
-    worksheet.mergeCells('A2:G2');
-    worksheet.getCell('A2').value = `${rows.length} enregistrement(s) - Généré le ${new Date().toLocaleDateString('fr-FR')}`;
+    worksheet.mergeCells('A2:J2');
+    worksheet.getCell('A2').value = `${entryCount} enregistrement(s) - Généré le ${new Date().toLocaleDateString('fr-FR')}`;
     worksheet.getCell('A2').fill = panelFill;
     worksheet.getCell('A2').font = { name: 'Arial', size: 10, color: { argb: 'FFCBD5E1' } };
     worksheet.getCell('A2').alignment = { vertical: 'middle', horizontal: 'left' };
@@ -415,18 +430,21 @@ export default function PVView() {
 
     rows.forEach((row, index) => {
       const excelRow = worksheet.addRow([
-        row.prenom || '—',
-        row.nom || '—',
-        roleLabel(row.role),
-        row.cin || '—',
-        row.tel || '—',
-        row.email || '—',
-        presenceTypeLabel(row)
+        cellValue(row, row.prenom),
+        cellValue(row, row.nom),
+        row.isEmptyDate ? '' : roleLabel(row.role),
+        cellValue(row, row.cin),
+        cellValue(row, row.tel),
+        cellValue(row, row.email),
+        row.date || '',
+        cellValue(row, row.timeIn),
+        cellValue(row, row.timeOut),
+        row.isEmptyDate ? '' : presenceTypeLabel(row)
       ]);
 
       excelRow.height = 23;
-      excelRow.eachCell((cell, colNumber) => {
-        cell.fill = colNumber === 7 ? accentFill : {
+      excelRow.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+        cell.fill = colNumber === 10 ? accentFill : {
           type: 'pattern',
           pattern: 'solid',
           fgColor: { argb: index % 2 === 0 ? 'FFFFFFFF' : 'FFF8FAFC' }
@@ -434,10 +452,10 @@ export default function PVView() {
         cell.font = {
           name: 'Arial',
           size: 10,
-          color: { argb: colNumber === 7 ? 'FF1D4ED8' : 'FF111827' },
-          bold: colNumber === 1 || colNumber === 7
+          color: { argb: colNumber === 10 ? 'FF1D4ED8' : 'FF111827' },
+          bold: colNumber === 1 || colNumber === 10
         };
-        cell.alignment = { vertical: 'middle', horizontal: colNumber === 7 ? 'center' : 'left' };
+        cell.alignment = { vertical: 'middle', horizontal: colNumber === 10 ? 'center' : 'left' };
         cell.border = { top: border, right: border, bottom: border, left: border };
       });
     });
@@ -449,16 +467,20 @@ export default function PVView() {
       { width: 16 },
       { width: 16 },
       { width: 30 },
+      { width: 14 },
+      { width: 18 },
+      { width: 18 },
       { width: 28 }
     ];
 
     worksheet.autoFilter = {
       from: 'A4',
-      to: 'G4'
+      to: 'J4'
     };
 
     worksheet.getColumn(4).numFmt = '@';
     worksheet.getColumn(5).numFmt = '@';
+    worksheet.getColumn(7).numFmt = '@';
 
     const buffer = await workbook.xlsx.writeBuffer();
     const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
@@ -636,19 +658,22 @@ export default function PVView() {
                 <th className="px-5 py-3 text-[9px] font-bold text-white/30 uppercase tracking-[2px]">CIN</th>
                 <th className="px-5 py-3 text-[9px] font-bold text-white/30 uppercase tracking-[2px]">Num</th>
                 <th className="px-5 py-3 text-[9px] font-bold text-white/30 uppercase tracking-[2px]">Email</th>
+                <th className="px-5 py-3 text-[9px] font-bold text-white/30 uppercase tracking-[2px]">Date</th>
+                <th className="px-5 py-3 text-[9px] font-bold text-white/30 uppercase tracking-[2px]">Heure d’entrée</th>
+                <th className="px-5 py-3 text-[9px] font-bold text-white/30 uppercase tracking-[2px]">Heure de sortie</th>
                 <th className="px-5 py-3 text-[9px] font-bold text-white/30 uppercase tracking-[2px]">Type de présence</th>
               </tr>
             </thead>
             <tbody>
               {!report ? (
                 <tr>
-                  <td colSpan={7} className="px-7 py-10 text-center text-white/20 italic text-[13px]">
+                  <td colSpan={10} className="px-7 py-10 text-center text-white/20 italic text-[13px]">
                     Sélectionnez une période et cliquez "Générer"
                   </td>
                 </tr>
               ) : rowsToRender.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-7 py-10 text-center text-white/20 italic text-[13px]">
+                  <td colSpan={10} className="px-7 py-10 text-center text-white/20 italic text-[13px]">
                     Aucun enregistrement trouvé
                   </td>
                 </tr>
@@ -656,15 +681,20 @@ export default function PVView() {
                 rowsToRender.map((row) => (
                   <tr key={row.id} className="trow border-b border-white/[0.03]">
                     <td className="px-7 py-3.5">
-                      <p className="text-[12px] font-semibold text-white whitespace-nowrap">{row.prenom || '—'}</p>
+                      <p className="text-[12px] font-semibold text-white whitespace-nowrap">{cellValue(row, row.prenom)}</p>
                     </td>
-                    <td className="px-5 py-3.5 text-[12px] text-white/60 font-medium whitespace-nowrap">{row.nom || '—'}</td>
-                    <td className="px-5 py-3.5 text-[12px] text-white/50 font-medium whitespace-nowrap">{roleLabel(row.role)}</td>
-                    <td className="px-5 py-3.5 text-[12px] text-white/50 font-medium whitespace-nowrap">{row.cin || '—'}</td>
-                    <td className="px-5 py-3.5 text-[12px] text-white/50 font-medium whitespace-nowrap">{row.tel || '—'}</td>
-                    <td className="px-5 py-3.5 text-[12px] text-white/50 font-medium whitespace-nowrap">{row.email || '—'}</td>
+                    <td className="px-5 py-3.5 text-[12px] text-white/60 font-medium whitespace-nowrap">{cellValue(row, row.nom)}</td>
+                    <td className="px-5 py-3.5 text-[12px] text-white/50 font-medium whitespace-nowrap">{row.isEmptyDate ? '' : roleLabel(row.role)}</td>
+                    <td className="px-5 py-3.5 text-[12px] text-white/50 font-medium whitespace-nowrap">{cellValue(row, row.cin)}</td>
+                    <td className="px-5 py-3.5 text-[12px] text-white/50 font-medium whitespace-nowrap">{cellValue(row, row.tel)}</td>
+                    <td className="px-5 py-3.5 text-[12px] text-white/50 font-medium whitespace-nowrap">{cellValue(row, row.email)}</td>
+                    <td className="px-5 py-3.5 text-[12px] text-white/50 font-medium whitespace-nowrap">{row.date || ''}</td>
+                    <td className="px-5 py-3.5 text-[12px] text-white/50 font-medium whitespace-nowrap">{cellValue(row, row.timeIn)}</td>
+                    <td className="px-5 py-3.5 text-[12px] text-white/50 font-medium whitespace-nowrap">{cellValue(row, row.timeOut)}</td>
                     <td className="px-5 py-3.5">
-                      <span className="text-[11px] font-bold text-accent-blue bg-accent-blue/10 px-2.5 py-1 rounded-lg whitespace-nowrap">{presenceTypeLabel(row)}</span>
+                      {row.isEmptyDate ? '' : (
+                        <span className="text-[11px] font-bold text-accent-blue bg-accent-blue/10 px-2.5 py-1 rounded-lg whitespace-nowrap">{presenceTypeLabel(row)}</span>
+                      )}
                     </td>
                   </tr>
                 ))
