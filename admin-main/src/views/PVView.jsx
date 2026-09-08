@@ -195,7 +195,7 @@ function getPresenceOptions(roleFilter) {
 
 function requestedDatesForPeriod(dateMode, singleDate, dateFrom, dateTo) {
   if (dateMode === 'single') return singleDate ? [singleDate] : [];
-  return eachDateInRange(dateFrom, dateTo).reverse();
+  return eachDateInRange(dateFrom, dateTo);
 }
 
 function makeEmptyDateRow(date) {
@@ -237,7 +237,9 @@ function fillEmptyDates(rows, dates) {
   });
 
   return dates.flatMap((date) => {
-    const dayRows = rowsByDate.get(date) || [];
+    const dayRows = [...(rowsByDate.get(date) || [])].sort(
+      (a, b) => new Date(a.timestampIn || 0) - new Date(b.timestampIn || 0)
+    );
     return dayRows.length ? dayRows : [makeEmptyDateRow(date)];
   });
 }
