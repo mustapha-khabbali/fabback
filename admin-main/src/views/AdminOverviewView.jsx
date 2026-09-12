@@ -170,6 +170,36 @@ function normalizePresenceType(entry) {
   return entry.presenceType || entry.objective || entry.typePresence || '—';
 }
 
+function eventSpaceLabel(space) {
+  if (typeof space === 'string') return space.trim();
+  if (!space || typeof space !== 'object') return '';
+  return String(space.label || space.name || space.title || space.value || '').trim();
+}
+
+function configuredEventSpaces(event) {
+  return (Array.isArray(event?.spaces) ? event.spaces : [])
+    .map(eventSpaceLabel)
+    .filter(Boolean);
+}
+
+function resolvedAttendanceSpace(row, events) {
+  const savedSpace = String(row.eventSpace || '').trim();
+  if (savedSpace) return savedSpace;
+
+  const isEventScan = Boolean(row.eventId || row.eventTitle);
+  if (!isEventScan) return 'FabLab';
+
+  // Older event attendance did not always persist the selected space. A
+  // one-space event is unambiguous, so its configured space safely restores
+  // the missing historical value (including the 11/09 workshop).
+  const event = events.find((item) => (
+    (row.eventId && String(item.id) === String(row.eventId))
+    || (!row.eventId && row.eventTitle && item.title === row.eventTitle)
+  ));
+  const spaces = configuredEventSpaces(event);
+  return spaces.length === 1 ? spaces[0] : '';
+}
+
 function normalizeDashboardJournalRow(entry, index) {
   const timestampIn = entry.timestamp || (entry.date && entry.timeIn ? `${entry.date}T${entry.timeIn}:00` : null);
   const timestampOut = entry.timestampOut || (entry.date && entry.timeOut ? `${entry.date}T${entry.timeOut}:00` : null);
@@ -253,9 +283,11 @@ export default function AdminOverviewView({ onNavigate }) {
   const [dashboardRoleFilter, setDashboardRoleFilter] = useState('all');
   const [dashboardPresenceFilter, setDashboardPresenceFilter] = useState('all');
   const [dashboardEventFilter, setDashboardEventFilter] = useState('');
+  const [dashboardSpaceFilter, setDashboardSpaceFilter] = useState('');
   const [openPresenceMenu, setOpenPresenceMenu] = useState(null);
   const [presenceMenuPosition, setPresenceMenuPosition] = useState({ top: 0, left: 0, width: 0 });
   const [attendanceRows, setAttendanceRows] = useState([]);
+  const [events, setEvents] = useState([]);
   const [attendanceStale, setAttendanceStale] = useState(false);
   const attendanceStaleRef = useRef(false);
   const [showPeriodModal, setShowPeriodModal] = useState(false);
@@ -299,6 +331,17 @@ export default function AdminOverviewView({ onNavigate }) {
       });
   }, [showToast]);
 
+  const loadEvents = useCallback((cancelledRef = { current: false }) => {
+    api.getEvents()
+      .then((loadedEvents) => {
+        if (!cancelledRef.current) setEvents(loadedEvents);
+      })
+      .catch(() => {
+        // Explicitly saved spaces and normal Gate-In records remain usable if
+        // the event catalogue is temporarily unavailable.
+      });
+  }, []);
+
   const loadLabClosures = useCallback((cancelledRef = { current: false }) => {
     api.getLabClosures()
       .then((data) => {
@@ -324,6 +367,7 @@ export default function AdminOverviewView({ onNavigate }) {
     const cancelledRef = { current: false };
 
     loadAttendance(cancelledRef);
+    loadEvents(cancelledRef);
     loadLabClosures(cancelledRef);
     const intervalId = periodMode === 'now' ? setInterval(() => loadAttendance(cancelledRef), 10000) : null;
 
@@ -331,16 +375,19 @@ export default function AdminOverviewView({ onNavigate }) {
       cancelledRef.current = true;
       if (intervalId) clearInterval(intervalId);
     };
-  }, [loadAttendance, loadLabClosures, periodMode]);
+  }, [loadAttendance, loadEvents, loadLabClosures, periodMode]);
 
   useEffect(() => subscribeRealtime((change) => {
     if (change.entity === 'sync' || (periodMode === 'now' && change.entity === 'attendance')) {
       loadAttendance();
     }
+    if (change.entity === 'sync' || change.entity === 'events') {
+      loadEvents();
+    }
     if (change.entity === 'sync' || change.entity === 'lab-closures') {
       loadLabClosures();
     }
-  }), [loadAttendance, loadLabClosures, periodMode]);
+  }), [loadAttendance, loadEvents, loadLabClosures, periodMode]);
 
   const handleTimeChange = (value, setter, previousValue, defaultValue) => {
     if (!value) {
@@ -547,7 +594,7 @@ export default function AdminOverviewView({ onNavigate }) {
     })) : [])
   ].sort((a, b) => new Date(a.date) - new Date(b.date));
 
-  // Determine dynamic stats and logs based on the selected dashboard period mode.
+  // Determine the rows used by the cards and table for the selected period.
   const getDynamicData = () => {
     if (periodMode === 'now') {
       const liveRows = readCurrentPresenceRows(attendanceRows);
@@ -558,17 +605,8 @@ export default function AdminOverviewView({ onNavigate }) {
           const timestampIn = safeDate(row.timestampIn || `${row.date}T${row.timeIn}:00`);
           return timestampIn && toLabISODate(timestampIn) === today;
         });
-      const ratedTodayRows = attendanceRows
-        .map(normalizeDashboardJournalRow)
-        .filter((row) => {
-          const timestampOut = safeDate(row.timestampOut);
-          return timestampOut && toLabISODate(timestampOut) === today && row.rating > 0;
-        });
-      const avgRating = ratedTodayRows.length
-        ? (ratedTodayRows.reduce((sum, row) => sum + row.rating, 0) / ratedTodayRows.length).toFixed(1)
-        : 0;
       return {
-        metrics: { present: liveRows.length, total: todayRows.length, exits: todayRows.filter(row => row.timestampOut).length, avgRating },
+        metricRows: todayRows,
         presents: liveRows
       };
     }
@@ -577,20 +615,13 @@ export default function AdminOverviewView({ onNavigate }) {
       .map(normalizeDashboardJournalRow)
       .filter((row) => rowMatchesPeriod(row, customDateMode, selectedDate, dateFrom, dateTo, periodTimeStart, periodTimeEnd));
 
-    const total = rows.length;
-    const exits = rows.filter(h => h.timeOut).length;
-    const rated = rows.filter(h => h.timeOut && h.rating);
-    const avgRating = rated.length
-      ? (rated.reduce((sum, h) => sum + h.rating, 0) / rated.length).toFixed(1)
-      : 0;
-
     return {
-      metrics: { present: rows.filter(row => !row.timeOut).length, total, exits, avgRating },
+      metricRows: rows,
       presents: rows
     };
   };
 
-  const { metrics, presents } = getDynamicData();
+  const { metricRows, presents } = getDynamicData();
   const selectedPresenceOption = presenceOptionByValue(dashboardPresenceFilter, dashboardRoleFilter);
   const dashboardTypeOptions = PRESENCE_TYPES_BY_ROLE[dashboardRoleFilter] || PRESENCE_TYPES_BY_ROLE.all;
   const dashboardEventOptions = Array.from(
@@ -600,13 +631,58 @@ export default function AdminOverviewView({ onNavigate }) {
         .map((item) => [item.eventId || item.eventTitle, { id: item.eventId || item.eventTitle, title: item.eventTitle || item.eventId }])
     ).values()
   );
-  const filteredPresents = presents.filter((item) => {
+  const presentsWithSpaces = presents.map((item) => ({
+    ...item,
+    resolvedSpace: resolvedAttendanceSpace(item, events)
+  }));
+  const metricRowsWithSpaces = metricRows.map((item) => ({
+    ...item,
+    resolvedSpace: resolvedAttendanceSpace(item, events)
+  }));
+  // Spaces are taken only from the attendance rows currently shown by the
+  // selected period. In "Maintenant" mode those rows are open presences;
+  // in journal mode they are the entries recorded during the chosen period.
+  const dashboardSpaceOptions = Array.from(
+    new Set(
+      presentsWithSpaces
+        .map((item) => item.resolvedSpace)
+        .filter(Boolean)
+    )
+  );
+  const filteredPresents = presentsWithSpaces.filter((item) => {
     if (dashboardRoleFilter !== 'all' && roleValue(item.role) !== dashboardRoleFilter) return false;
     if (selectedPresenceOption.value !== 'all' && !selectedPresenceOption.matches.includes(item.presenceType)) return false;
     if (selectedPresenceOption.requiresEvent && !dashboardEventFilter) return false;
     if (selectedPresenceOption.requiresEvent && String(item.eventId || item.eventTitle) !== String(dashboardEventFilter)) return false;
+    if (dashboardSpaceFilter && item.resolvedSpace !== dashboardSpaceFilter) return false;
     return true;
   });
+  const spaceMetricRows = dashboardSpaceFilter
+    ? metricRowsWithSpaces.filter((item) => item.resolvedSpace === dashboardSpaceFilter)
+    : metricRowsWithSpaces;
+  const spacePresentRows = dashboardSpaceFilter
+    ? presentsWithSpaces.filter((item) => item.resolvedSpace === dashboardSpaceFilter)
+    : presentsWithSpaces;
+  const completedSpaceRows = spaceMetricRows.filter((item) => item.timeOut);
+  const ratedSpaceRows = completedSpaceRows.filter((item) => item.rating > 0);
+  const metrics = {
+    present: periodMode === 'now'
+      ? spacePresentRows.length
+      : spaceMetricRows.filter((item) => !item.timeOut).length,
+    total: spaceMetricRows.length,
+    exits: completedSpaceRows.length,
+    avgRating: ratedSpaceRows.length
+      ? (ratedSpaceRows.reduce((sum, item) => sum + item.rating, 0) / ratedSpaceRows.length).toFixed(1)
+      : 0
+  };
+
+  // A space can disappear when the live data or selected period changes.
+  // Clear the selection then, so the default remains the unfiltered list.
+  useEffect(() => {
+    if (dashboardSpaceFilter && !dashboardSpaceOptions.includes(dashboardSpaceFilter)) {
+      setDashboardSpaceFilter('');
+    }
+  }, [dashboardSpaceFilter, dashboardSpaceOptions]);
 
   useEffect(() => {
     const projectRows = presents.filter((item) => isProjectPresence(item) && (item.projectTitle || item.projectName || item.detail));
@@ -986,7 +1062,25 @@ export default function AdminOverviewView({ onNavigate }) {
         <div className="section-card flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between px-7 py-5 border-b border-white/[0.04]">
-              <h3 className="text-[16px] font-bold text-white">{tableTitle}</h3>
+              <div className="flex min-w-0 flex-wrap items-center gap-2.5">
+                <h3 className="mr-1 text-[16px] font-bold text-white">{tableTitle}</h3>
+                {dashboardSpaceOptions.map((space) => {
+                  const selected = dashboardSpaceFilter === space;
+                  return (
+                    <button
+                      key={space}
+                      type="button"
+                      aria-pressed={selected}
+                      onClick={() => setDashboardSpaceFilter((current) => (current === space ? '' : space))}
+                      className={`rounded-full border px-3 py-1.5 text-[10px] font-bold transition-colors ${selected
+                        ? 'border-accent-blue/50 bg-accent-blue/20 text-accent-blue'
+                        : 'border-white/10 bg-white/[0.04] text-white/60 hover:border-white/25 hover:bg-white/[0.08] hover:text-white'}`}
+                    >
+                      {space}
+                    </button>
+                  );
+                })}
+              </div>
               <div className="flex items-center space-x-2">
                 {periodMode === 'now' && <div className="w-2 h-2 bg-accent-green rounded-full live-dot" />}
                 <span className="text-[10px] font-bold text-accent-green uppercase tracking-[2px]">
