@@ -79,7 +79,10 @@ export function createApp() {
     globalLimiter(req, res, next);
   });
   app.use('/api/auth', authLimiter);
-  app.use(express.json({ limit: '10mb' }));
+  // Journals embed full-quality photos (base64) and the whole project list is
+  // synced in one request, so the body can be several MB. Keep this in step with
+  // nginx's client_max_body_size (50m) so large-but-legit syncs aren't rejected.
+  app.use(express.json({ limit: '50mb' }));
 
   app.get('/health', async (_req, res, next) => {
     try {

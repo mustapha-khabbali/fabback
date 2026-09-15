@@ -60,8 +60,13 @@ export default function useSwipe({ onSwipeLeft, onSwipeRight, threshold = 50 }) 
 
     const handleTouchEnd = () => {
       if (startX.current === null || currentX.current === null || !isSwiping.current || isLocked.current) {
-        element.style.transition = 'transform 0.3s ease';
-        element.style.transform = 'translateX(0)';
+        // Clear the transform entirely (not translateX(0)): any non-`none`
+        // transform makes this element the containing block for `position:
+        // fixed` descendants, which would trap full-screen modals inside the
+        // tab area instead of the viewport. A plain tap ends up here, so this
+        // runs right before a modal (e.g. the journal reader) opens.
+        element.style.transition = 'none';
+        element.style.transform = '';
         startX.current = null;
         startY.current = null;
         currentX.current = null;
@@ -85,7 +90,7 @@ export default function useSwipe({ onSwipeLeft, onSwipeRight, threshold = 50 }) 
           handler();
           requestAnimationFrame(() => {
             element.style.transition = 'none';
-            element.style.transform = 'translateX(0)';
+            element.style.transform = '';
             isLocked.current = false;
           });
         }, 200);

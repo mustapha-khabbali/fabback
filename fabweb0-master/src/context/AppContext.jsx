@@ -518,8 +518,12 @@ export function AppProvider({ children }) {
         setUserProjects(savedProjects);
         localStorage.setItem('user_projects', JSON.stringify(savedProjects));
       })
-      .catch(() => {});
-  }, []);
+      .catch(() => {
+        // Don't fail silently: an unsynced change looks saved locally but
+        // vanishes on the next refresh, so tell the user it didn't stick.
+        showNotification("Échec de l'enregistrement sur le serveur. Vérifiez votre connexion et réessayez.", 'error');
+      });
+  }, [showNotification]);
 
   // Adopt a server-returned projects list as-is (no /sync round-trip): used
   // by flows where the server already persisted the change, e.g. responding

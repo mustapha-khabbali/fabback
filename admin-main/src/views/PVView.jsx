@@ -114,6 +114,35 @@ function normalizePresenceType(entry) {
   return entry.presenceType || entry.objective || entry.typePresence || '—';
 }
 
+function eventSpaceLabel(space) {
+  if (typeof space === 'string') return space.trim();
+  if (!space || typeof space !== 'object') return '';
+  return String(space.label || space.name || space.title || space.value || '').trim();
+}
+
+function configuredEventSpaces(event) {
+  return (Array.isArray(event?.spaces) ? event.spaces : [])
+    .map(eventSpaceLabel)
+    .filter(Boolean);
+}
+
+function isFabLabSpace(space) {
+  return eventSpaceLabel(space)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '')
+    .includes('fablab');
+}
+
+function resolvedEventSpace(row, event) {
+  const savedSpace = String(row.eventSpace || '').trim();
+  if (savedSpace) return savedSpace;
+
+  const spaces = configuredEventSpaces(event);
+  return spaces.length === 1 ? spaces[0] : '';
+}
+
 function normalizeDetail(entry) {
   if (entry.eventTitle) return entry.eventTitle;
   if (entry.projectTitle) return entry.projectTitle;
@@ -208,10 +237,12 @@ export default function PVView() {
   const [roleFilter, setRoleFilter] = useState('all');
   const [presenceType, setPresenceType] = useState('all');
   const [eventFilter, setEventFilter] = useState('all');
+  const [eventSpaceFilter, setEventSpaceFilter] = useState('');
   const [report, setReport] = useState(null);
   const [toast, setToast] = useState({ show: false, message: '' });
   const [toastTimeoutId, setToastTimeoutId] = useState(null);
   const [attendanceRows, setAttendanceRows] = useState([]);
+  const [events, setEvents] = useState([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -221,6 +252,13 @@ export default function PVView() {
       })
       .catch(() => {
         if (!cancelled) setAttendanceRows([]);
+      });
+    api.getEvents()
+      .then((loadedEvents) => {
+        if (!cancelled) setEvents(loadedEvents);
+      })
+      .catch(() => {
+        if (!cancelled) setEvents([]);
       });
     return () => {
       cancelled = true;
@@ -233,15 +271,30 @@ export default function PVView() {
     presenceOptions.find((option) => option.value === presenceType) || presenceOptions[0]
   ), [presenceOptions, presenceType]);
   const eventOptions = useMemo(() => readAdminEvents(allRows), [allRows]);
+  const hasSelectedEvent = Boolean(eventFilter && eventFilter !== 'all');
+  const selectedEvent = useMemo(() => events.find((event) => (
+    (eventFilter && String(event.id) === String(eventFilter))
+    || (eventFilter && event.title === eventFilter)
+  )), [events, eventFilter]);
+  const selectedEventSpaces = useMemo(() => configuredEventSpaces(selectedEvent), [selectedEvent]);
+  const requiresEventSpace = selectedPresenceOption?.requiresEvent && hasSelectedEvent && selectedEventSpaces.length > 1;
 
   useEffect(() => {
     setPresenceType('all');
-    setEventFilter('all');
+    setEventFilter('');
+    setEventSpaceFilter('');
   }, [roleFilter]);
 
   useEffect(() => {
-    if (!selectedPresenceOption?.requiresEvent) setEventFilter('');
+    if (!selectedPresenceOption?.requiresEvent) {
+      setEventFilter('');
+      setEventSpaceFilter('');
+    }
   }, [selectedPresenceOption]);
+
+  useEffect(() => {
+    setEventSpaceFilter('');
+  }, [eventFilter]);
 
   const showToast = (message) => {
     if (toastTimeoutId) clearTimeout(toastTimeoutId);
@@ -280,7 +333,8 @@ export default function PVView() {
       }
     }
 
-    if (selectedPresenceOption?.requiresEvent && !eventFilter) return false;
+    if (selectedPresenceOption?.requiresEvent && !hasSelectedEvent) return false;
+    if (requiresEventSpace && !eventSpaceFilter) return false;
     return true;
   };
 
@@ -291,9 +345,10 @@ export default function PVView() {
       if (roleFilter !== 'all' && row.role !== roleFilter) return false;
       if (selectedPresenceOption.value !== 'all' && !selectedPresenceOption.matches.includes(row.presenceType)) return false;
       if (selectedPresenceOption.requiresEvent && String(row.eventId || row.eventTitle) !== String(eventFilter)) return false;
+      if (requiresEventSpace && resolvedEventSpace(row, selectedEvent) !== eventSpaceFilter) return false;
       return true;
     });
-  }, [allRows, dateMode, singleDate, dateFrom, dateTo, timeFrom, timeTo, roleFilter, selectedPresenceOption, eventFilter]);
+  }, [allRows, dateMode, singleDate, dateFrom, dateTo, timeFrom, timeTo, roleFilter, selectedPresenceOption, eventFilter, requiresEventSpace, eventSpaceFilter, selectedEvent]);
 
   const reportRows = useMemo(() => {
     return [...filteredRows].sort((a, b) => {
@@ -302,6 +357,12 @@ export default function PVView() {
       return new Date(a.timestampIn || 0) - new Date(b.timestampIn || 0);
     });
   }, [filteredRows]);
+  const selectedReportSpace = selectedEventSpaces.length === 1
+    ? selectedEventSpaces[0]
+    : eventSpaceFilter;
+  const selectedReportSpaceLabel = selectedReportSpace && !isFabLabSpace(selectedReportSpace)
+    ? selectedReportSpace
+    : '';
 
   const handleGenerate = () => {
     if (!validatePvFilters()) return;
@@ -312,7 +373,7 @@ export default function PVView() {
       ? (ratedRows.reduce((sum, row) => sum + row.rating, 0) / ratedRows.length).toFixed(1)
       : '0.0';
 
-    setReport({ entries: rows.length, days, avgRating, rows });
+    setReport({ entries: rows.length, days, avgRating, rows, spaceLabel: selectedReportSpaceLabel });
   };
 
   const handleExportExcel = async () => {
@@ -341,7 +402,9 @@ export default function PVView() {
     worksheet.getRow(1).height = 30;
 
     worksheet.mergeCells('A2:J2');
-    worksheet.getCell('A2').value = `${rows.length} enregistrement(s) - Généré le ${new Date().toLocaleDateString('fr-FR')}`;
+    const exportSpaceLabel = report ? report.spaceLabel : selectedReportSpaceLabel;
+    const spaceSuffix = exportSpaceLabel ? ` - ${exportSpaceLabel}` : '';
+    worksheet.getCell('A2').value = `${rows.length} enregistrement(s) - Généré le ${new Date().toLocaleDateString('fr-FR')}${spaceSuffix}`;
     worksheet.getCell('A2').fill = panelFill;
     worksheet.getCell('A2').font = { name: 'Arial', size: 10, color: { argb: 'FFCBD5E1' } };
     worksheet.getCell('A2').alignment = { vertical: 'middle', horizontal: 'left' };
@@ -428,7 +491,8 @@ export default function PVView() {
     const { start, end } = buildRange(dateMode, singleDate, dateFrom, dateTo, timeFrom, timeTo);
     return !start || !end || start > end;
   })();
-  const isEventRequiredMissing = selectedPresenceOption?.requiresEvent && !eventFilter;
+  const isEventRequiredMissing = selectedPresenceOption?.requiresEvent && !hasSelectedEvent;
+  const isEventSpaceRequiredMissing = requiresEventSpace && !eventSpaceFilter;
   const fieldClass = 'w-full h-10 bg-body border border-white/10 text-white text-[12px] font-medium rounded-lg px-3 outline-none focus:border-accent-blue/50 transition-colors';
   const labelClass = 'text-[9px] font-bold text-white/30 uppercase tracking-[1.5px] block mb-1.5';
 
@@ -534,7 +598,7 @@ export default function PVView() {
               </select>
             </div>
 
-            <div className="w-[320px]">
+            <div className={requiresEventSpace ? 'w-[170px]' : 'w-[320px]'}>
               <label className={labelClass}>Type de présence</label>
               <select
                 value={presenceType}
@@ -559,9 +623,23 @@ export default function PVView() {
               </div>
             )}
 
+            {requiresEventSpace && (
+              <div className="w-[150px]">
+                <label className={labelClass}>Espace</label>
+                <select
+                  value={eventSpaceFilter}
+                  onChange={(e) => setEventSpaceFilter(e.target.value)}
+                  className={fieldClass}
+                >
+                  <option value="">Choisir un espace</option>
+                  {selectedEventSpaces.map((space) => <option key={space} value={space}>{space}</option>)}
+                </select>
+              </div>
+            )}
+
             <button
               onClick={handleGenerate}
-              disabled={isInvalidRange || isEventRequiredMissing}
+              disabled={isInvalidRange || isEventRequiredMissing || isEventSpaceRequiredMissing}
               className="btn-gate-in h-10 px-5 rounded-lg font-bold text-[12px] disabled:opacity-40 disabled:cursor-not-allowed xl:ml-auto"
             >
               Générer
@@ -572,7 +650,7 @@ export default function PVView() {
 
       <div className="section-card overflow-hidden">
         <div className="flex items-center justify-between px-7 py-4 border-b border-white/[0.04]">
-          <h3 className="text-[14px] font-bold text-white">Historique de présence</h3>
+          <h3 className="text-[14px] font-bold text-white">Historique de présence{report?.spaceLabel ? ` (${report.spaceLabel})` : ''}</h3>
           <span className="text-[11px] text-white/25 font-semibold">
             {report ? `${report.entries} enregistrement(s)` : '0 enregistrement(s)'}
           </span>

@@ -27,7 +27,9 @@ const journalSchema = z.object({
   content: z.string().optional().nullable(),
   image: z.string().optional().nullable(),
   phase: z.string().optional().nullable(),
-  version: z.number().int().optional().nullable()
+  // Clients send version from a number <input>, whose value is always a string
+  // (e.g. "1"). Coerce so a valid numeric string doesn't 400 the whole sync.
+  version: z.coerce.number().int().optional().nullable()
 });
 
 const projectSchema = z.object({

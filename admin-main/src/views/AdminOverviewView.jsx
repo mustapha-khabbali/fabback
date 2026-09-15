@@ -118,8 +118,12 @@ function isOtherPresence(item) {
   return item?.presenceType === 'Other';
 }
 
+function isEventPresence(item) {
+  return item?.presenceType === 'Event';
+}
+
 function presenceTypeLabel(item, showDetail = false) {
-  if (item?.presenceType === 'Event') return item.eventTitle || 'Event';
+  if (isEventPresence(item)) return item.eventTitle || 'Event';
   if (isProjectPresence(item) && showDetail) return item.projectTitle || item.projectName || item.detail || item.presenceType;
   if (isOtherPresence(item) && showDetail) return item.detail || item.comment || item.presenceType;
   return item?.presenceType || '—';
@@ -286,6 +290,7 @@ export default function AdminOverviewView({ onNavigate }) {
   const [dashboardSpaceFilter, setDashboardSpaceFilter] = useState('');
   const [openPresenceMenu, setOpenPresenceMenu] = useState(null);
   const [presenceMenuPosition, setPresenceMenuPosition] = useState({ top: 0, left: 0, width: 0 });
+  const [selectedEventDetails, setSelectedEventDetails] = useState(null);
   const [attendanceRows, setAttendanceRows] = useState([]);
   const [events, setEvents] = useState([]);
   const [attendanceStale, setAttendanceStale] = useState(false);
@@ -470,6 +475,19 @@ export default function AdminOverviewView({ onNavigate }) {
 
   const openUserProfile = (user) => {
     onNavigate?.('users', user);
+  };
+
+  const openEventDetails = (attendance) => {
+    const linkedEvent = events.find((event) => (
+      (attendance.eventId && String(event.id) === String(attendance.eventId))
+      || (!attendance.eventId && attendance.eventTitle && event.title === attendance.eventTitle)
+    ));
+
+    // Attendance remains readable even if its event has subsequently been deleted.
+    setSelectedEventDetails(linkedEvent || {
+      title: attendance.eventTitle || 'Event',
+      spaces: attendance.eventSpace ? [attendance.eventSpace] : []
+    });
   };
 
   const togglePresenceMenu = (menu, event, width = 160) => {
@@ -1217,6 +1235,7 @@ export default function AdminOverviewView({ onNavigate }) {
                     ) : filteredPresents.map((s) => {
                       const rowKey = s.id || s.name;
                       const hasRevealText = (isProjectPresence(s) && (s.projectTitle || s.projectName || s.detail)) || (isOtherPresence(s) && s.detail);
+                      const canOpenEventDetails = periodMode === 'now' && isEventPresence(s) && Boolean(s.eventId || s.eventTitle);
                       const detailRevealed = !!revealedProjects[rowKey];
                       const isCompleted = periodMode === 'custom' && !!s.timeOut;
 
@@ -1248,11 +1267,15 @@ export default function AdminOverviewView({ onNavigate }) {
                           <button
                             type="button"
                             onClick={() => {
+                              if (canOpenEventDetails) {
+                                openEventDetails(s);
+                                return;
+                              }
                               if (!hasRevealText) return;
                               setRevealedProjects((current) => ({ ...current, [rowKey]: !current[rowKey] }));
                             }}
-                            title={hasRevealText ? (s.projectTitle || s.projectName || s.detail) : undefined}
-                            className={`block max-w-full truncate text-[11px] font-bold text-accent-blue bg-accent-blue/10 px-2.5 py-1 rounded-lg whitespace-nowrap transition-colors ${hasRevealText ? 'cursor-pointer hover:bg-accent-blue/20' : 'cursor-default'}`}
+                            title={canOpenEventDetails ? 'Afficher les informations de l\'événement' : (hasRevealText ? (s.projectTitle || s.projectName || s.detail) : undefined)}
+                            className={`block max-w-full truncate text-[11px] font-bold text-accent-blue bg-accent-blue/10 px-2.5 py-1 rounded-lg whitespace-nowrap transition-colors ${canOpenEventDetails || hasRevealText ? 'cursor-pointer hover:bg-accent-blue/20' : 'cursor-default'}`}
                           >
                             {presenceTypeLabel(s, detailRevealed)}
                           </button>
@@ -1279,6 +1302,70 @@ export default function AdminOverviewView({ onNavigate }) {
         </div>
 
       </div>
+
+      {selectedEventDetails && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+          <button
+            type="button"
+            aria-label="Fermer les informations de l'événement"
+            onClick={() => setSelectedEventDetails(null)}
+            className="absolute inset-0 bg-[#060B28]/80 backdrop-blur-md cursor-default"
+          />
+          <div className="relative w-full max-w-lg rounded-3xl border border-white/[0.08] bg-[#111C44] p-7 text-left shadow-2xl animate-fade-in">
+            <button
+              type="button"
+              onClick={() => setSelectedEventDetails(null)}
+              className="absolute right-4 top-4 text-lg text-white/40 transition-colors hover:text-white"
+              aria-label="Fermer"
+            >
+              ✕
+            </button>
+            <p className="mb-1 text-[10px] font-bold uppercase tracking-[2px] text-accent-purple">Événement</p>
+            <h3 className="pr-8 text-[20px] font-bold text-white">{selectedEventDetails.title}</h3>
+
+            <div className="mt-6 space-y-4">
+              {selectedEventDetails.description && (
+                <div>
+                  <p className="mb-1 text-[9px] font-bold uppercase tracking-[1.5px] text-white/35">Description</p>
+                  <p className="text-[13px] leading-relaxed text-white/70">{selectedEventDetails.description}</p>
+                </div>
+              )}
+              {(selectedEventDetails.date || selectedEventDetails.dateFrom || selectedEventDetails.dateTo) && (
+                <div>
+                  <p className="mb-1 text-[9px] font-bold uppercase tracking-[1.5px] text-white/35">Date</p>
+                  <p className="text-[13px] font-semibold text-white/80">
+                    {selectedEventDetails.dateMode === 'range'
+                      ? `${formatDateString(selectedEventDetails.dateFrom)} — ${formatDateString(selectedEventDetails.dateTo)}`
+                      : formatDateString(selectedEventDetails.date)}
+                  </p>
+                </div>
+              )}
+              {configuredEventSpaces(selectedEventDetails).length > 0 && (
+                <div>
+                  <p className="mb-2 text-[9px] font-bold uppercase tracking-[1.5px] text-white/35">Espaces</p>
+                  <div className="flex flex-wrap gap-2">
+                    {configuredEventSpaces(selectedEventDetails).map((space) => (
+                      <span key={space} className="rounded-lg bg-accent-blue/10 px-2.5 py-1 text-[11px] font-bold text-accent-blue">{space}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {Array.isArray(selectedEventDetails.intervenants) && selectedEventDetails.intervenants.length > 0 && (
+                <div>
+                  <p className="mb-2 text-[9px] font-bold uppercase tracking-[1.5px] text-white/35">Intervenants</p>
+                  <div className="space-y-1.5">
+                    {selectedEventDetails.intervenants.map((intervenant, index) => (
+                      <p key={intervenant.id || `${intervenant.prenom}-${intervenant.nom}-${index}`} className="text-[12px] text-white/75">
+                        {intervenant.prenom} {intervenant.nom}{intervenant.role ? ` — ${intervenant.role}` : ''}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Red Toast Notification */}
       {toast.show && (

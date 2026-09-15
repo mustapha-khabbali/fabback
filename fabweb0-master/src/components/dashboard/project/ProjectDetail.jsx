@@ -408,28 +408,36 @@ export default function ProjectDetail({ onBack }) {
   };
 
   const saveJournal = (date, content, tempImage, phase, version) => {
-    let updated;
+    // The version <input> yields a string; the API schema expects an int, so
+    // normalise here to keep the sync payload valid.
+    const versionNumber = Number.parseInt(version, 10) || 1;
     if (activeJournal) {
-      // Editing existing
+      // Editing existing — commit, then return to the reader showing the update
+      // (edit was launched from the reader, so that's where "done" belongs).
+      const updatedJournal = { ...activeJournal, date, content, image: tempImage, phase, version: versionNumber };
       const updatedJournals = project.journals.map(j =>
-        j.id === activeJournal.id ? { ...j, date, content, image: tempImage, phase, version } : j
+        j.id === activeJournal.id ? updatedJournal : j
       );
-      updated = userProjects.map(p =>
+      const updated = userProjects.map(p =>
         p.id === currentProjectId ? { ...p, journals: updatedJournals } : p
       );
-    } else {
-      // Creating new
-      const entry = { date, content, image: tempImage, phase, version };
-      updated = userProjects.map(p =>
-        p.id === currentProjectId ? { ...p, journals: [entry, ...p.journals] } : p
-      );
-      recordPresenceActivity('journal:create', {
-        projectId: project.id,
-        projectTitle: project.title,
-        phase,
-        version
-      });
+      saveProjects(updated);
+      setShowJournalModal(false);
+      setActiveJournal(updatedJournal);
+      setShowJournalReader(true);
+      return;
     }
+    // Creating new
+    const entry = { date, content, image: tempImage, phase, version: versionNumber };
+    const updated = userProjects.map(p =>
+      p.id === currentProjectId ? { ...p, journals: [entry, ...p.journals] } : p
+    );
+    recordPresenceActivity('journal:create', {
+      projectId: project.id,
+      projectTitle: project.title,
+      phase,
+      version
+    });
     saveProjects(updated);
     setShowJournalModal(false);
     setActiveJournal(null);
@@ -915,7 +923,15 @@ export default function ProjectDetail({ onBack }) {
       {showJournalModal && (
         <JournalCreateModal
           onSave={saveJournal}
-          onCancel={() => { setShowJournalModal(false); setActiveJournal(null); }}
+          onCancel={() => {
+            setShowJournalModal(false);
+            if (activeJournal) {
+              // Editing: go back to the reader we came from, keep the journal.
+              setShowJournalReader(true);
+            } else {
+              setActiveJournal(null);
+            }
+          }}
           journal={activeJournal}
           defaultPhase={project.phase || 'MOC'}
         />
