@@ -200,6 +200,14 @@ export const api = {
     return body.attendance || [];
   },
 
+  async updateAttendanceExitTime(id, endedAt) {
+    const body = await request(`/attendance/${encodeURIComponent(id)}/exit-time`, {
+      method: 'PATCH',
+      body: JSON.stringify({ endedAt })
+    });
+    return body.attendance;
+  },
+
   async getLabClosures() {
     return request('/lab-closures');
   },

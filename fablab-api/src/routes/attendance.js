@@ -33,6 +33,18 @@ const checkOutSchema = z.object({
   feedbackComment: z.string().optional()
 });
 
+// An administrator may correct a missed or incorrectly recorded Gate-OUT.
+// The value is a wall-clock date/time in the FabLab's timezone, not a client
+// supplied instant, so a correction such as "left two hours ago" stays exact.
+const updateExitTimeSchema = z.object({
+  endedAt: z.string()
+    .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/, 'Invalid exit date/time')
+    .refine((value) => {
+      const parsed = new Date(`${value}:00Z`);
+      return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 16) === value;
+    }, 'Invalid exit date/time')
+});
+
 const LAB_TIME_ZONE = 'Africa/Casablanca';
 const MOROCCAN_HOLIDAYS_2026 = [
   { name: 'Nouvel An', date: '2026-01-01' },
@@ -561,6 +573,48 @@ attendanceRouter.post('/check-out', async (req, res, next) => {
     );
 
     const attendance = mapAttendance(joined.rows[0]);
+    emitRealtimeChange({ entity: 'attendance', action: 'check-out', id: attendance.id, recipientId: attendance.userId });
+    res.json({ attendance });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Manual attendance correction from the admin dashboard. It intentionally
+// follows the same completed-attendance path as Gate-OUT, while preserving an
+// existing member rating/feedback on records that were already completed.
+attendanceRouter.patch('/:attendanceId/exit-time', requireRole('administrateur'), async (req, res, next) => {
+  try {
+    const parsed = updateExitTimeSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: 'Date ou heure de sortie invalide.' });
+      return;
+    }
+
+    const result = await query(
+      `
+        update attendance
+        set timestamp_out = ($1::timestamp at time zone $2), auto_closed = false
+        where id = $3
+          and timestamp_in <= ($1::timestamp at time zone $2)
+          and ($1::timestamp at time zone $2) <= now()
+        returning *
+      `,
+      [parsed.data.endedAt, LAB_TIME_ZONE, req.params.attendanceId]
+    );
+
+    if (!result.rows[0]) {
+      const existing = await query('select id from attendance where id = $1', [req.params.attendanceId]);
+      if (!existing.rows[0]) {
+        res.status(404).json({ error: 'Enregistrement de présence introuvable.' });
+        return;
+      }
+      res.status(400).json({ error: "L'heure de sortie doit être après l'entrée et ne peut pas être dans le futur." });
+      return;
+    }
+
+    const joined = await joinAttendance({ query }, result.rows[0].id);
+    const attendance = mapAttendance(joined);
     emitRealtimeChange({ entity: 'attendance', action: 'check-out', id: attendance.id, recipientId: attendance.userId });
     res.json({ attendance });
   } catch (error) {

@@ -21,6 +21,15 @@ let baseUrl;
 const stagiaire = () => tokenFor(USERS.stagiaire);
 const DEFAULT_TEST_LAB_DATE = '2026-07-13'; // Monday
 
+function labWallDateTime(date) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Africa/Casablanca',
+    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}T${values.hour}:${values.minute}`;
+}
+
 function checkInBody(extra = {}) {
   return { qr: { gate: 'GATE_IN', id: QR.GATE_IN }, objective: 'Projet en cours', ...extra };
 }
@@ -655,4 +664,50 @@ test('admin history includes auto-closed rows flagged as autoClosed', async () =
   assert.equal(row.autoClosed, true);
   assert.equal(row.type, 'out');
   assert.equal(row.rating, null);
+});
+
+test('an administrator can record the real past exit time for an active attendance', async () => {
+  const entryTime = new Date(Date.now() - 2 * 60 * 60 * 1000);
+  const exitTime = new Date(Date.now() - 60 * 60 * 1000);
+  const id = await insertAttendance(USERS.stagiaire.id, { timestampIn: entryTime });
+
+  const res = await api(baseUrl, `/attendance/${id}/exit-time`, {
+    method: 'PATCH',
+    token: tokenFor(USERS.admin),
+    body: { endedAt: labWallDateTime(exitTime) }
+  });
+
+  assert.equal(res.status, 200);
+  assert.equal(res.body.attendance.id, id);
+  assert.equal(res.body.attendance.type, 'out');
+  assert.equal(labWallDateTime(new Date(res.body.attendance.timestampOut)), labWallDateTime(exitTime));
+
+  const row = await getAttendanceRow(id);
+  assert.equal(row.auto_closed, false);
+});
+
+test('manual exit-time corrections reject non-admin users and impossible times', async () => {
+  const entryTime = new Date(Date.now() - 2 * 60 * 60 * 1000);
+  const id = await insertAttendance(USERS.stagiaire.id, { timestampIn: entryTime });
+
+  const forbidden = await api(baseUrl, `/attendance/${id}/exit-time`, {
+    method: 'PATCH',
+    token: stagiaire(),
+    body: { endedAt: labWallDateTime(new Date(Date.now() - 60 * 60 * 1000)) }
+  });
+  assert.equal(forbidden.status, 403);
+
+  const beforeEntry = await api(baseUrl, `/attendance/${id}/exit-time`, {
+    method: 'PATCH',
+    token: tokenFor(USERS.admin),
+    body: { endedAt: labWallDateTime(new Date(Date.now() - 3 * 60 * 60 * 1000)) }
+  });
+  assert.equal(beforeEntry.status, 400);
+
+  const future = await api(baseUrl, `/attendance/${id}/exit-time`, {
+    method: 'PATCH',
+    token: tokenFor(USERS.admin),
+    body: { endedAt: labWallDateTime(new Date(Date.now() + 60 * 60 * 1000)) }
+  });
+  assert.equal(future.status, 400);
 });

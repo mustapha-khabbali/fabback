@@ -165,6 +165,12 @@ function formatTime(dateValue) {
   }).format(date);
 }
 
+function labDateTimeParts(dateValue) {
+  const date = dateValue instanceof Date ? dateValue : new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return { date: '', time: '' };
+  return { date: toLabISODate(date), time: formatTime(date) };
+}
+
 function safeDate(dateValue) {
   const date = new Date(dateValue);
   return Number.isNaN(date.getTime()) ? null : date;
@@ -303,6 +309,10 @@ export default function AdminOverviewView({ onNavigate }) {
   const [newExceptionDate, setNewExceptionDate] = useState('');
   const [newExceptionFrom, setNewExceptionFrom] = useState('');
   const [newExceptionTo, setNewExceptionTo] = useState('');
+  const [exitTimeEditor, setExitTimeEditor] = useState(null);
+  const [exitDate, setExitDate] = useState('');
+  const [exitTime, setExitTime] = useState('');
+  const [isSavingExitTime, setIsSavingExitTime] = useState(false);
 
   // Toast state for validation errors
   const [toast, setToast] = useState({ show: false, message: '' });
@@ -488,6 +498,50 @@ export default function AdminOverviewView({ onNavigate }) {
       title: attendance.eventTitle || 'Event',
       spaces: attendance.eventSpace ? [attendance.eventSpace] : []
     });
+  };
+
+  const openExitTimeEditor = (attendance) => {
+    const existingExit = attendance.timestampOut ? labDateTimeParts(attendance.timestampOut) : labDateTimeParts(new Date());
+    setExitTimeEditor(attendance);
+    setExitDate(existingExit.date);
+    setExitTime(existingExit.time);
+  };
+
+  const closeExitTimeEditor = () => {
+    if (!isSavingExitTime) setExitTimeEditor(null);
+  };
+
+  const saveExitTime = async () => {
+    if (!exitTimeEditor || !exitDate || !exitTime) {
+      showToast("Veuillez choisir la date et l'heure de sortie.");
+      return;
+    }
+
+    const entry = labDateTimeParts(exitTimeEditor.timestampIn || `${exitTimeEditor.date}T${exitTimeEditor.timeIn}:00`);
+    const selectedWallTime = `${exitDate}T${exitTime}`;
+    const entryWallTime = entry.date && entry.time ? `${entry.date}T${entry.time}` : '';
+    const now = labDateTimeParts(new Date());
+    const nowWallTime = `${now.date}T${now.time}`;
+    if (entryWallTime && selectedWallTime < entryWallTime) {
+      showToast("L'heure de sortie doit être après l'heure d'entrée.");
+      return;
+    }
+    if (selectedWallTime > nowWallTime) {
+      showToast("L'heure de sortie ne peut pas être dans le futur.");
+      return;
+    }
+
+    setIsSavingExitTime(true);
+    try {
+      await api.updateAttendanceExitTime(exitTimeEditor.id, selectedWallTime);
+      await loadAttendance();
+      setExitTimeEditor(null);
+      showToast('Heure de sortie mise à jour.');
+    } catch (error) {
+      showToast(error.message || "Impossible de modifier l'heure de sortie.");
+    } finally {
+      setIsSavingExitTime(false);
+    }
   };
 
   const togglePresenceMenu = (menu, event, width = 160) => {
@@ -1284,12 +1338,17 @@ export default function AdminOverviewView({ onNavigate }) {
                           <span className="text-[11px] font-bold text-accent-green bg-accent-green/10 px-2.5 py-1 rounded-lg">{s.timeIn}</span>
                         </td>
                         <td className="pl-2 pr-5 py-3.5">
-                          <div className="flex items-center space-x-1 justify-end">
+                          <button
+                            type="button"
+                            onClick={() => openExitTimeEditor(s)}
+                            title="Modifier l'heure de sortie"
+                            className="ml-auto flex items-center space-x-1 rounded-lg px-2 py-1 -mr-2 transition-colors hover:bg-white/[0.06]"
+                          >
                             <div className={`w-1.5 h-1.5 rounded-full ${isCompleted ? 'bg-accent-red' : 'bg-accent-green live-dot'}`} />
                             <span className={`text-[9px] font-bold uppercase ${isCompleted ? 'text-accent-red' : 'text-accent-green'}`}>
                               {isCompleted ? `Terminé${s.timeOut ? ` (${s.timeOut})` : ''}` : 'Actif'}
                             </span>
-                          </div>
+                          </button>
                         </td>
                       </tr>
                       );
@@ -1362,6 +1421,76 @@ export default function AdminOverviewView({ onNavigate }) {
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {exitTimeEditor && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+          <button
+            type="button"
+            aria-label="Fermer"
+            onClick={closeExitTimeEditor}
+            className="absolute inset-0 bg-[#060B28]/80 backdrop-blur-md"
+          />
+          <div className="relative w-full max-w-md rounded-3xl border border-white/[0.08] bg-[#111C44] p-7 text-left shadow-2xl animate-fade-in">
+            <button
+              type="button"
+              onClick={closeExitTimeEditor}
+              disabled={isSavingExitTime}
+              className="absolute right-4 top-4 text-lg text-white/40 hover:text-white disabled:opacity-40"
+              aria-label="Fermer"
+            >
+              ✕
+            </button>
+            <p className="mb-1 text-[12px] font-medium text-white/50">Présence de {exitTimeEditor.name || 'Utilisateur'}</p>
+            <h3 className="mb-2 text-[18px] font-bold text-white">Modifier l'heure de sortie</h3>
+            <p className="mb-6 text-[12px] leading-relaxed text-white/45">
+              Choisissez l'heure réelle à laquelle cette personne est sortie. Cette correction sera utilisée dans le journal et le PV.
+            </p>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="mb-2 block text-[10px] font-bold uppercase tracking-widest text-white/40">Date de sortie</label>
+                <input
+                  type="date"
+                  value={exitDate}
+                  min={toLabISODate(exitTimeEditor.timestampIn) || undefined}
+                  max={currentLabISODate()}
+                  onChange={(event) => setExitDate(event.target.value)}
+                  disabled={isSavingExitTime}
+                  className="w-full rounded-xl border border-white/10 bg-[#060B28] px-4 py-3 text-[13px] font-medium text-white outline-none transition-colors focus:border-accent-blue/50 disabled:opacity-50"
+                />
+              </div>
+              <div>
+                <label className="mb-2 block text-[10px] font-bold uppercase tracking-widest text-white/40">Heure de sortie</label>
+                <input
+                  type="time"
+                  value={exitTime}
+                  onChange={(event) => setExitTime(event.target.value)}
+                  disabled={isSavingExitTime}
+                  className="w-full rounded-xl border border-white/10 bg-[#060B28] px-4 py-3 text-[13px] font-medium text-white outline-none transition-colors focus:border-accent-blue/50 disabled:opacity-50"
+                />
+              </div>
+            </div>
+            <p className="mt-4 text-[11px] text-white/35">Entrée enregistrée : {exitTimeEditor.date} à {exitTimeEditor.timeIn}</p>
+            <div className="mt-7 flex justify-end gap-3 border-t border-white/[0.06] pt-5">
+              <button
+                type="button"
+                onClick={closeExitTimeEditor}
+                disabled={isSavingExitTime}
+                className="rounded-xl px-4 py-2.5 text-[12px] font-bold text-white/55 transition-colors hover:text-white disabled:opacity-40"
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={saveExitTime}
+                disabled={isSavingExitTime}
+                className="rounded-xl bg-accent-blue px-5 py-2.5 text-[12px] font-bold text-white transition-colors hover:bg-accent-blue/80 disabled:opacity-50"
+              >
+                {isSavingExitTime ? 'Enregistrement…' : 'Enregistrer'}
+              </button>
             </div>
           </div>
         </div>
