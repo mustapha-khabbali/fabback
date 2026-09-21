@@ -113,6 +113,7 @@ function mapAttendance(row) {
     eventSpace: row.event_space || '',
     timestamp: row.timestamp_in,
     timestampOut: row.timestamp_out,
+    scheduledExitAt: row.scheduled_exit_at || null,
     rating: row.rating,
     feedbackComment: row.feedback_comment,
     autoClosed: row.auto_closed || false
@@ -129,7 +130,8 @@ async function findLatestOpenAttendance(client, userId) {
       select
         a.*,
         ((a.timestamp_in at time zone $2)::date = (now() at time zone $2)::date) as is_today,
-        (now() >= (((a.timestamp_in at time zone $2)::date + $3::time) at time zone $2)) as is_expired
+        (now() >= (((a.timestamp_in at time zone $2)::date + $3::time) at time zone $2)) as is_expired,
+        (a.scheduled_exit_at is not null and now() >= a.scheduled_exit_at) as is_scheduled_exit_due
       from attendance a
       where a.user_id = $1 and a.timestamp_out is null
       order by a.timestamp_in desc
@@ -141,6 +143,7 @@ async function findLatestOpenAttendance(client, userId) {
 }
 
 function isOpenAttendanceActive(row) {
+  if (row?.scheduled_exit_at) return row.is_scheduled_exit_due !== true;
   return isSameLabDay(row) && row?.is_expired !== true;
 }
 
@@ -149,9 +152,9 @@ async function autoCloseAttendance(client, attendanceId) {
     `
       update attendance
       set
-        timestamp_out = greatest(
-          timestamp_in,
-          ((timestamp_in at time zone $2)::date + $3::time) at time zone $2
+        timestamp_out = coalesce(
+          scheduled_exit_at,
+          greatest(timestamp_in, ((timestamp_in at time zone $2)::date + $3::time) at time zone $2)
         ),
         rating = null,
         feedback_comment = null,
@@ -165,6 +168,16 @@ async function autoCloseAttendance(client, attendanceId) {
 }
 
 async function autoCloseExpiredOpenAttendances(client) {
+  const scheduledResult = await client.query(
+    `
+      update attendance
+      set timestamp_out = scheduled_exit_at, rating = null, feedback_comment = null, auto_closed = true
+      where timestamp_out is null
+        and scheduled_exit_at is not null
+        and scheduled_exit_at <= now()
+      returning id
+    `
+  );
   const result = await client.query(
     `
       update attendance
@@ -177,6 +190,7 @@ async function autoCloseExpiredOpenAttendances(client) {
         feedback_comment = null,
         auto_closed = true
       where timestamp_out is null
+        and scheduled_exit_at is null
         and now() >= (((timestamp_in at time zone $1)::date + $2::time) at time zone $1)
       returning id
     `,
@@ -184,11 +198,36 @@ async function autoCloseExpiredOpenAttendances(client) {
   );
 
   const joinedRows = [];
-  for (const row of result.rows) {
+  for (const row of [...scheduledResult.rows, ...result.rows]) {
     const joined = await joinAttendance(client, row.id);
     if (joined) joinedRows.push(joined);
   }
   return joinedRows;
+}
+
+// A background timer calls this even when no dashboard is open, so a timed
+// event changes from Actif to Terminé at the calculated gate-out moment.
+export async function closeDueAttendances() {
+  const rows = await withTransaction(async (client) => {
+    const result = await client.query(
+      `
+        update attendance
+        set timestamp_out = scheduled_exit_at, rating = null, feedback_comment = null, auto_closed = true
+        where timestamp_out is null
+          and scheduled_exit_at is not null
+          and scheduled_exit_at <= now()
+        returning id
+      `
+    );
+    const joinedRows = [];
+    for (const row of result.rows) {
+      const joined = await joinAttendance(client, row.id);
+      if (joined) joinedRows.push(joined);
+    }
+    return joinedRows;
+  });
+  rows.forEach(emitAttendanceCheckOut);
+  return rows;
 }
 
 async function joinAttendance(client, attendanceId) {
@@ -257,6 +296,26 @@ async function resolveEventSpace(client, eventId, selectedSpace) {
     isConfigured: Boolean(matchedSpace),
     isFabLab: isFabLabSpace(matchedSpace)
   };
+}
+
+async function calculateScheduledEventExit(client, eventId) {
+  const parsedEventId = uuidOrNull(eventId);
+  if (!parsedEventId) return null;
+
+  const result = await client.query(
+    `
+      select case
+        when start_time is null or end_time is null then null
+        when (now() at time zone $2)::time between start_time and end_time
+          then (((now() at time zone $2)::date + end_time) at time zone $2)
+        else now() + (end_time - start_time)
+      end as scheduled_exit_at
+      from events
+      where id = $1
+    `,
+    [parsedEventId, LAB_TIME_ZONE]
+  );
+  return result.rows[0]?.scheduled_exit_at || null;
 }
 
 async function hasScannedEventSpace(client, userId, data, eventSpace) {
@@ -447,6 +506,7 @@ attendanceRouter.post('/check-in', async (req, res, next) => {
       const open = await findLatestOpenAttendance(client, req.user.id);
       const activeOpen = open && isOpenAttendanceActive(open);
       const eventOpensFabLabPresence = isEventCheckIn && eventSpace.isFabLab && !activeOpen;
+      const scheduledExitAt = isEventCheckIn ? await calculateScheduledEventExit(client, data.eventId) : null;
       // Server-side guard: Gate-IN must not create a second open lab presence
       // row. EVENT scans are event records, except when the admin-configured
       // event space is FabLab and the user is not already marked inside.
@@ -470,9 +530,9 @@ attendanceRouter.post('/check-in', async (req, res, next) => {
         `
           insert into attendance (
             user_id, objective, comment, project_id, project_title,
-            supervisor_id, supervisor_name, event_id, event_title, event_space, timestamp_out
+            supervisor_id, supervisor_name, event_id, event_title, event_space, scheduled_exit_at, timestamp_out
           )
-          values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, case when $11::boolean then now() else null end)
+          values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, case when $12::boolean then now() else null end)
           returning *
         `,
         [
@@ -486,7 +546,8 @@ attendanceRouter.post('/check-in', async (req, res, next) => {
           uuidOrNull(data.eventId),
           data.eventTitle || null,
           eventSpace.label,
-          isEventCheckIn && !eventOpensFabLabPresence
+          scheduledExitAt,
+          isEventCheckIn && !eventOpensFabLabPresence && !scheduledExitAt
         ]
       );
 

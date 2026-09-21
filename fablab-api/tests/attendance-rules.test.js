@@ -16,6 +16,8 @@ import {
   QR
 } from './helpers.js';
 import { config } from '../src/config.js';
+import { closeDueAttendances } from '../src/routes/attendance.js';
+import { query } from '../src/db/pool.js';
 
 let baseUrl;
 const stagiaire = () => tokenFor(USERS.stagiaire);
@@ -209,6 +211,45 @@ test('EVENT scan in a configured outside space stays completed and does not coun
   const open = await api(baseUrl, '/attendance/open', { token: stagiaire() });
   assert.equal(open.status, 200);
   assert.equal(open.body.attendance, null);
+});
+
+test('a timed EVENT scan during its schedule stays active until the configured end time', async () => {
+  const eventId = await insertEvent({
+    title: 'Timed workshop',
+    spaces: ['Amphithéâtre 1'],
+    startTime: '00:00',
+    endTime: '23:59'
+  });
+
+  const event = await api(baseUrl, '/attendance/check-in', {
+    method: 'POST',
+    token: stagiaire(),
+    body: checkInBody({
+      qr: { gate: 'EVENT', id: QR.EVENT },
+      objective: 'Event',
+      eventId,
+      eventTitle: 'Timed workshop',
+      eventSpace: 'Amphithéâtre 1'
+    })
+  });
+
+  assert.equal(event.status, 201);
+  assert.equal(event.body.attendance.timestampOut, null);
+  assert.ok(event.body.attendance.scheduledExitAt, 'the event end must be planned at scan time');
+  assert.match(labWallDateTime(new Date(event.body.attendance.scheduledExitAt)), /T23:59$/);
+});
+
+test('the automatic event gate-out records the planned exit time when it becomes due', async () => {
+  const id = await insertAttendance(USERS.stagiaire.id, { timestampIn: new Date(Date.now() - 60 * 60 * 1000) });
+  await query("update attendance set scheduled_exit_at = now() - interval '1 minute' where id = $1", [id]);
+
+  const closed = await closeDueAttendances();
+  assert.equal(closed.length, 1);
+  assert.equal(closed[0].id, id);
+
+  const row = await getAttendanceRow(id);
+  assert.ok(row.timestamp_out);
+  assert.equal(new Date(row.timestamp_out).getTime(), new Date(row.scheduled_exit_at).getTime());
 });
 
 test('EVENT scan rejects the same event space twice but accepts a different space', async () => {

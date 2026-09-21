@@ -6,6 +6,13 @@ import { emitRealtimeChange } from '../realtime/bus.js';
 
 export const eventsRouter = express.Router();
 
+const timeSchema = z.string()
+  .regex(/^\d{2}:\d{2}$/, 'Invalid event time')
+  .refine((value) => {
+    const [hours, minutes] = value.split(':').map(Number);
+    return hours <= 23 && minutes <= 59;
+  }, 'Invalid event time');
+
 const eventSchema = z.object({
   title: z.string().trim().min(1),
   description: z.string().optional(),
@@ -13,10 +20,18 @@ const eventSchema = z.object({
   date: z.string().optional().nullable(),
   dateFrom: z.string().optional().nullable(),
   dateTo: z.string().optional().nullable(),
+  startTime: timeSchema.optional().nullable(),
+  endTime: timeSchema.optional().nullable(),
   spaces: z.array(z.any()).optional(),
   intervenants: z.array(z.any()).optional(),
   archived: z.boolean().optional()
 });
+
+function hasValidEventTimes(event) {
+  const hasStart = Boolean(event.startTime);
+  const hasEnd = Boolean(event.endTime);
+  return hasStart === hasEnd && (!hasStart || event.startTime < event.endTime);
+}
 
 function mapEvent(row) {
   const toDateInput = (value) => {
@@ -35,6 +50,8 @@ function mapEvent(row) {
     date: toDateInput(row.date),
     dateFrom: toDateInput(row.date_from),
     dateTo: toDateInput(row.date_to),
+    startTime: row.start_time ? String(row.start_time).slice(0, 5) : '',
+    endTime: row.end_time ? String(row.end_time).slice(0, 5) : '',
     spaces: row.spaces || [],
     intervenants: row.intervenants || [],
     archived: row.archived,
@@ -62,10 +79,14 @@ eventsRouter.post('/', requireRole('administrateur'), async (req, res, next) => 
     }
 
     const event = parsed.data;
+    if (!hasValidEventTimes(event)) {
+      res.status(400).json({ error: "L'heure de fin doit être après l'heure de début." });
+      return;
+    }
     const result = await query(
       `
-        insert into events (title, description, date_mode, date, date_from, date_to, spaces, intervenants, archived)
-        values ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9)
+        insert into events (title, description, date_mode, date, date_from, date_to, start_time, end_time, spaces, intervenants, archived)
+        values ($1, $2, $3, $4, $5, $6, $7::time, $8::time, $9::jsonb, $10::jsonb, $11)
         returning *
       `,
       [
@@ -75,6 +96,8 @@ eventsRouter.post('/', requireRole('administrateur'), async (req, res, next) => 
         event.date || null,
         event.dateFrom || null,
         event.dateTo || null,
+        event.startTime || null,
+        event.endTime || null,
         JSON.stringify(event.spaces || []),
         JSON.stringify(event.intervenants || []),
         Boolean(event.archived)
@@ -104,12 +127,17 @@ eventsRouter.patch('/:id', requireRole('administrateur'), async (req, res, next)
     }
 
     const event = { ...mapEvent(current.rows[0]), ...parsed.data };
+    if (!hasValidEventTimes(event)) {
+      res.status(400).json({ error: "L'heure de fin doit être après l'heure de début." });
+      return;
+    }
     const result = await query(
       `
         update events
         set title = $1, description = $2, date_mode = $3, date = $4, date_from = $5, date_to = $6,
-            spaces = $7::jsonb, intervenants = $8::jsonb, archived = $9, updated_at = now()
-        where id = $10
+            start_time = $7::time, end_time = $8::time, spaces = $9::jsonb, intervenants = $10::jsonb,
+            archived = $11, updated_at = now()
+        where id = $12
         returning *
       `,
       [
@@ -119,6 +147,8 @@ eventsRouter.patch('/:id', requireRole('administrateur'), async (req, res, next)
         event.date || null,
         event.dateFrom || null,
         event.dateTo || null,
+        event.startTime || null,
+        event.endTime || null,
         JSON.stringify(event.spaces || []),
         JSON.stringify(event.intervenants || []),
         Boolean(event.archived),

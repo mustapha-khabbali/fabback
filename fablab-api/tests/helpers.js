@@ -101,14 +101,14 @@ export async function insertAttendance(userId, { timestampIn }) {
   return result.rows[0].id;
 }
 
-export async function insertEvent({ title = 'Test event', spaces = ['FabLab'] } = {}) {
+export async function insertEvent({ title = 'Test event', spaces = ['FabLab'], startTime = null, endTime = null } = {}) {
   const result = await query(
     `
-      insert into events (title, description, date_mode, date, spaces, intervenants, archived)
-      values ($1, '', 'single', current_date, $2::jsonb, '[]'::jsonb, false)
+      insert into events (title, description, date_mode, date, start_time, end_time, spaces, intervenants, archived)
+      values ($1, '', 'single', current_date, $2::time, $3::time, $4::jsonb, '[]'::jsonb, false)
       returning id
     `,
-    [title, JSON.stringify(spaces)]
+    [title, startTime, endTime, JSON.stringify(spaces)]
   );
   return result.rows[0].id;
 }

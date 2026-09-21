@@ -167,9 +167,9 @@ export default function EventSection() {
           <div className="space-y-1.5 max-h-[440px] overflow-y-auto pr-1 -mr-1">
             {historyEvents.map((e) => (
               <div key={e.id} className="flex items-center justify-between gap-2 bg-white/[0.04] hover:bg-white/[0.06] border border-white/10 rounded-lg px-3 py-2 transition-colors">
-                <button onClick={() => openEdit(e, 'history')} className="min-w-0 text-left cursor-pointer flex-1">
+                  <button onClick={() => openEdit(e, 'history')} className="min-w-0 text-left cursor-pointer flex-1">
                   <p className="text-[12px] font-bold text-white truncate">{e.title}</p>
-                  <p className="text-[9px] text-white/40 font-medium truncate">{(e.spaces || (e.space ? [e.space] : [])).join(', ')}</p>
+                  <p className="text-[9px] text-white/40 font-medium truncate">{(e.spaces || (e.space ? [e.space] : [])).join(', ')}{e.startTime && e.endTime ? ` · ${e.startTime} – ${e.endTime}` : ''}</p>
                 </button>
                 <button onClick={() => setConfirmDeleteId(e.id)} className="p-1.5 text-accent-red hover:bg-accent-red/10 rounded-lg transition-colors cursor-pointer shrink-0">
                   <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
@@ -256,6 +256,7 @@ export default function EventSection() {
               <button onClick={() => openEdit(e, 'list')} className="flex items-center gap-1.5 cursor-pointer min-w-0">
                 <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-accent-green" />
                 <span className="text-[12px] font-bold truncate max-w-[150px] text-white">{e.title}</span>
+                {e.startTime && e.endTime && <span className="text-[9px] font-bold text-white/45 shrink-0">{e.startTime}–{e.endTime}</span>}
               </button>
               <button
                 onClick={() => archiveEvent(e.id)}

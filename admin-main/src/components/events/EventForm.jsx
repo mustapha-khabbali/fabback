@@ -44,6 +44,8 @@ export default function EventForm({ event, users, onCreateUser, onSave, onBack }
   const [date, setDate] = useState(event?.date || '');
   const [dateFrom, setDateFrom] = useState(event?.dateFrom || '');
   const [dateTo, setDateTo] = useState(event?.dateTo || '');
+  const [startTime, setStartTime] = useState(event?.startTime || '');
+  const [endTime, setEndTime] = useState(event?.endTime || '');
 
   const initials = (p, n) => (p?.[0] || '') + (n?.[0] || '') || '?';
   const descPlain = description.trim();
@@ -83,7 +85,8 @@ export default function EventForm({ event, users, onCreateUser, onSave, onBack }
 
   const dateValid = dateMode === 'single' ? !!date : (!!dateFrom && !!dateTo && dateFrom <= dateTo);
   const intervenantsValid = intervenants.length > 0 && intervenants.every((i) => i.roleType !== 'CUSTOM' || i.customRole.trim());
-  const isValid = title.trim() && descPlain && intervenantsValid && spaces.length > 0 && dateValid;
+  const timesValid = Boolean(startTime && endTime && startTime < endTime);
+  const isValid = title.trim() && descPlain && intervenantsValid && spaces.length > 0 && dateValid && timesValid;
 
   const buildEvent = () => ({
     ...(event?.id ? { id: event.id } : {}),
@@ -93,6 +96,8 @@ export default function EventForm({ event, users, onCreateUser, onSave, onBack }
     spaces,
     dateMode,
     ...(dateMode === 'single' ? { date, dateFrom: '', dateTo: '' } : { date: '', dateFrom, dateTo }),
+    startTime,
+    endTime,
     archived: event?.archived || false,
     createdAt: event?.createdAt || new Date().toISOString(),
     updatedAt: new Date().toISOString()
@@ -245,6 +250,23 @@ export default function EventForm({ event, users, onCreateUser, onSave, onBack }
           )}
           {dateMode === 'range' && dateFrom && dateTo && dateFrom > dateTo && (
             <p className="mt-1.5 text-[10px] font-bold text-accent-red">Le début doit précéder la fin.</p>
+          )}
+        </div>
+
+        <div className="flex flex-col">
+          <span className={label}>Horaire</span>
+          <div className="grid grid-cols-2 gap-1.5">
+            <div className="flex flex-col">
+              <span className="text-[8px] font-bold text-white/30 uppercase tracking-[2px] mb-1 ml-0.5">De</span>
+              <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className={field} />
+            </div>
+            <div className="flex flex-col">
+              <span className="text-[8px] font-bold text-white/30 uppercase tracking-[2px] mb-1 ml-0.5">À</span>
+              <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className={field} />
+            </div>
+          </div>
+          {startTime && endTime && startTime >= endTime && (
+            <p className="mt-1.5 text-[10px] font-bold text-accent-red">L'heure de fin doit être après l'heure de début.</p>
           )}
         </div>
       </div>
