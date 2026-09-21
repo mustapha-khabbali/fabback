@@ -30,6 +30,10 @@ function labWallDateTime(date) {
   return `${values.year}-${values.month}-${values.day}T${values.hour}:${values.minute}`;
 }
 
+function labWallTime(date) {
+  return labWallDateTime(date).slice(-5);
+}
+
 function checkInBody(extra = {}) {
   return { qr: { gate: 'GATE_IN', id: QR.GATE_IN }, objective: 'Projet en cours', ...extra };
 }
@@ -674,7 +678,7 @@ test('an administrator can record the real past exit time for an active attendan
   const res = await api(baseUrl, `/attendance/${id}/exit-time`, {
     method: 'PATCH',
     token: tokenFor(USERS.admin),
-    body: { endedAt: labWallDateTime(exitTime) }
+    body: { exitTime: labWallTime(exitTime) }
   });
 
   assert.equal(res.status, 200);
@@ -693,21 +697,21 @@ test('manual exit-time corrections reject non-admin users and impossible times',
   const forbidden = await api(baseUrl, `/attendance/${id}/exit-time`, {
     method: 'PATCH',
     token: stagiaire(),
-    body: { endedAt: labWallDateTime(new Date(Date.now() - 60 * 60 * 1000)) }
+    body: { exitTime: labWallTime(new Date(Date.now() - 60 * 60 * 1000)) }
   });
   assert.equal(forbidden.status, 403);
 
   const beforeEntry = await api(baseUrl, `/attendance/${id}/exit-time`, {
     method: 'PATCH',
     token: tokenFor(USERS.admin),
-    body: { endedAt: labWallDateTime(new Date(Date.now() - 3 * 60 * 60 * 1000)) }
+    body: { exitTime: labWallTime(new Date(Date.now() - 3 * 60 * 60 * 1000)) }
   });
   assert.equal(beforeEntry.status, 400);
 
   const future = await api(baseUrl, `/attendance/${id}/exit-time`, {
     method: 'PATCH',
     token: tokenFor(USERS.admin),
-    body: { endedAt: labWallDateTime(new Date(Date.now() + 60 * 60 * 1000)) }
+    body: { exitTime: labWallTime(new Date(Date.now() + 60 * 60 * 1000)) }
   });
   assert.equal(future.status, 400);
 });

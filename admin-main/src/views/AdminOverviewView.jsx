@@ -310,7 +310,6 @@ export default function AdminOverviewView({ onNavigate }) {
   const [newExceptionFrom, setNewExceptionFrom] = useState('');
   const [newExceptionTo, setNewExceptionTo] = useState('');
   const [exitTimeEditor, setExitTimeEditor] = useState(null);
-  const [exitDate, setExitDate] = useState('');
   const [exitTime, setExitTime] = useState('');
   const [isSavingExitTime, setIsSavingExitTime] = useState(false);
 
@@ -503,7 +502,6 @@ export default function AdminOverviewView({ onNavigate }) {
   const openExitTimeEditor = (attendance) => {
     const existingExit = attendance.timestampOut ? labDateTimeParts(attendance.timestampOut) : labDateTimeParts(new Date());
     setExitTimeEditor(attendance);
-    setExitDate(existingExit.date);
     setExitTime(existingExit.time);
   };
 
@@ -512,13 +510,13 @@ export default function AdminOverviewView({ onNavigate }) {
   };
 
   const saveExitTime = async () => {
-    if (!exitTimeEditor || !exitDate || !exitTime) {
-      showToast("Veuillez choisir la date et l'heure de sortie.");
+    if (!exitTimeEditor || !exitTime) {
+      showToast("Veuillez choisir l'heure de sortie.");
       return;
     }
 
     const entry = labDateTimeParts(exitTimeEditor.timestampIn || `${exitTimeEditor.date}T${exitTimeEditor.timeIn}:00`);
-    const selectedWallTime = `${exitDate}T${exitTime}`;
+    const selectedWallTime = entry.date ? `${entry.date}T${exitTime}` : '';
     const entryWallTime = entry.date && entry.time ? `${entry.date}T${entry.time}` : '';
     const now = labDateTimeParts(new Date());
     const nowWallTime = `${now.date}T${now.time}`;
@@ -533,7 +531,7 @@ export default function AdminOverviewView({ onNavigate }) {
 
     setIsSavingExitTime(true);
     try {
-      await api.updateAttendanceExitTime(exitTimeEditor.id, selectedWallTime);
+      await api.updateAttendanceExitTime(exitTimeEditor.id, exitTime);
       await loadAttendance();
       setExitTimeEditor(null);
       showToast('Heure de sortie mise à jour.');
@@ -1449,29 +1447,15 @@ export default function AdminOverviewView({ onNavigate }) {
             <p className="mb-6 text-[12px] leading-relaxed text-white/45">
               Choisissez l'heure réelle à laquelle cette personne est sortie. Cette correction sera utilisée dans le journal et le PV.
             </p>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="mb-2 block text-[10px] font-bold uppercase tracking-widest text-white/40">Date de sortie</label>
-                <input
-                  type="date"
-                  value={exitDate}
-                  min={toLabISODate(exitTimeEditor.timestampIn) || undefined}
-                  max={currentLabISODate()}
-                  onChange={(event) => setExitDate(event.target.value)}
-                  disabled={isSavingExitTime}
-                  className="w-full rounded-xl border border-white/10 bg-[#060B28] px-4 py-3 text-[13px] font-medium text-white outline-none transition-colors focus:border-accent-blue/50 disabled:opacity-50"
-                />
-              </div>
-              <div>
-                <label className="mb-2 block text-[10px] font-bold uppercase tracking-widest text-white/40">Heure de sortie</label>
-                <input
-                  type="time"
-                  value={exitTime}
-                  onChange={(event) => setExitTime(event.target.value)}
-                  disabled={isSavingExitTime}
-                  className="w-full rounded-xl border border-white/10 bg-[#060B28] px-4 py-3 text-[13px] font-medium text-white outline-none transition-colors focus:border-accent-blue/50 disabled:opacity-50"
-                />
-              </div>
+            <div>
+              <label className="mb-2 block text-[10px] font-bold uppercase tracking-widest text-white/40">Heure de sortie</label>
+              <input
+                type="time"
+                value={exitTime}
+                onChange={(event) => setExitTime(event.target.value)}
+                disabled={isSavingExitTime}
+                className="w-full rounded-xl border border-white/10 bg-[#060B28] px-4 py-3 text-[13px] font-medium text-white outline-none transition-colors focus:border-accent-blue/50 disabled:opacity-50"
+              />
             </div>
             <p className="mt-4 text-[11px] text-white/35">Entrée enregistrée : {exitTimeEditor.date} à {exitTimeEditor.timeIn}</p>
             <div className="mt-7 flex justify-end gap-3 border-t border-white/[0.06] pt-5">

@@ -200,10 +200,10 @@ export const api = {
     return body.attendance || [];
   },
 
-  async updateAttendanceExitTime(id, endedAt) {
+  async updateAttendanceExitTime(id, exitTime) {
     const body = await request(`/attendance/${encodeURIComponent(id)}/exit-time`, {
       method: 'PATCH',
-      body: JSON.stringify({ endedAt })
+      body: JSON.stringify({ exitTime })
     });
     return body.attendance;
   },

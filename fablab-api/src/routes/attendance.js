@@ -34,15 +34,15 @@ const checkOutSchema = z.object({
 });
 
 // An administrator may correct a missed or incorrectly recorded Gate-OUT.
-// The value is a wall-clock date/time in the FabLab's timezone, not a client
-// supplied instant, so a correction such as "left two hours ago" stays exact.
+// The entry's FabLab calendar date remains authoritative; administrators only
+// select the exit time displayed in the dashboard and PV.
 const updateExitTimeSchema = z.object({
-  endedAt: z.string()
-    .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/, 'Invalid exit date/time')
+  exitTime: z.string()
+    .regex(/^\d{2}:\d{2}$/, 'Invalid exit time')
     .refine((value) => {
-      const parsed = new Date(`${value}:00Z`);
-      return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 16) === value;
-    }, 'Invalid exit date/time')
+      const [hours, minutes] = value.split(':').map(Number);
+      return hours <= 23 && minutes <= 59;
+    }, 'Invalid exit time')
 });
 
 const LAB_TIME_ZONE = 'Africa/Casablanca';
@@ -594,13 +594,13 @@ attendanceRouter.patch('/:attendanceId/exit-time', requireRole('administrateur')
     const result = await query(
       `
         update attendance
-        set timestamp_out = ($1::timestamp at time zone $2), auto_closed = false
+        set timestamp_out = (((timestamp_in at time zone $2)::date + $1::time) at time zone $2), auto_closed = false
         where id = $3
-          and timestamp_in <= ($1::timestamp at time zone $2)
-          and ($1::timestamp at time zone $2) <= now()
+          and timestamp_in <= (((timestamp_in at time zone $2)::date + $1::time) at time zone $2)
+          and (((timestamp_in at time zone $2)::date + $1::time) at time zone $2) <= now()
         returning *
       `,
-      [parsed.data.endedAt, LAB_TIME_ZONE, req.params.attendanceId]
+      [parsed.data.exitTime, LAB_TIME_ZONE, req.params.attendanceId]
     );
 
     if (!result.rows[0]) {
