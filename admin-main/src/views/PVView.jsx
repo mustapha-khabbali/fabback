@@ -11,6 +11,7 @@ const ROLE_OPTIONS = [
 
 const DEFAULT_TIME_FROM = '08:30';
 const DEFAULT_TIME_TO = '18:30';
+const ALL_EVENT_SPACES = '__all_event_spaces__';
 
 const PRESENCE_TYPES_BY_ROLE = {
   all: [
@@ -204,7 +205,7 @@ function rowMatchesRange(row, start, end) {
 
 function readAdminEvents(rows) {
   const fromRows = rows
-    .filter((row) => row.eventId || row.eventTitle)
+    .filter((row) => row.presenceType === 'Event' && (row.eventId || row.eventTitle))
     .map((row) => ({ id: row.eventId || row.eventTitle, title: row.eventTitle || row.eventId }));
 
   const seen = new Set();
@@ -216,6 +217,30 @@ function readAdminEvents(rows) {
       seen.add(event.id);
       return true;
     });
+}
+
+function eventMatchesDateRange(event, startDate, endDate) {
+  if (!startDate || !endDate) return false;
+
+  const isRange = event?.dateMode === 'range';
+  const eventStart = isRange ? event?.dateFrom : event?.date;
+  const eventEnd = isRange ? event?.dateTo : event?.date;
+  if (!eventStart || !eventEnd) return false;
+
+  return eventStart <= endDate && eventEnd >= startDate;
+}
+
+function eventOption(event) {
+  return { id: event.id || event.title, title: event.title || event.id };
+}
+
+function uniqueEvents(eventList) {
+  const seen = new Set();
+  return eventList.filter((event) => {
+    if (!event?.id || seen.has(String(event.id))) return false;
+    seen.add(String(event.id));
+    return true;
+  });
 }
 
 function getPresenceOptions(roleFilter) {
@@ -270,7 +295,30 @@ export default function PVView() {
   const selectedPresenceOption = useMemo(() => (
     presenceOptions.find((option) => option.value === presenceType) || presenceOptions[0]
   ), [presenceOptions, presenceType]);
-  const eventOptions = useMemo(() => readAdminEvents(allRows), [allRows]);
+  const selectedDateRange = useMemo(() => ({
+    startDate: dateMode === 'single' ? singleDate : dateFrom,
+    endDate: dateMode === 'single' ? singleDate : dateTo
+  }), [dateMode, singleDate, dateFrom, dateTo]);
+  const eventOptions = useMemo(() => {
+    const { startDate, endDate } = selectedDateRange;
+    if (!startDate || !endDate || startDate > endDate) return [];
+    const scheduledEvents = events
+      .filter((event) => eventMatchesDateRange(event, startDate, endDate))
+      .map(eventOption);
+
+    // A deleted event has no schedule left to compare. Keep it available only
+    // when its saved attendance is inside the chosen PV period.
+    const deletedEventHistory = readAdminEvents(allRows.filter((row) => (
+      row.date >= startDate
+      && row.date <= endDate
+      && !events.some((event) => (
+        (row.eventId && String(event.id) === String(row.eventId))
+        || (!row.eventId && event.title === row.eventTitle)
+      ))
+    )));
+
+    return uniqueEvents([...scheduledEvents, ...deletedEventHistory]);
+  }, [events, allRows, selectedDateRange]);
   const hasSelectedEvent = Boolean(eventFilter && eventFilter !== 'all');
   const selectedEvent = useMemo(() => events.find((event) => (
     (eventFilter && String(event.id) === String(eventFilter))
@@ -295,6 +343,15 @@ export default function PVView() {
   useEffect(() => {
     setEventSpaceFilter('');
   }, [eventFilter]);
+
+  useEffect(() => {
+    if (!eventFilter || eventFilter === 'all') return;
+    const eventIsAvailable = eventOptions.some((event) => String(event.id) === String(eventFilter));
+    if (!eventIsAvailable) {
+      setEventFilter('');
+      setEventSpaceFilter('');
+    }
+  }, [eventFilter, eventOptions]);
 
   const showToast = (message) => {
     if (toastTimeoutId) clearTimeout(toastTimeoutId);
@@ -345,7 +402,11 @@ export default function PVView() {
       if (roleFilter !== 'all' && row.role !== roleFilter) return false;
       if (selectedPresenceOption.value !== 'all' && !selectedPresenceOption.matches.includes(row.presenceType)) return false;
       if (selectedPresenceOption.requiresEvent && String(row.eventId || row.eventTitle) !== String(eventFilter)) return false;
-      if (requiresEventSpace && resolvedEventSpace(row, selectedEvent) !== eventSpaceFilter) return false;
+      if (
+        requiresEventSpace
+        && eventSpaceFilter !== ALL_EVENT_SPACES
+        && resolvedEventSpace(row, selectedEvent) !== eventSpaceFilter
+      ) return false;
       return true;
     });
   }, [allRows, dateMode, singleDate, dateFrom, dateTo, timeFrom, timeTo, roleFilter, selectedPresenceOption, eventFilter, requiresEventSpace, eventSpaceFilter, selectedEvent]);
@@ -359,7 +420,7 @@ export default function PVView() {
   }, [filteredRows]);
   const selectedReportSpace = selectedEventSpaces.length === 1
     ? selectedEventSpaces[0]
-    : eventSpaceFilter;
+    : (eventSpaceFilter === ALL_EVENT_SPACES ? '' : eventSpaceFilter);
   const selectedReportSpaceLabel = selectedReportSpace && !isFabLabSpace(selectedReportSpace)
     ? selectedReportSpace
     : '';
@@ -632,6 +693,7 @@ export default function PVView() {
                   className={fieldClass}
                 >
                   <option value="">Choisir un espace</option>
+                  <option value={ALL_EVENT_SPACES}>Tous les espaces</option>
                   {selectedEventSpaces.map((space) => <option key={space} value={space}>{space}</option>)}
                 </select>
               </div>
